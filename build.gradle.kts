@@ -77,17 +77,17 @@ tasks.register<JavaExec>("tests") {
 
 // Dépendance pour les autres plugins (via JitPack) :
 //   repositories { maven("https://jitpack.io") }
-//   dependencies { compileOnly("com.github.ORA-KUN:Vorace:Vorace-1.0.0") }
+//   dependencies { compileOnly("com.github.VoracePlugin:vorace-core:<version>") }
 publishing {
     publications {
         create<MavenPublication>("vorace") {
-            groupId = "com.github.ORA-KUN"
-            artifactId = "Vorace"
+            groupId = "com.github.VoracePlugin"
+            artifactId = "vorace-core"
             from(components["java"])
             pom {
                 name = "Vorace"
                 description = "Plugin Paper libre : packs, objets, meubles, blocs, glyphes, modèles animés, couche paquets"
-                url = "https://github.com/ORA-KUN/Vorace"
+                url = "https://github.com/VoracePlugin/vorace-core"
                 licenses { license { name = "MIT"; url = "https://opensource.org/licenses/MIT" } }
             }
         }

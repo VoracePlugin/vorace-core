@@ -1,5 +1,5 @@
 # JitPack (https://jitpack.io) construit Vorace à chaque version publiée pour que d'autres plugins puissent
-# s'en servir comme dépendance : com.github.ORA-KUN:Vorace:Vorace-X.Y.Z
+# s'en servir comme dépendance : com.github.VoracePlugin:vorace-core:<version>
 jdk:
   - openjdk21
 before_install:

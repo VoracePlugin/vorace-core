@@ -1,1 +1,1 @@
-rootProject.name = "Vorace"
+rootProject.name = "vorace-core"

@@ -30,7 +30,7 @@ jobs:
         if: matrix.paper == '1.21.1-R0.1-SNAPSHOT'
         run: |
           gradle publishToMavenLocal -Pjdk=21 -PpaperApi="${{ matrix.paper }}"
-          ls -R ~/.m2/repository/com/github/ORA-KUN/Vorace/
+          ls -R ~/.m2/repository/com/github/VoracePlugin/vorace-core/
       - name: Garder le .jar
         if: matrix.paper == '1.21.1-R0.1-SNAPSHOT'
         uses: actions/upload-artifact@v4

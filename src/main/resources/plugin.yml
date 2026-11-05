@@ -4,7 +4,7 @@ main: fr.vorace.Vorace
 api-version: '1.21'
 description: Plugin libre de packs de ressources, objets, meubles, blocs et glyphes
 authors: [ORA-KUN]
-website: https://github.com/ORA-KUN/Vorace
+website: https://github.com/VoracePlugin/vorace-core
 load: STARTUP
 softdepend: [ModelEngine, MythicMobs, PlaceholderAPI]
 commands:

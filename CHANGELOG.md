@@ -1,5 +1,18 @@
 # Journal des changements
 
+## 1.2.0 (novembre 2026) : vorace-core
+
+Le dépôt devient **vorace-core** dans l'organisation [VoracePlugin](https://github.com/VoracePlugin). Le plugin
+garde son nom (`Vorace`), ses commandes et ses dossiers.
+
+- Les mobs (cerveau, troupeaux, apparitions, volants, décors vivants) sortent dans le plugin
+  [vorace-mob](https://github.com/VoracePlugin/vorace-mob), qui dépend de vorace-core. Retirés d'ici : le paquet
+  `fr.vorace.mobs`, `/vorace mob` (remplacé par `/vmob`), la section `mobs` de `config.yml`, les méthodes de mobs de
+  `VoraceAPI` (maintenant `VoraceMobAPI`) et `VoraceMobActionEvent` (maintenant dans `fr.vorace.mobs`).
+- Vorace-mob reprend tout seul les fichiers de `plugins/Vorace/mobs`, `zones` et `apparitions`.
+- Dépendance JitPack : `com.github.VoracePlugin:vorace-core:<version>`.
+- L'essai sur la map d'Orario part dans vorace-mob ; l'essai serveur d'ici ne vérifie plus que l'affichage.
+
 ## 1.1.0 (novembre 2026, branche `ameliorations-modeles` du fork d'Antoine)
 
 Par rapport à la 1.0.0 (`main`) : modèles animés plus fluides et moins coûteux, et un système de mobs complet
