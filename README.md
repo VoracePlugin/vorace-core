@@ -63,6 +63,12 @@ epee_rubis:
 - **Actions** : commandes au clic droit ou gauche (console ou joueur), délai entre deux utilisations, objet consommé.
 - **Recettes** : avec forme, sans forme, ou au four ; les ingrédients peuvent être d'autres objets Vorace.
 - **Mise à jour** : quand tu modifies un objet, ceux déjà dans les inventaires sont mis à jour à la connexion.
+  Chaque exemplaire garde ce qui lui appartient : quantité, usure, enchantements ajoutés, nom donné à l'enclume,
+  données des autres plugins (PersistentDataContainer), lignes de description et modificateurs d'attributs ajoutés
+  par d'autres plugins, garniture d'armure, coût de réparation. Les lignes de description écrites par Vorace sont
+  remplacées, celles des autres plugins restent à leur place (avant ou après) ; si un autre plugin a réécrit les
+  lignes de Vorace elles-mêmes, la description est gardée telle quelle. Les objets faits avant la 1.2.1 n'ont pas
+  ces repères : leur première mise à jour se fait comme avant (nom et description de la définition).
 - `/vorace give <joueur> <objet> [quantité]`, `/vorace objets` (menu de tous les objets), `/vorace maj`.
 - API : `VoraceAPI.objet("epee_rubis", 1)`, `VoraceAPI.id(itemStack)`.
 
@@ -192,7 +198,12 @@ intégrées et les animations, et fabrique le pack tout seul. Exemple créé au 
 - API : `VoraceAPI.poserModele`, `attacherModele`, `jouerAnimation`, `jouerAnimationParDessus`, `tailleModele`,
   `regardModele`, `positionOs`, `modeleAnime`, `retirerModele`.
 
-Pas encore pris en charge : maillages (meshes), variables Molang propres au mob (`query.ground_speed`...).
+- **Maillages (meshes, 1.2.1)** : chaque face plate et rectangulaire devient un élément plat, texturé des deux côtés.
+  Une face droite ou tournée sur un seul axe (par pas de 22,5°, jusqu'à 45°) reste dans son os ; une face tournée
+  autrement devient une partie à elle seule (une entité d'affichage de plus). Les triangles et les faces tordues ne
+  peuvent pas entrer dans le format de Minecraft : ils sont signalés au chargement.
+
+Pas encore pris en charge : variables Molang propres au mob (`query.ground_speed`...).
 
 - `/vorace modele prive [joueur]` : seul ce joueur voit le modèle (`VoraceAPI.modeleVisiblePour(base, joueurs...)`),
   `/vorace modele public` pour annuler.
@@ -281,7 +292,7 @@ puis retire-le ou désactive son envoi, sinon les joueurs recevront deux packs.
 | `/vorace sources` | packs trouvés, dans l'ordre de fusion |
 | `/vorace give <joueur> <objet> [quantité]` | donne un objet Vorace |
 | `/vorace objets` | menu de tous les objets (clic = 1, Maj + clic = une pile) |
-| `/vorace maj` | met à jour les objets Vorace dans les inventaires des joueurs connectés |
+| `/vorace maj` | met à jour les objets Vorace dans les inventaires des joueurs connectés (`/vorace maj essai` : vérifie que la mise à jour garde les données d'un exemplaire) |
 | `/vorace meuble [liste\|poser\|info\|retirer\|rafraichir]` | gestion des meubles posés |
 | `/vorace bloc [liste\|poser\|casser\|info]` | blocs personnalisés |
 | `/vorace glyphe [liste\|menu <fond>]` | glyphes et aperçu des fonds de menus |
@@ -334,6 +345,8 @@ Puis `depend: [Vorace]` (ou `softdepend`) dans votre plugin.yml. Tout passe par 
 
 - `VoracePackPretEvent` : le pack vient d'être (re)construit. `VoracePackChargeEvent` : un joueur a fini de le charger.
 - `VoraceObjetUtiliseEvent` : un objet à commandes est utilisé (annulable, commandes modifiables).
+- `VoraceObjetMisAJourEvent` : un objet vient d'être refait avec sa définition actuelle ; un plugin y remet ce que
+  Vorace ne garde pas tout seul (par exemple un custom_model_data à lui).
 - `VoraceMeublePoseEvent`, `VoraceMeubleCasseEvent` : un meuble va être posé ou cassé (annulables).
 - `VoraceBlocPoseEvent`, `VoraceBlocCasseEvent` : un bloc Vorace va être posé ou cassé (annulables, butin modifiable).
 - `VoraceModeleAnimationEvent` : une animation va être jouée sur un modèle (annulable, animation modifiable).
@@ -369,9 +382,10 @@ en plus simple. Le jeu lui-même vient dans des plugins à part qui s'appuient s
     regard, textures animées, teinte des dégâts, clés d'effet, Molang) et mobs avec un cerveau (besoins, troupeaux,
     laisse, zones, horaires, points d'apparition) : détail dans [CHANGELOG.md](CHANGELOG.md)
 11. ✅ **1.2** : les mobs sortent dans [vorace-mob](https://github.com/VoracePlugin/vorace-mob) ; vorace-core garde l'affichage
-12. Pour [vorace-item](https://github.com/VoracePlugin/vorace-item) : armes modulaires assemblées dans le pack (une pièce
-    par matériau, toutes les combinaisons), données propres à chaque exemplaire gardées par la mise à jour des objets,
-    temps de recharge visible sur un objet
+12. ✅ **1.2.1** : la mise à jour des objets garde ce qui appartient à chaque exemplaire ; maillages Blockbench
+13. Pour [vorace-item](https://github.com/VoracePlugin/vorace-item) : armes modulaires assemblées dans le pack (une pièce
+    par matériau, toutes les combinaisons), temps de recharge visible sur un objet, événement « coup porté avec un
+    objet Vorace »
 
 ## Licence
 

@@ -1,5 +1,33 @@
 # Journal des changements
 
+## 1.2.1 (novembre 2026)
+
+### Mise à jour des objets : chaque exemplaire garde ce qui lui appartient
+
+Avant, quand la définition d'un objet changeait, l'objet refait à la connexion ne gardait que la quantité, l'usure et
+les enchantements : le nom donné à l'enclume et tout ce qu'un autre plugin avait mis dessus disparaissaient.
+Maintenant sont aussi gardés :
+
+- le nom donné à l'enclume (ou par un plugin) ;
+- les données des autres plugins (PersistentDataContainer : stats, qualité, forgeron...) ;
+- les lignes de description ajoutées par d'autres plugins, à leur place, avant ou après celles de Vorace (qui, elles,
+  sont remplacées par la définition actuelle) ;
+- les modificateurs d'attributs des autres plugins, la garniture d'armure et le coût de réparation.
+
+Vorace note pour cela sur chaque objet l'empreinte du nom et des lignes qu'il a écrits (`vorace:nom`,
+`vorace:description`). Les objets fabriqués avant la 1.2.1 n'ont pas ces repères : leur première mise à jour se fait
+comme avant. Les objets de Nexo et d'Oraxen convertis sont refaits comme avant.
+
+Nouvel événement `VoraceObjetMisAJourEvent` : un plugin y remet ce que Vorace ne garde pas tout seul.
+Essai sur un vrai serveur : `/vorace maj essai` (objet renommé, enregistré puis relu, définition changée).
+
+### Maillages Blockbench (meshes)
+
+Les maillages des .bbmodel ne sont plus ignorés : chaque face plate et rectangulaire devient un élément plat
+(épaisseur nulle, texturé des deux côtés), tourné comme la face. Une face droite ou tournée sur un seul axe par pas
+de 22,5° reste dans son os ; sinon elle devient une partie à elle seule. Les triangles et les faces tordues ne
+peuvent pas entrer dans le format de Minecraft : le nombre de faces non affichées est signalé au chargement.
+
 ## 1.2.0 (novembre 2026) : vorace-core
 
 Le dépôt devient **vorace-core** dans l'organisation [VoracePlugin](https://github.com/VoracePlugin). Le plugin

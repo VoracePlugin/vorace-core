@@ -28,6 +28,23 @@ g["elements"].append({"name": "hb", "type": "cube", "uuid": "hitbox-cube-0001", 
 g["outliner"].append({"name": "hitbox", "origin": [0, 0, 0], "uuid": "hitbox-groupe-0001", "children": ["hitbox-cube-0001"]})
 json.dump(g, open(sys.argv[2], 'w', encoding='utf-8'))
 PY
+# maillages de Blockbench : le golem avec une cape (face droite) et un voile incliné de 30° (partie à part)
+mkdir -p plugins/Vorace/modeles-animes
+python3 - "$OUTILS/../src/main/resources/exemples/modeles/golem_rubis.bbmodel" plugins/Vorace/modeles-animes/golem_cape.bbmodel <<'PY'
+import json, math, sys
+g = json.load(open(sys.argv[1], encoding='utf-8'))
+c, s = math.cos(math.radians(30)), math.sin(math.radians(30))
+g["elements"] += [
+  {"name": "cape", "type": "mesh", "uuid": "maillage-cape", "origin": [0, 4, 6], "rotation": [0, 0, 0],
+   "vertices": {"a": [-6, 0, 0], "b": [6, 0, 0], "c": [6, 16, 0], "d": [-6, 16, 0]},
+   "faces": {"f": {"vertices": ["a", "c", "b", "d"], "uv": {"a": [0, 16], "b": [12, 16], "c": [12, 0], "d": [0, 0]}, "texture": 0}}},
+  {"name": "voile", "type": "mesh", "uuid": "maillage-voile", "origin": [0, 20, -6], "rotation": [0, 0, 0],
+   "vertices": {"a": [-4, 0, 0], "b": [4, 0, 0], "c": [4, 8 * c, 8 * s], "d": [-4, 8 * c, 8 * s]},
+   "faces": {"f": {"vertices": ["a", "b", "c", "d"], "uv": {"a": [0, 8], "b": [8, 8], "c": [8, 0], "d": [0, 0]}, "texture": 0}}}]
+racine = next(o for o in g["outliner"] if isinstance(o, dict))
+racine["children"] += ["maillage-cape", "maillage-voile"]
+json.dump(g, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
 echo "eula=true" > eula.txt
 cat > server.properties <<PROPS
 online-mode=false
@@ -92,6 +109,9 @@ sleep 2
 cmd "vorace modele poser modelengine/golem_me"
 sleep 2
 cmd "vorace modele info"
+cmd "vorace modele poser golem_cape"
+sleep 2
+cmd "vorace modele info"
 cmd "vorace meuble liste"
 cmd "vorace bloc liste"
 cmd "vorace glyphe liste"
@@ -124,6 +144,9 @@ for s in Nexo ItemsAdder ModelEngine; do grep -aqE "$s : [0-9]+ objet" journal.t
 if [ "$ALERTES_CONVERSION" -gt 0 ]; then echo "ECHEC : les fichiers convertis donnent des alertes au chargement"; exit 1; fi
 echo "===== Menus"; cat menus.txt
 grep -aq 'MENUS OK' menus.txt || { echo "ECHEC : menus"; exit 1; }
+echo "===== Maillages"; grep -a 'golem_cape' journal.txt | head -5
+grep -aq 'golem_cape : .*parties=[0-9]*/9 ' journal.txt || { echo "ECHEC : maillages (cape et voile du golem)"; exit 1; }
+if grep -aq 'maillage « ' journal.txt; then echo "ECHEC : une face de maillage n'a pas été convertie"; exit 1; fi
 echo "===== Mise à jour des objets"; grep -a 'ESSAI OBJETS' journal.txt
 grep -aq 'ESSAI OBJETS echecs=0' journal.txt || { echo "ECHEC : mise à jour des objets (données de l'exemplaire)"; exit 1; }
 ERREURS=$(grep -acE 'ERROR\]: \[Vorace\]|at fr\.vorace\.' journal.txt)

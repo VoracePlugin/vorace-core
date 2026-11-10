@@ -65,13 +65,23 @@ public final class LecteurBBModel {
 
         // cubes
         Map<String, JsonObject> elements = new HashMap<>();
+        Map<String, List<JsonObject>> meshes = new HashMap<>();
         JsonArray els = tableau(racine, "elements");
         if (els != null) {
             for (JsonElement e : els) {
                 JsonObject c = e.getAsJsonObject();
                 String type = texte(c, "type", "cube");
+                if (type.equals("mesh")) {
+                    // maillage : ses faces rectangulaires deviennent des éléments plats (voir ConvertisseurMesh)
+                    ConvertisseurMesh.Resultat r = ConvertisseurMesh.convertir(c);
+                    if (r.facesIgnorees() > 0) problemes.add(id + " : maillage « " + texte(c, "name", "?") + " » : " + r.facesIgnorees() + " face(s) sur "
+                        + r.facesTotales() + " non affichée(s) (seules les faces plates et rectangulaires passent dans le format de Minecraft : "
+                        + "refaire les triangles et les faces tordues en cubes ou en rectangles plats)");
+                    meshes.put(texte(c, "uuid", ""), r.cubes());
+                    continue;
+                }
                 if (!type.equals("cube")) {
-                    if (!type.equals("locator") && !type.equals("null_object")) problemes.add(id + " : élément « " + texte(c, "name", "?") + " » de type " + type + " ignoré (seuls les cubes sont pris en charge)");
+                    if (!type.equals("locator") && !type.equals("null_object")) problemes.add(id + " : élément « " + texte(c, "name", "?") + " » de type " + type + " ignoré (seuls les cubes et les maillages sont pris en charge)");
                     continue;
                 }
                 elements.put(texte(c, "uuid", ""), c);
@@ -85,10 +95,18 @@ public final class LecteurBBModel {
         Set<String> cubesHitbox = new HashSet<>();
         Set<String> cubesCaches = new HashSet<>();
         if (outliner != null) for (JsonElement e : outliner) if (e.isJsonObject()) osSpeciaux(e.getAsJsonObject(), cubesHitbox, cubesCaches);
-        for (String u : cubesCaches) elements.remove(u);
+        for (String u : cubesCaches) { elements.remove(u); meshes.remove(u); }
+        // un maillage est rangé dans les os comme un cube : ses éléments plats y prennent sa place
+        Map<String, List<JsonObject>> parUuid = new HashMap<>();
+        elements.forEach((u, c) -> parUuid.put(u, visible(c) ? List.of(c) : List.of()));
+        if (els != null) for (JsonElement e : els) {
+            JsonObject c = e.getAsJsonObject();
+            String u = texte(c, "uuid", "");
+            if (meshes.containsKey(u)) parUuid.put(u, visible(c) ? meshes.get(u) : List.of());
+        }
         if (outliner != null) {
             for (JsonElement e : outliner) {
-                if (e.isJsonObject()) lireOs(e.getAsJsonObject(), -1, new double[3], elements, decalage, textures, parties, problemes, id);
+                if (e.isJsonObject()) lireOs(e.getAsJsonObject(), -1, new double[3], parUuid, decalage, textures, parties, problemes, id);
                 else hors.add(e.getAsString());
             }
         }
@@ -98,8 +116,7 @@ public final class LecteurBBModel {
             List<Partie> detaches = new ArrayList<>();
             int index = parties.size();
             for (Object u : hors) {
-                JsonObject c = elements.get((String) u);
-                if (c != null && visible(c)) ajouterCube(c, decalage, textures, cubes, detaches, index, new double[3], problemes, id);
+                for (JsonObject c : parUuid.getOrDefault((String) u, List.of())) ajouterCube(c, decalage, textures, cubes, detaches, index, new double[3], problemes, id);
             }
             parties.add(new Partie("racine", null, -1, new double[3], new double[3], cubes, 1));
             parties.addAll(detaches);
@@ -165,7 +182,8 @@ public final class LecteurBBModel {
         }
 
         // taille au sol, pour la hitbox (l'os « hitbox » s'il existe, sinon tous les cubes)
-        Collection<JsonObject> pourTaille = elements.values();
+        Collection<JsonObject> pourTaille = new ArrayList<>(elements.values());
+        meshes.values().forEach(pourTaille::addAll);
         if (!cubesHitbox.isEmpty()) {
             List<JsonObject> hb = new ArrayList<>();
             for (JsonElement e : els) if (cubesHitbox.contains(texte(e.getAsJsonObject(), "uuid", ""))) hb.add(e.getAsJsonObject());
@@ -190,7 +208,7 @@ public final class LecteurBBModel {
         return new ModeleBB(id, finales, textures, animations, largeur, Math.max(0, maxY));
     }
 
-    private static void lireOs(JsonObject g, int parent, double[] pivotParent, Map<String, JsonObject> elements, double[] decalage,
+    private static void lireOs(JsonObject g, int parent, double[] pivotParent, Map<String, List<JsonObject>> elements, double[] decalage,
                                List<Texture> textures, List<Partie> parties, List<String> problemes, String id) {
         if (g.has("visibility") && !g.get("visibility").getAsBoolean()) return;
         if (osSpecial(g)) return; // os « hitbox » / « shadow » de ModelEngine
@@ -207,8 +225,7 @@ public final class LecteurBBModel {
             for (JsonElement e : enfants) {
                 if (e.isJsonObject()) sousGroupes.add(e.getAsJsonObject());
                 else {
-                    JsonObject c = elements.get(e.getAsString());
-                    if (c != null && visible(c)) ajouterCube(c, decalage, textures, cubes, detaches, index, pivot, problemes, id);
+                    for (JsonObject c : elements.getOrDefault(e.getAsString(), List.of())) ajouterCube(c, decalage, textures, cubes, detaches, index, pivot, problemes, id);
                 }
             }
         }
