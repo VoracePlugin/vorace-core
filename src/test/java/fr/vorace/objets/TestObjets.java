@@ -15,6 +15,10 @@ public final class TestObjets {
     static void verifier(boolean ok, String quoi) { System.out.println((ok ? "OK    " : "ECHEC ") + quoi); if (!ok) echecs++; }
     static String s(Map<String, byte[]> m, String k) { byte[] b = m.get(k); return b == null ? null : new String(b, StandardCharsets.UTF_8); }
 
+    static List<String> fusion(List<String> avant, List<String> empreintesVorace, List<String> nouvelle) {
+        return FusionDescription.fusionner(avant, avant.stream().map(FusionDescription::empreinte).toList(), empreintesVorace, nouvelle);
+    }
+
     public static void main(String[] a) throws Exception {
         Path r = Files.createTempDirectory("vorace-res");
         Files.createDirectories(r.resolve("textures/armes"));
@@ -52,6 +56,16 @@ public final class TestObjets {
         String paper = s(m34, "assets/minecraft/models/item/paper.json");
         verifier(paper != null && paper.indexOf("1001") < paper.indexOf("1003") && paper.contains("minecraft:item/paper") && paper.contains("item/generated"), "1.21/1.21.1 : overrides custom_model_data triés " + paper);
         verifier(s(m34, "assets/minecraft/models/item/diamond_sword.json").contains("item/handheld"), "1.21/1.21.1 : épée de base tenue en main");
+        // mise à jour des objets : les lignes de Vorace changent, celles des autres plugins restent à leur place
+        List<String> vorace = List.of("Forgée avec des rubis.", "", "Clic droit : bond");
+        List<String> ev = vorace.stream().map(FusionDescription::empreinte).toList();
+        List<String> neuves = List.of("Nouvelle description.");
+        verifier(List.of("Nouvelle description.", "Qualité : rare").equals(fusion(List.of("Forgée avec des rubis.", "", "Clic droit : bond", "Qualité : rare"), ev, neuves)), "description : ligne d'un autre plugin gardée après");
+        verifier(List.of("Forgeron : Antoine", "Nouvelle description.", "Qualité : rare").equals(fusion(List.of("Forgeron : Antoine", "Forgée avec des rubis.", "", "Clic droit : bond", "Qualité : rare"), ev, neuves)), "description : lignes gardées avant et après");
+        verifier(List.of("Nouvelle description.").equals(fusion(vorace, ev, neuves)), "description : seulement celle de Vorace");
+        verifier(fusion(List.of("Forgée avec des rubis.", "Clic droit : bond", "Qualité : rare"), ev, neuves) == null, "description : lignes de Vorace changées par un autre plugin -> gardée telle quelle");
+        verifier(List.of("Nouvelle description.", "Qualité : rare").equals(fusion(List.of("Qualité : rare"), List.of(), neuves)), "description : objet sans description Vorace");
+        verifier(List.of().equals(FusionDescription.lire("")) && FusionDescription.lire(FusionDescription.joindre(ev)).equals(ev), "empreintes rangées puis relues");
         System.out.println(echecs == 0 ? "TOUS LES TESTS PASSENT" : echecs + " ECHEC(S)");
         System.exit(echecs == 0 ? 0 : 1);
     }

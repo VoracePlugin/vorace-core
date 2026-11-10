@@ -92,6 +92,7 @@ public final class Commande implements CommandExecutor, TabCompleter {
                 plugin.menus().objets(page).ouvrir(p);
             }
             case "maj" -> {
+                if (a.length > 1 && a[1].equalsIgnoreCase("essai")) { new fr.vorace.objets.EssaiObjets(plugin).lancer(s); return true; }
                 int n = 0;
                 for (Player p : Bukkit.getOnlinePlayers()) n += plugin.ecouteurObjets().mettreAJour(p);
                 s.sendMessage(Messages.brut("<green>" + n + " objet(s) mis à jour dans les inventaires."));

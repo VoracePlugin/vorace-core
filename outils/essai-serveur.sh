@@ -95,6 +95,8 @@ cmd "vorace modele info"
 cmd "vorace meuble liste"
 cmd "vorace bloc liste"
 cmd "vorace glyphe liste"
+# mise à jour des objets : ce qui appartient à chaque exemplaire est gardé quand la définition change
+cmd "vorace maj essai"
 sleep 2
 # menus (1.0) : un faux joueur admin ouvre /vorace et clique
 cmd "op Menus"
@@ -122,6 +124,8 @@ for s in Nexo ItemsAdder ModelEngine; do grep -aqE "$s : [0-9]+ objet" journal.t
 if [ "$ALERTES_CONVERSION" -gt 0 ]; then echo "ECHEC : les fichiers convertis donnent des alertes au chargement"; exit 1; fi
 echo "===== Menus"; cat menus.txt
 grep -aq 'MENUS OK' menus.txt || { echo "ECHEC : menus"; exit 1; }
+echo "===== Mise à jour des objets"; grep -a 'ESSAI OBJETS' journal.txt
+grep -aq 'ESSAI OBJETS echecs=0' journal.txt || { echo "ECHEC : mise à jour des objets (données de l'exemplaire)"; exit 1; }
 ERREURS=$(grep -acE 'ERROR\]: \[Vorace\]|at fr\.vorace\.' journal.txt)
 echo "erreurs de Vorace dans la console : $ERREURS"
 if [ "$ERREURS" -gt 0 ]; then echo "ECHEC : erreurs de Vorace dans la console"; exit 1; fi

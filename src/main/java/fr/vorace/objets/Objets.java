@@ -2,11 +2,13 @@ package fr.vorace.objets;
 
 import fr.vorace.Messages;
 import fr.vorace.Vorace;
+import fr.vorace.api.VoraceObjetMisAJourEvent;
 import fr.vorace.blocs.EtatsNoteBlock;
 import fr.vorace.blocs.GenerateurBlocs;
 import fr.vorace.pack.FormatPack;
 import fr.vorace.pack.Journal;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Material;
@@ -24,10 +26,13 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.ShapelessRecipe;
+import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.inventory.meta.Repairable;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
@@ -50,6 +55,8 @@ public final class Objets {
     private final Vorace plugin;
     private final NamespacedKey cleId;
     private final NamespacedKey cleVersion;
+    private final NamespacedKey cleNom;
+    private final NamespacedKey cleDescription;
     private volatile Map<String, DefinitionObjet> definitions = Map.of();
     private final Map<String, Integer> cmdAttribues = new LinkedHashMap<>();
     private final Map<String, Integer> numerosBlocs = new LinkedHashMap<>();
@@ -62,6 +69,8 @@ public final class Objets {
         this.plugin = plugin;
         this.cleId = new NamespacedKey(plugin, "id");
         this.cleVersion = new NamespacedKey(plugin, "version");
+        this.cleNom = new NamespacedKey(plugin, "nom");
+        this.cleDescription = new NamespacedKey(plugin, "description");
     }
 
     public Path dossierObjets() { return plugin.getDataFolder().toPath().resolve("objets"); }
@@ -199,14 +208,24 @@ public final class Objets {
         ItemStack objet = new ItemStack(materiauValide(d), Math.max(1, quantite));
         ItemMeta meta = objet.getItemMeta();
         if (meta == null) return objet;
-        if (d.nom() != null) meta.displayName(Messages.objet(d.nom()));
+        Component nom = d.nom() == null ? null : Messages.objet(d.nom());
+        if (nom != null) meta.displayName(nom);
+        List<String> empreintesLignes = new ArrayList<>();
         if (!d.description().isEmpty()) {
             List<Component> lore = new ArrayList<>();
-            for (String l : d.description()) lore.add(Messages.objet(l));
+            for (String l : d.description()) {
+                Component c = Messages.objet(l);
+                lore.add(c);
+                empreintesLignes.add(FusionDescription.empreinte(texte(c)));
+            }
             meta.lore(lore);
         }
-        meta.getPersistentDataContainer().set(cleId, PersistentDataType.STRING, d.id());
-        meta.getPersistentDataContainer().set(cleVersion, PersistentDataType.STRING, Integer.toHexString(d.hashCode()));
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        pdc.set(cleId, PersistentDataType.STRING, d.id());
+        pdc.set(cleVersion, PersistentDataType.STRING, Integer.toHexString(d.hashCode()));
+        // ce que Vorace a écrit, pour reconnaître à la mise à jour ce qui a été changé par le joueur ou un autre plugin
+        pdc.set(cleNom, PersistentDataType.STRING, FusionDescription.empreinte(nom == null ? "" : texte(nom)));
+        pdc.set(cleDescription, PersistentDataType.STRING, FusionDescription.joindre(empreintesLignes));
 
         if (d.aUnVisuel()) {
             FormatPack f = plugin.packs().format();
@@ -311,19 +330,75 @@ public final class Objets {
         return !Integer.toHexString(d.hashCode()).equals(v);
     }
 
-    /** Refait l'objet avec sa définition actuelle, en gardant quantité, usure et enchantements ajoutés. */
+    /**
+     * Refait l'objet avec sa définition actuelle. Ce qui appartient à cet exemplaire est gardé : quantité, usure,
+     * enchantements ajoutés, et pour un objet déjà Vorace (pas un objet converti de Nexo ou d'Oraxen) le nom donné à
+     * l'enclume, les données des autres plugins, leurs lignes de description et leurs modificateurs d'attributs, la
+     * garniture d'armure et le coût de réparation. Puis {@link VoraceObjetMisAJourEvent} laisse les autres plugins
+     * remettre le reste.
+     */
     public ItemStack mettreAJour(ItemStack ancien, DefinitionObjet d) {
         ItemStack neuf = fabriquer(d, ancien.getAmount());
         Map<Enchantment, Integer> enchants = ancien.getEnchantments();
         if (enchants != null && !enchants.isEmpty()) neuf.addUnsafeEnchantments(enchants);
-        if (ancien.getItemMeta() instanceof Damageable vieux && vieux.hasDamage()) {
-            ItemMeta m = neuf.getItemMeta();
-            if (m instanceof Damageable dm) {
-                dm.setDamage(vieux.getDamage());
-                neuf.setItemMeta(m);
+        ItemMeta vieux = ancien.getItemMeta();
+        ItemMeta m = neuf.getItemMeta();
+        if (vieux != null && m != null) {
+            if (vieux instanceof Damageable dv && dv.hasDamage() && m instanceof Damageable dm) dm.setDamage(dv.getDamage());
+            if (vieux.getPersistentDataContainer().has(cleId, PersistentDataType.STRING)) garderExemplaire(vieux, m);
+            neuf.setItemMeta(m);
+        }
+        VoraceObjetMisAJourEvent e = new VoraceObjetMisAJourEvent(d.id(), ancien.clone(), neuf);
+        Bukkit.getPluginManager().callEvent(e);
+        return e.getNouveau();
+    }
+
+    /** Recopie sur le nouvel objet ce que le joueur et les autres plugins ont mis sur l'ancien. */
+    private void garderExemplaire(ItemMeta vieux, ItemMeta m) {
+        PersistentDataContainer ancien = vieux.getPersistentDataContainer();
+        // données des autres plugins (celles de Vorace sur le nouvel objet restent les nouvelles)
+        ancien.copyTo(m.getPersistentDataContainer(), false);
+
+        // nom : gardé s'il n'est plus celui que Vorace avait écrit (renommé à l'enclume ou par un plugin)
+        String nomVorace = ancien.get(cleNom, PersistentDataType.STRING);
+        if (nomVorace != null && vieux.hasDisplayName()) {
+            Component nom = vieux.displayName();
+            if (nom != null && !FusionDescription.empreinte(texte(nom)).equals(nomVorace)) m.displayName(nom);
+        }
+
+        // description : les lignes de Vorace sont remplacées, celles des autres plugins restent à leur place
+        String lignesVorace = ancien.get(cleDescription, PersistentDataType.STRING);
+        if (lignesVorace != null) {
+            List<Component> avant = vieux.hasLore() && vieux.lore() != null ? vieux.lore() : List.of();
+            List<String> empreintes = new ArrayList<>();
+            for (Component c : avant) empreintes.add(FusionDescription.empreinte(texte(c)));
+            List<Component> maintenant = m.hasLore() && m.lore() != null ? m.lore() : List.of();
+            List<Component> fusion = FusionDescription.fusionner(avant, empreintes, FusionDescription.lire(lignesVorace), maintenant);
+            List<Component> lore = fusion == null ? avant : fusion;
+            m.lore(lore.isEmpty() ? null : lore);
+        }
+
+        // modificateurs d'attributs des autres plugins (ceux de Vorace viennent de la définition)
+        var modificateurs = vieux.getAttributeModifiers();
+        if (modificateurs != null) {
+            String ns = plugin.getName().toLowerCase(Locale.ROOT);
+            for (Map.Entry<Attribute, AttributeModifier> e : modificateurs.entries()) {
+                if (ns.equals(e.getValue().getKey().getNamespace())) continue;
+                try {
+                    m.addAttributeModifier(e.getKey(), e.getValue());
+                } catch (IllegalArgumentException dejaLa) {
+                    // même modificateur déjà présent : rien à faire
+                }
             }
         }
-        return neuf;
+
+        if (vieux instanceof ArmorMeta av && av.hasTrim() && m instanceof ArmorMeta am) am.setTrim(av.getTrim());
+        if (vieux instanceof Repairable rv && rv.hasRepairCost() && m instanceof Repairable rm) rm.setRepairCost(rv.getRepairCost());
+    }
+
+    /** Texte seul d'un composant (sans couleurs ni styles), qui ne change pas quand l'objet est enregistré puis relu. */
+    private static String texte(Component c) {
+        return PlainTextComponentSerializer.plainText().serialize(c);
     }
 
     private Material materiauValide(DefinitionObjet d) {
