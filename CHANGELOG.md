@@ -1,5 +1,14 @@
 # Journal des changements
 
+## 1.3.0 (novembre 2026) : Paper 1.21.4 au minimum
+
+Vorace demande maintenant un serveur **Paper 1.21.4 ou plus récent** (`api-version: '1.21.4'`) : il ne se charge
+plus sur 1.21 à 1.21.3. La dernière version pour ces serveurs est la 1.2.1.
+
+- Le plugin est compilé contre l'API Paper 1.21.4 (au lieu de 1.21.1), y compris la dépendance JitPack.
+- La compilation automatique vérifie 1.21.4, 1.21.11 et 26.2.
+- Rien ne change dans les commandes, la config ni l'API.
+
 ## 1.2.1 (novembre 2026)
 
 ### Mise à jour des objets : chaque exemplaire garde ce qui lui appartient

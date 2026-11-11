@@ -1,6 +1,6 @@
 # vorace-core (plugin Vorace)
 
-Le cœur de [VoracePlugin](https://github.com/VoracePlugin). Plugin **libre et gratuit** pour serveurs Paper (Minecraft **1.21 à 26.x**) : packs de ressources,
+Le cœur de [VoracePlugin](https://github.com/VoracePlugin). Plugin **libre et gratuit** pour serveurs Paper (Minecraft **1.21.4 à 26.x**) : packs de ressources,
 objets, meubles, blocs et glyphes personnalisés, modèles 3D animés, couche paquets et conversion depuis Nexo, Oraxen, ItemsAdder et ModelEngine. Tout se règle avec des menus (`/vorace`). Le but est de pouvoir
 tout faire sans plugin payant, et de corriger ou améliorer le plugin au fur et à mesure des besoins.
 
@@ -359,8 +359,8 @@ gradle build          # le .jar est dans build/libs/
 gradle tests          # tests sans serveur (fusion des packs, hébergement HTTP)
 ```
 
-Par défaut le plugin est compilé contre l'API Paper 1.21.1 (la plus ancienne prise en charge).
-La compilation automatique sur GitHub vérifie aussi 1.21.4, 1.21.11 et 26.2.
+Par défaut le plugin est compilé contre l'API Paper 1.21.4 (la plus ancienne prise en charge).
+La compilation automatique sur GitHub vérifie aussi 1.21.11 et 26.2.
 
 ## Feuille de route
 
