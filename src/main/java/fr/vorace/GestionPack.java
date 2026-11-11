@@ -33,6 +33,9 @@ public final class GestionPack {
         return t;
     });
     private volatile Constructeur.Resultat actuel;
+    /** Les packs construits juste avant l'actuel (le plus récent en premier), encore servis par leur empreinte. */
+    private volatile List<Constructeur.Resultat> precedents = List.of();
+    static final int PACKS_GARDES = 2;
     private volatile List<Recherche.Trouve> dernieresSources = List.of();
     private volatile FormatPack format;
 
@@ -41,6 +44,24 @@ public final class GestionPack {
     }
 
     public Constructeur.Resultat actuel() { return actuel; }
+
+    /** Un pack construit juste avant l'actuel, par son empreinte (null s'il n'est plus gardé). */
+    public Constructeur.Resultat precedent(String sha1) {
+        for (Constructeur.Resultat r : precedents) if (r.sha1().equals(sha1)) return r;
+        return null;
+    }
+
+    /** Le nouveau pack devient l'actuel ; l'ancien reste servi un moment (les {@link #PACKS_GARDES} derniers). */
+    static List<Constructeur.Resultat> garder(List<Constructeur.Resultat> precedents, Constructeur.Resultat ancien, Constructeur.Resultat nouveau) {
+        if (ancien == null || ancien.sha1().equals(nouveau.sha1())) return precedents;
+        List<Constructeur.Resultat> l = new ArrayList<>();
+        l.add(ancien);
+        for (Constructeur.Resultat r : precedents) {
+            if (l.size() >= PACKS_GARDES) break;
+            if (!r.sha1().equals(nouveau.sha1()) && !r.sha1().equals(ancien.sha1())) l.add(r);
+        }
+        return List.copyOf(l);
+    }
     public List<Recherche.Trouve> dernieresSources() { return dernieresSources; }
     public FormatPack format() { return format; }
 
@@ -68,6 +89,7 @@ public final class GestionPack {
             try {
                 Constructeur.Resultat res = construireMaintenant(r);
                 Constructeur.Resultat ancien = actuel;
+                precedents = garder(precedents, ancien, res);
                 actuel = res;
                 boolean change = ancien == null || !ancien.sha1().equals(res.sha1());
                 f.complete(res);

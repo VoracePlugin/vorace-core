@@ -8,4 +8,4 @@ Les menus de `/vorace` prennent l'identité de Vorace, le dégradé violet → r
 - `menus.fond-dessine: false` dans la config remet les coffres normaux du jeu (avec des vitres violettes et roses).
 - Les fonds sont aussi des glyphes (`vorace_fond_1` à `vorace_fond_6`) : `/vorace glyphe menu vorace_fond_6` montre l'aperçu. Ils n'apparaissent pas dans les listes de glyphes.
 
-> **Code écrit par une IA.** Vorace est développé par Claude (l'IA d'Anthropic), à la demande et sous la direction de ORA, qui teste et décide de ce qui est ajouté. Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
+> Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.

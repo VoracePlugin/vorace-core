@@ -1,6 +1,6 @@
 Étape 2 de **Vorace** : les objets personnalisés.
 
-> **Code écrit par une IA.** Vorace est développé par Claude (l'IA d'Anthropic), à la demande et sous la direction de Jules (ORA-KUN), qui teste et décide de ce qui est ajouté. Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
+> Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
 
 Cette version a été compilée et testée automatiquement (génération du pack des objets pour 1.21, 1.21.2 et 1.21.4+), mais pas encore essayée en jeu : les retours sont bienvenus dans les Issues.
 

@@ -66,7 +66,20 @@ public final class TestHttp {
         // mauvaise empreinte
         cap = new Capture(); ch = canal(c, cap);
         ch.writeInbound(Unpooled.copiedBuffer("GET /vorace/0000.zip HTTP/1.1\r\n\r\n", StandardCharsets.ISO_8859_1));
-        verifier(sortie(ch).startsWith("HTTP/1.1 404"), "ancienne empreinte : 404");
+        verifier(sortie(ch).startsWith("HTTP/1.1 404"), "empreinte inconnue : 404");
+
+        // reconstruction pendant un téléchargement : l'ancien pack reste servi par son empreinte
+        Constructeur.Resultat nouveau = Constructeur.construire(List.of(Source.enMemoire("t", Map.of("assets/x/b.json", "{}".getBytes()))),
+            new Constructeur.Options("t", new FormatPack(46, 0, "t"), true, null));
+        Contenu apres = new Contenu(() -> nouveau, s -> s.equals(pack.sha1()) ? pack : null);
+        cap = new Capture(); ch = canal(apres, cap);
+        ch.writeInbound(Unpooled.copiedBuffer("GET /vorace/" + pack.sha1() + ".zip HTTP/1.1\r\n\r\n", StandardCharsets.ISO_8859_1));
+        String ancienPack = sortie(ch);
+        verifier(!pack.sha1().equals(nouveau.sha1()) && ancienPack.startsWith("HTTP/1.1 200") && ancienPack.contains("Content-Length: " + pack.zip().length),
+            "après une reconstruction : l'ancien pack répond encore 200");
+        cap = new Capture(); ch = canal(apres, cap);
+        ch.writeInbound(Unpooled.copiedBuffer("GET /vorace/pack.zip HTTP/1.1\r\n\r\n", StandardCharsets.ISO_8859_1));
+        verifier(sortie(ch).contains("Content-Length: " + nouveau.zip().length), "après une reconstruction : pack.zip donne le nouveau");
 
         // HEAD
         cap = new Capture(); ch = canal(c, cap);

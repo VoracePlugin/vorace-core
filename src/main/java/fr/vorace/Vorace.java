@@ -244,7 +244,7 @@ public final class Vorace extends JavaPlugin {
     }
 
     private void demarrerHebergement() {
-        Contenu contenu = new Contenu(() -> packs.actuel());
+        Contenu contenu = new Contenu(() -> packs.actuel(), sha1 -> packs.precedent(sha1));
         String mode = reglages.mode().toLowerCase(Locale.ROOT).trim();
         List<String> essais = switch (mode) {
             case "meme-port", "même-port" -> List.of("meme-port");

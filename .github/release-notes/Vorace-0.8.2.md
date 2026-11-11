@@ -16,4 +16,4 @@ Chaque version est essayée automatiquement sur un vrai serveur Paper 1.21.4 : m
 
 Rien à changer dans tes fichiers : remplace le .jar et redémarre.
 
-> **Code écrit par une IA.** Vorace est développé par Claude (l'IA d'Anthropic), à la demande et sous la direction de ORA, qui teste et décide de ce qui est ajouté. Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
+> Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.

@@ -12,4 +12,4 @@ Un glyphe est une image qui s'écrit comme une lettre. Ils se créent dans `plug
 
 Rien à changer dans tes fichiers : remplace le .jar et redémarre. Le fichier `glyphes/exemple-glyphes.yml` et ses images sont ajoutés une seule fois.
 
-> **Code écrit par une IA.** Vorace est développé par Claude (l'IA d'Anthropic), à la demande et sous la direction de ORA, qui teste et décide de ce qui est ajouté. Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
+> Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
