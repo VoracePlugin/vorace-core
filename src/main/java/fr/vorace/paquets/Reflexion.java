@@ -24,9 +24,22 @@ final class Reflexion {
 
     private static final Map<Class<?>, String> NOMS = new ConcurrentHashMap<>();
 
-    /** Nom d'un paquet : « ClientboundSetTimePacket », ou « ServerboundMovePlayerPacket.Pos » pour une variante. */
+    /**
+     * Nom d'un paquet : « ClientboundSetTimePacket », ou « ServerboundMovePlayerPacket.Pos » pour une variante.
+     * <p>Le nom est calculé hors de la table, puis rangé : un {@code computeIfAbsent} qui se rappelle lui-même sur la
+     * même {@link ConcurrentHashMap} lève « Recursive update » quand les deux classes tombent dans la même case, et
+     * l'erreur, levée au milieu d'un paquet, déconnectait le joueur.
+     */
     static String nom(Class<?> c) {
-        return NOMS.computeIfAbsent(c, k -> k.getEnclosingClass() == null ? k.getSimpleName() : nom(k.getEnclosingClass()) + "." + k.getSimpleName());
+        String connu = NOMS.get(c);
+        if (connu != null) return connu;
+        StringBuilder nom = new StringBuilder(c.getSimpleName());
+        for (Class<?> parent = c.getEnclosingClass(); parent != null; parent = parent.getEnclosingClass()) {
+            nom.insert(0, parent.getSimpleName() + ".");
+        }
+        String calcule = nom.toString();
+        String deja = NOMS.putIfAbsent(c, calcule);
+        return deja != null ? deja : calcule;
     }
 
     /** Champs d'instance de la classe et de ses parents, par nom (le plus proche gagne). */

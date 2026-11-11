@@ -17,6 +17,14 @@ public final class TestPaquets {
     static int echecs = 0;
     static void verifier(boolean ok, String quoi) { System.out.println((ok ? "OK    " : "ECHEC ") + quoi); if (!ok) echecs++; }
 
+    static void ajouterImbriquees(Class<?> c, List<Class<?>> sortie) {
+        for (Class<?> k : c.getDeclaredClasses()) {
+            if (k.getSimpleName().isEmpty()) continue;
+            sortie.add(k);
+            ajouterImbriquees(k, sortie);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // champs et records
         ClientboundSetTimePacket t = new ClientboundSetTimePacket(10, 1000, true);
@@ -30,6 +38,29 @@ public final class TestPaquets {
         boolean erreur = false;
         try { Reflexion.lire(t, "inconnu"); } catch (IllegalArgumentException e) { erreur = e.getMessage().contains("dayTime"); }
         verifier(erreur, "champ inconnu : erreur qui liste les champs existants");
+
+        // noms des classes rangées dans d'autres (ServerboundMovePlayerPacket.Pos...) : plusieurs centaines de classes
+        // du JDK, pour que des classes et leurs parents tombent forcément dans la même case de la table des noms
+        // (avant la 1.3.1 : « Recursive update », et le joueur était déconnecté)
+        List<Class<?>> imbriquees = new ArrayList<>();
+        for (Class<?> racine : new Class<?>[]{java.util.Map.class, java.util.concurrent.ConcurrentHashMap.class, Character.class,
+                Thread.class, java.util.HashMap.class, java.util.TreeMap.class, java.util.Collections.class, java.util.Spliterators.class,
+                java.util.stream.Collectors.class, java.util.concurrent.ConcurrentSkipListMap.class, java.lang.invoke.MethodHandles.class,
+                java.util.Locale.class, java.text.Normalizer.class, java.nio.file.StandardOpenOption.class, java.util.AbstractMap.class}) {
+            ajouterImbriquees(racine, imbriquees);
+        }
+        java.util.Collections.reverse(imbriquees); // les enfants avant leurs parents, comme sur le serveur (Pos arrive avant son parent)
+        boolean nomsJustes = imbriquees.size() > 100;
+        String probleme = "";
+        for (Class<?> k : imbriquees) {
+            String attendu = k.getSimpleName();
+            for (Class<?> x = k.getEnclosingClass(); x != null; x = x.getEnclosingClass()) attendu = x.getSimpleName() + "." + attendu;
+            try {
+                if (!attendu.equals(Reflexion.nom(k)) || !attendu.equals(Reflexion.nom(k))) { nomsJustes = false; probleme = attendu; }
+            } catch (RuntimeException ex) { nomsJustes = false; probleme = attendu + " : " + ex; }
+        }
+        verifier(nomsJustes, imbriquees.size() + " classes imbriquées nommées sans erreur " + probleme);
+        verifier("Map.Entry".equals(Reflexion.nom(java.util.Map.Entry.class)), "nom d'une classe imbriquée : Map.Entry");
 
         // connexion simulée
         Plugin faux = (Plugin) Proxy.newProxyInstance(TestPaquets.class.getClassLoader(), new Class<?>[]{Plugin.class},

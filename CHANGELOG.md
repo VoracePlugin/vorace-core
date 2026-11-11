@@ -1,5 +1,16 @@
 # Journal des changements
 
+## 1.3.1 (novembre 2026) : corrections
+
+- **Joueurs déconnectés par « Recursive update »** : la couche paquets nommait les paquets rangés dans un autre
+  (`ServerboundMovePlayerPacket.Pos`, envoyé dès qu'un joueur bouge) avec un `computeIfAbsent` qui se rappelait
+  lui-même sur la même table. Selon le démarrage du serveur, les deux noms tombaient dans la même case de la table :
+  Java levait `IllegalStateException: Recursive update` au milieu du paquet et le joueur était déconnecté (vu une fois
+  dans l'essai serveur). Le nom est maintenant calculé hors de la table. Test : plus de 200 classes imbriquées du JDK.
+- **Pack introuvable juste après une reconstruction** : le serveur web ne servait que le dernier pack. Un joueur qui
+  avait reçu l'adresse du pack juste avant une reconstruction (`/vorace reload`, vorace-item au démarrage) recevait un
+  404, et était expulsé si le pack est obligatoire. Les deux packs précédents restent servis par leur empreinte.
+
 ## 1.3.0 (novembre 2026) : Paper 1.21.4 au minimum
 
 Vorace demande maintenant un serveur **Paper 1.21.4 ou plus récent** (`api-version: '1.21.4'`) : il ne se charge
