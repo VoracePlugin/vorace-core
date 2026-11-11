@@ -4,7 +4,7 @@ Le cœur de [VoracePlugin](https://github.com/VoracePlugin). Plugin **libre et g
 objets, meubles, blocs et glyphes personnalisés, modèles 3D animés, couche paquets et conversion depuis Nexo, Oraxen, ItemsAdder et ModelEngine. Tout se règle avec des menus (`/vorace`). Le but est de pouvoir
 tout faire sans plugin payant, et de corriger ou améliorer le plugin au fur et à mesure des besoins.
 
-> **Code écrit par une IA.** Vorace est développé par Claude (l'IA d'Anthropic), à la demande et sous la direction de ORA, qui teste et décide de ce qui est ajouté. Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
+> Le code est ouvert pour que chacun puisse le relire, le corriger et l'améliorer.
 >
 > Vorace est écrit de zéro. Il ne contient aucun code d'un autre plugin.
 
