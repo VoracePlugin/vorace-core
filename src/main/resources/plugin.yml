@@ -1,7 +1,7 @@
 name: Vorace
 version: '${version}'
 main: fr.vorace.Vorace
-api-version: '1.21'
+api-version: '1.21.4'
 description: Plugin libre de packs de ressources, objets, meubles, blocs et glyphes
 authors: [ORA-KUN]
 website: https://github.com/VoracePlugin/vorace-core
