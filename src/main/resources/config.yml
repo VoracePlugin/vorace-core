@@ -112,6 +112,10 @@ pantin:
   # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
   # lui sans avoir les épaules dans la caméra. Les autres voient le pantin à sa vraie place. 0 : pas de recul.
   recul-pour-soi: 4
+  # Ultimes : le joueur voit la scène comme un film (caméra qui tourne autour de lui, recule pour montrer le phénix, le
+  # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
+  # ces quelques secondes, comme les plugins de cinématiques ; seulement pour les animations qui ont un os « camera ».
+  camera-ultimes: true
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true

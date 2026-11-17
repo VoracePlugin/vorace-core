@@ -38,6 +38,12 @@
   `dust#FF6A00:1.6*40~1.2` (particules colorées) ; placée sur l'os nommé, sinon au milieu du modèle.
 - Son : `nom[*volume][^hauteur]`, par exemple `entity.generic.explode*1.5^0.7`. L'ancienne écriture (nom seul) ne change pas.
 
+### Caméra de cinéma
+- Une animation du pantin dont l'os « camera » est animé (et « camera_cible », le point regardé) se voit comme un film :
+  le joueur passe en spectateur rattaché à une caméra invisible (entité d'affichage, mouvements adoucis), le pantin
+  reste sur place, puis le joueur retrouve son mode de jeu, sa place et son regard à la fin (même après un arrêt du
+  serveur, à sa connexion). `pantin.camera-ultimes`.
+
 ### Apparitions (phénix, météorite, titan des ultimes)
 - `VoraceAPI.apparition(modèle, endroit, yaw, animation, taille)` : un modèle animé apparaît le temps d'une
   animation puis disparaît (rien n'est gardé avec le monde ; base invisible côté joueurs).

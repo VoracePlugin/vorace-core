@@ -310,6 +310,20 @@ public final class Pantins implements Listener {
 
     // ------------------------------------------------------------------ événements
 
+    /** Arrêt du serveur pendant une caméra de cinéma : le joueur retrouve son mode de jeu à sa connexion. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
+    public void retourCinema(PlayerJoinEvent e) {
+        org.bukkit.NamespacedKey cle = new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA);
+        String mode = e.getPlayer().getPersistentDataContainer().get(cle, org.bukkit.persistence.PersistentDataType.STRING);
+        if (mode == null) return;
+        e.getPlayer().getPersistentDataContainer().remove(cle);
+        try {
+            e.getPlayer().setGameMode(org.bukkit.GameMode.valueOf(mode));
+        } catch (IllegalArgumentException ignore) {
+            e.getPlayer().setGameMode(org.bukkit.GameMode.SURVIVAL);
+        }
+    }
+
     @EventHandler
     public void arrivee(PlayerJoinEvent e) {
         if (!actif() || !plugin.getConfig().getBoolean("pantin.preparer-a-la-connexion", true)) return;

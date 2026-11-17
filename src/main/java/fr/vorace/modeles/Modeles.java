@@ -89,6 +89,10 @@ public final class Modeles {
      * voient le pantin à sa vraie place. 0 : pas de copie.
      */
     private float pantinRecul = 4f;
+    /** Caméra de cinéma pour les animations qui ont un os « camera » animé (ultimes). */
+    private boolean cameraCinema = true;
+    /** Mode de jeu du joueur avant une caméra de cinéma (remis à sa connexion si le serveur s'est arrêté pendant). */
+    public static final String CLE_CAMERA = "camera_mode";
     private volatile Map<String, ModeleBB> modeles = Map.of();
     private final Map<UUID, Instance> instances = new LinkedHashMap<>();
     private BukkitTask tache;
@@ -230,6 +234,7 @@ public final class Modeles {
         if (ancien != null && ancien.pantin && ancien.modele == m && ancien.trouver(animation) != null && ancien.memeArmure(armure)) {
             // coups enchaînés : le même pantin joue la suite, sans disparaître entre deux coups
             ancien.demarrer(animation, boucle, false);
+            ancien.debutCinema(animation);
             return true;
         }
         if (ancien != null) {
@@ -256,6 +261,7 @@ public final class Modeles {
         }
         instances.put(joueur.getUniqueId(), i);
         i.demarrer(animation, boucle, false);
+        i.debutCinema(animation);
         return true;
     }
 
@@ -406,6 +412,7 @@ public final class Modeles {
             pantinMonte = plugin.getConfig().getBoolean("pantin.monter-sur-le-joueur", true);
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
+            cameraCinema = plugin.getConfig().getBoolean("pantin.camera-ultimes", true);
         } catch (Throwable t) {
             intervalle = 2;
         }
@@ -495,6 +502,7 @@ public final class Modeles {
 
         /** Appelé une fois quand le modèle disparaît (pantin : le joueur redevient visible). */
         void finir() {
+            finCinema();
             Runnable r = fin;
             fin = null;
             if (r != null) {
@@ -795,7 +803,7 @@ public final class Modeles {
 
         /** Pantin d'un joueur dont les morceaux sont ses passagers. */
         boolean monte() {
-            return pantin && mob && pantinMonte && base instanceof Player;
+            return pantin && mob && pantinMonte && base instanceof Player && ancre == null;
         }
 
         void supprimerParties() {
@@ -808,7 +816,78 @@ public final class Modeles {
         }
 
         Location position() {
-            return fixe != null ? fixe.clone() : base.getLocation();
+            return fixe != null ? fixe.clone() : ancre != null ? ancre.clone() : base.getLocation();
+        }
+
+        // -------------------------------------------------------------- caméra de cinéma (ultimes)
+
+        /** Pendant une caméra de cinéma : le pantin reste là où le joueur était (le joueur, spectateur, suit la caméra). */
+        private Location ancre;
+        private ItemDisplay camera;
+        private org.bukkit.GameMode modeAvant;
+
+        private int indexOs(String nom) {
+            for (int k = 0; k < modele.parties().size(); k++) if (nom.equalsIgnoreCase(modele.parties().get(k).nom())) return k;
+            return -1;
+        }
+
+        /**
+         * Animation dont l'os « camera » est animé (et « camera_cible », le point regardé) : le joueur la voit comme un
+         * film, depuis cette caméra (mode spectateur rattaché à une entité d'affichage invisible, comme les plugins de
+         * cinématiques). Le pantin reste sur place ; à la fin, le joueur retrouve son mode de jeu, sa place et son regard.
+         */
+        void debutCinema(String nomAnimation) {
+            if (!pantin || proprietaire == null || !cameraCinema || camera != null) return;
+            Animation a = trouver(nomAnimation);
+            int kc = indexOs("camera");
+            if (a == null || kc < 0 || a.os().get(modele.parties().get(kc).uuid()) == null) return;
+            Player p = Bukkit.getPlayer(proprietaire);
+            if (p == null) return;
+            ancre = p.getLocation();
+            modeAvant = p.getGameMode();
+            base.eject();   // les morceaux descendent du joueur : le pantin reste à sa place
+            derniere = null;
+            // le joueur voit le vrai pantin (pas sa copie reculée)
+            for (ItemDisplay d : parties) if (d != null) p.showEntity(plugin, d);
+            for (ItemDisplay d : armures) if (d != null) p.showEntity(plugin, d);
+            for (ItemDisplay d : partiesSoi) if (d != null) p.hideEntity(plugin, d);
+            for (ItemDisplay d : armuresSoi) if (d != null) p.hideEntity(plugin, d);
+            Location depart = p.getEyeLocation();
+            camera = depart.getWorld().spawn(depart, ItemDisplay.class, d -> {
+                d.setPersistent(false);
+                d.setTeleportDuration(2);
+                d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
+            });
+            p.getPersistentDataContainer().set(new NamespacedKey(plugin, CLE_CAMERA), PersistentDataType.STRING, modeAvant.name());
+            p.setGameMode(org.bukkit.GameMode.SPECTATOR);
+            p.setSpectatorTarget(camera);
+            majCamera();
+        }
+
+        /** Place la caméra sur l'os « camera », tournée vers « camera_cible ». */
+        private void majCamera() {
+            if (camera == null || !camera.isValid()) return;
+            Location c = positionOs("camera");
+            if (c == null) return;
+            Location v = positionOs("camera_cible");
+            if (v != null && v.distanceSquared(c) > 1e-6) c.setDirection(v.toVector().subtract(c.toVector()));
+            camera.teleport(c);
+            Player p = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
+            if (p != null && p.getGameMode() == org.bukkit.GameMode.SPECTATOR && !camera.equals(p.getSpectatorTarget())) p.setSpectatorTarget(camera);
+        }
+
+        void finCinema() {
+            if (camera == null) return;
+            Player p = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
+            if (p != null) {
+                p.setSpectatorTarget(null);
+                p.setGameMode(modeAvant == null ? org.bukkit.GameMode.SURVIVAL : modeAvant);
+                if (ancre != null) p.teleport(ancre);
+                p.getPersistentDataContainer().remove(new NamespacedKey(plugin, CLE_CAMERA));
+            }
+            camera.remove();
+            camera = null;
+            ancre = null;
         }
 
         // -------------------------------------------------------------- taille, regard, repères
@@ -979,7 +1058,7 @@ public final class Modeles {
             if (mob && !mort) {
                 LivingEntity le = (LivingEntity) base;
                 // pantin : le corps regarde où regarde le joueur (pas le corps du jeu, qui tourne en retard)
-                yaw = pantin && le instanceof Player ? l.getYaw() : corps(le);
+                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? l.getYaw() : corps(le);
                 double dx = derniere == null ? 0 : l.getX() - derniere.getX(), dz = derniere == null ? 0 : l.getZ() - derniere.getZ();
                 double vitesse = Math.sqrt(dx * dx + dz * dz);
                 String voulue = vitesse > 0.15 && trouver("course") != null ? "course" : vitesse > 0.01 ? "marche" : "repos";
@@ -1087,6 +1166,7 @@ public final class Modeles {
             Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
             dernieresPoses = poses;
             teteProprietaire(poses);
+            majCamera();
             Quaternionf droite = Animateur.demiTour();
             float siege = monte() ? (float) base.getHeight() : 0f;
             // copie pour soi : reculée vers l'arrière du corps (l'avant du modèle regarde -z)
