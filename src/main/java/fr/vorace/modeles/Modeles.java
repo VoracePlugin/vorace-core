@@ -72,6 +72,13 @@ public final class Modeles {
     private boolean teinteDegats = true, suiviTete = true, effetsActifs = true;
     /** Pantin des joueurs : rotation (degrés) et décalage vertical (blocs) des têtes de joueur qui portent le skin. */
     private float peauRotationY = 0f, peauDecalageY = 0.25f;
+    /** Pantin monté sur le joueur (passagers) : il suit le joueur sans aucun retard, même pour lui-même. */
+    private boolean pantinMonte = true;
+    /**
+     * Le joueur ne voit pas la tête de son propre pantin : le jeu dessine les têtes de joueur sans élaguer les faces, et
+     * la caméra à la première personne est dedans (l'intérieur de la tête couvrirait l'écran). Les autres la voient.
+     */
+    private boolean pantinCacherTete = true;
     private volatile Map<String, ModeleBB> modeles = Map.of();
     private final Map<UUID, Instance> instances = new LinkedHashMap<>();
     private BukkitTask tache;
@@ -350,6 +357,8 @@ public final class Modeles {
             effetsActifs = plugin.getConfig().getBoolean("modeles.effets", true);
             peauRotationY = (float) plugin.getConfig().getDouble("pantin.correction.rotation-y", 0);
             peauDecalageY = (float) plugin.getConfig().getDouble("pantin.correction.decalage-y", 0.25);
+            pantinMonte = plugin.getConfig().getBoolean("pantin.monter-sur-le-joueur", true);
+            pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", true);
         } catch (Throwable t) {
             intervalle = 2;
         }
@@ -371,7 +380,7 @@ public final class Modeles {
                     }
                     continue;
                 }
-                int iv = i.lointain ? Math.min(10, intervalle * 2) : intervalle;
+                int iv = i.pantin && i.mob ? 1 : i.lointain ? Math.min(10, intervalle * 2) : intervalle;  // pantin d'un joueur : chaque tic
                 if (!i.mettreAJour(iv)) {
                     i.supprimerParties();
                     instances.remove(i.base.getUniqueId());
@@ -604,15 +613,21 @@ public final class Modeles {
             }
             derniere = l;
             if (spectateurs != null) appliquerVisibilite();
-            // pantin : le joueur ne voit pas sa propre tête (elle serait dans sa caméra à la première personne)
             Player soi = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
-            if (soi != null) {
+            if (soi != null && pantinCacherTete) {
                 for (int k = 0; k < parties.length; k++) {
                     String nomOs = modele.parties().get(k).nom();
                     if (parties[k] != null && nomOs != null && nomOs.equalsIgnoreCase("peau_tete")) soi.hideEntity(plugin, parties[k]);
                 }
             }
+            // pantin monté : chaque morceau est passager du joueur ; son jeu le place lui-même à chaque image, sans retard
+            if (monte()) for (Display d : affichages()) base.addPassenger(d);
             mettreAJour(1);
+        }
+
+        /** Pantin d'un joueur dont les morceaux sont ses passagers. */
+        boolean monte() {
+            return pantin && mob && pantinMonte && base instanceof Player;
         }
 
         void supprimerParties() {
@@ -792,7 +807,8 @@ public final class Modeles {
             float teteYaw = 0, tetePitch = 0;
             if (mob && !mort) {
                 LivingEntity le = (LivingEntity) base;
-                yaw = corps(le);
+                // pantin : le corps regarde où regarde le joueur (pas le corps du jeu, qui tourne en retard)
+                yaw = pantin && le instanceof Player ? l.getYaw() : corps(le);
                 double dx = derniere == null ? 0 : l.getX() - derniere.getX(), dz = derniere == null ? 0 : l.getZ() - derniere.getZ();
                 double vitesse = Math.sqrt(dx * dx + dz * dz);
                 String voulue = vitesse > 0.15 && trouver("course") != null ? "course" : vitesse > 0.01 ? "marche" : "repos";
@@ -813,8 +829,18 @@ public final class Modeles {
                 tetePitch = limiter(Float.isNaN(regardPitch) ? 0 : regardPitch, 60);
             }
 
-            // déplacement des parties avec la base
-            if (derniere == null || !derniere.getWorld().equals(l.getWorld()) || derniere.distanceSquared(l) > 1e-6) {
+            // déplacement des parties avec la base (pantin monté : elles sont passagères ; on remonte celles qui sont tombées)
+            if (monte()) {
+                for (Display d : affichages()) {
+                    if (d.getVehicle() != null) continue;
+                    Location c = l.clone();
+                    c.setYaw(0);
+                    c.setPitch(0);
+                    d.teleport(c);
+                    base.addPassenger(d);
+                }
+                derniere = l;
+            } else if (derniere == null || !derniere.getWorld().equals(l.getWorld()) || derniere.distanceSquared(l) > 1e-6) {
                 Location c = l.clone();
                 c.setYaw(0);
                 c.setPitch(0);
@@ -890,12 +916,17 @@ public final class Modeles {
             Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
             dernieresPoses = poses;
             Quaternionf droite = Animateur.demiTour();
+            float siege = monte() ? (float) base.getHeight() : 0f;
             for (int k = 0; k < parties.length; k++) {
                 ItemDisplay d = parties[k];
                 if (d == null || poses[k] == null || !d.isValid()) continue;
                 Pose p = poses[k];
                 Transformation tr = peaux.containsKey(k) ? transformationPeau(k, p)
                     : new Transformation(p.translation(), p.rotation(), p.echelle(), droite);
+                if (siege != 0f && base.equals(d.getVehicle())) {
+                    // passager : le jeu le place au sommet de la boîte du joueur (1,8 debout, 1,5 accroupi) ; on redescend
+                    tr = new Transformation(new Vector3f(tr.getTranslation()).sub(0, siege, 0), tr.getLeftRotation(), tr.getScale(), tr.getRightRotation());
+                }
                 if (tr.equals(envoyees[k])) continue;
                 envoyees[k] = tr;
                 d.setInterpolationDelay(0);

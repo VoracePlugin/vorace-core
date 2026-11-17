@@ -54,7 +54,7 @@ public final class TestPantins {
         // avant du bras droit : (44, 20) 4 x 12 ; haut = lignes 20 à 25, bas = 26 à 31 ; avant de la tête : (8, 8) 8 x 8
         verifier(h.getRGB(8, 8) == skin.getRGB(44, 20) && h.getRGB(15, 15) == skin.getRGB(47, 25),
             "bras droit (haut) : avant du bras -> avant de la tête, 4 x 6 étiré en 8 x 8");
-        verifier(b.getRGB(8, 8) == skin.getRGB(44, 26) && b.getRGB(15, 15) == skin.getRGB(47, 31), "bras droit (bas) : lignes 26 à 31");
+        verifier(b.getRGB(8, 8) == skin.getRGB(44, 24) && b.getRGB(15, 15) == skin.getRGB(47, 31), "bras droit (bas) : lignes 24 à 31 (deux de recouvrement)");
         verifier(h.getRGB(40, 8) == skin.getRGB(44, 36), "manche droite -> chapeau (seconde couche)");
         verifier(h.getRGB(8, 0) == skin.getRGB(44, 16), "dessus du bras -> dessus de la tête");
         BufferedImage corps = d.get("corps_haut");

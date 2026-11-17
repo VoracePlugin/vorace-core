@@ -109,6 +109,13 @@ pantin:
   preparer-a-la-connexion: true
   # Le vrai joueur disparaît pour les autres pendant l'animation (corps invisible, équipement caché).
   cacher-joueur: true
+  # Les morceaux du pantin sont des passagers du joueur : le corps suit le joueur sans aucun retard (y compris pour
+  # lui-même à la première personne). Pendant une animation, Paper refuse de téléporter un joueur qui a des passagers :
+  # un plugin qui téléporte doit d'abord appeler VoraceAPI.arreterJoueur (Matsuri le fait). false : ancien suivi.
+  monter-sur-le-joueur: true
+  # Le joueur ne voit pas la tête de son propre pantin (les autres la voient) : à la première personne, sa caméra est
+  # dedans et le jeu en dessinerait l'intérieur sur tout l'écran. Contrepartie : en F5, il se voit sans tête.
+  cacher-sa-tete: true
   # Réglages de secours si les têtes du pantin sont mal tournées ou décalées en jeu.
   correction:
     rotation-y: 0

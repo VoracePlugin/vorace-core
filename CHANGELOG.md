@@ -13,6 +13,14 @@
 - Envois à MineSkin au rythme qu'il demande (délai lu dans chaque réponse, 3,5 s au moins) ; une erreur 5xx ou 429 est
   réessayée cinq fois en attendant de plus en plus ; un morceau refusé n'arrête plus les autres et est renvoyé à la fin.
   Message d'erreur lisible (code et texte de MineSkin) dans `/vorace pantin etat` et la console.
+- Le pantin est monté sur le joueur (ses morceaux sont des passagers) : il le suit sans aucun retard, même à la
+  première personne, et regarde là où le joueur regarde. Pendant une animation, Paper refuse de téléporter un joueur
+  qui porte des passagers : appeler d'abord `VoraceAPI.arreterJoueur`. Le pantin s'arrête à la mort et au départ.
+  `pantin.monter-sur-le-joueur: false` rend l'ancien suivi.
+- Pantin mis à jour à chaque tic. Le joueur ne voit pas la tête de son propre pantin (`pantin.cacher-sa-tete`) : sa
+  caméra est dedans et le jeu en dessinerait l'intérieur ; les autres la voient.
+- Coudes, genoux et taille fermés : la moitié basse de chaque membre et du tronc reprend deux lignes du skin au-dessus
+  de la jointure et remonte de deux pixels dans le morceau du dessus (un peu plus fine, sans scintillement).
 - `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.
 - Réglages de secours `pantin.correction.rotation-y` et `decalage-y` si les têtes sont mal tournées en jeu.
 - Coups enchaînés : le même pantin joue l'animation suivante sans disparaître, et garde sa dernière pose 0,25 s.

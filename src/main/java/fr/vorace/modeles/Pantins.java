@@ -369,8 +369,15 @@ public final class Pantins implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) preparer(p); }, 40);
     }
 
+    /** Mort : le pantin s'arrête (ses morceaux sont des passagers du joueur). */
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
+    public void mort(org.bukkit.event.entity.PlayerDeathEvent e) {
+        if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getEntity());
+    }
+
     @EventHandler
     public void depart(PlayerQuitEvent e) {
+        if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getPlayer());
         montrer(e.getPlayer());
         invisiblesAvant.remove(e.getPlayer().getUniqueId());
         peaux.remove(e.getPlayer().getUniqueId());

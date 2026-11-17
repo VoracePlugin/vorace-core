@@ -1,6 +1,7 @@
 # Génère le squelette du pantin des joueurs et le mannequin des réactions (projets Blockbench) :
 #   python3 outils/modeles-pantin.py src/main/resources/exemples/modeles
-# joueur.bbmodel : os « peau_... » (un cube chacun), repères poing_droit, poing_gauche, pied_droit, pied_gauche (sans cube,
+# joueur.bbmodel : os « peau_... » (un cube chacun ; les moitiés basses remontent de 2 pixels dans celles du dessus, un peu
+# plus fines, pour que coudes, genoux et taille restent fermés quand ils se plient), repères poing_droit, poing_gauche, pied_droit, pied_gauche (sans cube,
 # pour placer les particules des animations : « flame*20@poing_droit ») que le pantin remplace par des têtes portant le vrai skin ;
 # un modèle de classe (animations de compétences) reprend ce squelette tel quel et ajoute ses animations.
 # mannequin_reactions.bbmodel : mannequin d'essai qui a les réactions aux compétences (saisi, plaque, souleve...).
@@ -81,15 +82,15 @@ PEAU, CHEMISE, PANTALON, VISAGE, CHEVEUX = (0, 0, 8, 8), (8, 0, 16, 8), (16, 0, 
 
 pj = Projet()
 tete = groupe("peau_tete", [0, 24, 0], [pj.cube("tete", [-4, 24, -4], [4, 32, 4], {"tout": PEAU, "north": VISAGE, "up": CHEVEUX})])
-bras_d_bas = groupe("peau_bras_droit_bas", [6, 18, 0], [pj.cube("bras_droit_bas", [4, 12, -2], [8, 18, 2], {"tout": PEAU}), groupe("poing_droit", [6, 12, 0], [])])
+bras_d_bas = groupe("peau_bras_droit_bas", [6, 18, 0], [pj.cube("bras_droit_bas", [4.15, 12, -1.85], [7.85, 20, 1.85], {"tout": PEAU}), groupe("poing_droit", [6, 12, 0], [])])
 bras_d_haut = groupe("peau_bras_droit_haut", [6, 22, 0], [pj.cube("bras_droit_haut", [4, 18, -2], [8, 24, 2], {"tout": CHEMISE}), bras_d_bas])
-bras_g_bas = groupe("peau_bras_gauche_bas", [-6, 18, 0], [pj.cube("bras_gauche_bas", [-8, 12, -2], [-4, 18, 2], {"tout": PEAU}), groupe("poing_gauche", [-6, 12, 0], [])])
+bras_g_bas = groupe("peau_bras_gauche_bas", [-6, 18, 0], [pj.cube("bras_gauche_bas", [-7.85, 12, -1.85], [-4.15, 20, 1.85], {"tout": PEAU}), groupe("poing_gauche", [-6, 12, 0], [])])
 bras_g_haut = groupe("peau_bras_gauche_haut", [-6, 22, 0], [pj.cube("bras_gauche_haut", [-8, 18, -2], [-4, 24, 2], {"tout": CHEMISE}), bras_g_bas])
 corps_haut = groupe("peau_corps_haut", [0, 18, 0], [pj.cube("corps_haut", [-4, 18, -2], [4, 24, 2], {"tout": CHEMISE}), tete, bras_d_haut, bras_g_haut])
-corps_bas = groupe("peau_corps_bas", [0, 12, 0], [pj.cube("corps_bas", [-4, 12, -2], [4, 18, 2], {"tout": CHEMISE}), corps_haut])
-jambe_d_bas = groupe("peau_jambe_droite_bas", [2, 6, 0], [pj.cube("jambe_droite_bas", [0, 0, -2], [4, 6, 2], {"tout": PANTALON}), groupe("pied_droit", [2, 0, 0], [])])
+corps_bas = groupe("peau_corps_bas", [0, 12, 0], [pj.cube("corps_bas", [-3.85, 12, -1.85], [3.85, 20, 1.85], {"tout": CHEMISE}), corps_haut])
+jambe_d_bas = groupe("peau_jambe_droite_bas", [2, 6, 0], [pj.cube("jambe_droite_bas", [0.15, 0, -1.85], [3.85, 8, 1.85], {"tout": PANTALON}), groupe("pied_droit", [2, 0, 0], [])])
 jambe_d_haut = groupe("peau_jambe_droite_haut", [2, 12, 0], [pj.cube("jambe_droite_haut", [0, 6, -2], [4, 12, 2], {"tout": PANTALON}), jambe_d_bas])
-jambe_g_bas = groupe("peau_jambe_gauche_bas", [-2, 6, 0], [pj.cube("jambe_gauche_bas", [-4, 0, -2], [0, 6, 2], {"tout": PANTALON}), groupe("pied_gauche", [-2, 0, 0], [])])
+jambe_g_bas = groupe("peau_jambe_gauche_bas", [-2, 6, 0], [pj.cube("jambe_gauche_bas", [-3.85, 0, -1.85], [-0.15, 8, 1.85], {"tout": PANTALON}), groupe("pied_gauche", [-2, 0, 0], [])])
 jambe_g_haut = groupe("peau_jambe_gauche_haut", [-2, 12, 0], [pj.cube("jambe_gauche_haut", [-4, 6, -2], [0, 12, 2], {"tout": PANTALON}), jambe_g_bas])
 racine = groupe("racine", [0, 0, 0], [corps_bas, jambe_d_haut, jambe_g_haut])
 

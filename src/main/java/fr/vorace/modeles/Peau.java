@@ -29,9 +29,12 @@ public final class Peau {
      *
      * @param base      zone du skin
      * @param surcouche zone de la seconde couche (veste, manches, jambières), ou null
-     * @param haut      vrai : moitié haute (lignes 0 à 5), faux : moitié basse (lignes 6 à 11)
+     * @param haut      vrai : moitié haute (lignes 0 à 5), faux : moitié basse (lignes 4 à 11, recouvrement compris)
      */
     record Morceau(Zone base, Zone surcouche, boolean haut) {}
+
+    /** Lignes du skin (et pixels du cube) que la moitié basse reprend au-dessus de la jointure. */
+    public static final int RECOUVREMENT = 2;
 
     /** Les dix morceaux, par nom d'os du pantin sans le préfixe « peau_ ». */
     public static final List<String> MORCEAUX = List.of("corps_haut", "corps_bas", "bras_droit_haut", "bras_droit_bas",
@@ -97,7 +100,9 @@ public final class Peau {
      * (0, 0) pour la tête, (32, 0) pour le chapeau.
      */
     private static void remplir(BufferedImage src, Zone z, boolean haut, BufferedImage dst, int du, int dv) {
-        int r0 = haut ? 0 : z.h() / 2, rh = z.h() / 2;
+        // moitié basse : deux lignes de plus vers le haut ; son cube remonte de deux pixels dans le morceau du dessus, et
+        // la jointure (coude, genou, taille) reste couverte quand le membre se plie
+        int r0 = haut ? 0 : z.h() / 2 - RECOUVREMENT, rh = haut ? z.h() / 2 : z.h() / 2 + RECOUVREMENT;
         int u = z.u(), v = z.v(), l = z.l(), p = z.p();
         // côtés : droite, avant, gauche, arrière (lignes de la moitié)
         etirer(src, u, v + p + r0, p, rh, dst, du, dv + 8);

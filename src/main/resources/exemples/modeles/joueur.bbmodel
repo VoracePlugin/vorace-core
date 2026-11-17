@@ -111,20 +111,20 @@
    "render_order": "default",
    "allow_mirror_modeling": true,
    "from": [
-    4,
+    4.15,
     12,
-    -2
+    -1.85
    ],
    "to": [
-    8,
-    18,
-    2
+    7.85,
+    20,
+    1.85
    ],
    "autouv": 0,
    "color": 0,
    "origin": [
     6.0,
-    15.0,
+    16.0,
     0.0
    ],
    "faces": {
@@ -277,20 +277,20 @@
    "render_order": "default",
    "allow_mirror_modeling": true,
    "from": [
-    -8,
+    -7.85,
     12,
-    -2
+    -1.85
    ],
    "to": [
-    -4,
-    18,
-    2
+    -4.15,
+    20,
+    1.85
    ],
    "autouv": 0,
    "color": 0,
    "origin": [
     -6.0,
-    15.0,
+    16.0,
     0.0
    ],
    "faces": {
@@ -526,20 +526,20 @@
    "render_order": "default",
    "allow_mirror_modeling": true,
    "from": [
-    -4,
+    -3.85,
     12,
-    -2
+    -1.85
    ],
    "to": [
-    4,
-    18,
-    2
+    3.85,
+    20,
+    1.85
    ],
    "autouv": 0,
    "color": 0,
    "origin": [
     0.0,
-    15.0,
+    16.0,
     0.0
    ],
    "faces": {
@@ -609,20 +609,20 @@
    "render_order": "default",
    "allow_mirror_modeling": true,
    "from": [
+    0.15,
     0,
-    0,
-    -2
+    -1.85
    ],
    "to": [
-    4,
-    6,
-    2
+    3.85,
+    8,
+    1.85
    ],
    "autouv": 0,
    "color": 0,
    "origin": [
     2.0,
-    3.0,
+    4.0,
     0.0
    ],
    "faces": {
@@ -775,20 +775,20 @@
    "render_order": "default",
    "allow_mirror_modeling": true,
    "from": [
-    -4,
+    -3.85,
     0,
-    -2
+    -1.85
    ],
    "to": [
-    0,
-    6,
-    2
+    -0.15,
+    8,
+    1.85
    ],
    "autouv": 0,
    "color": 0,
    "origin": [
     -2.0,
-    3.0,
+    4.0,
     0.0
    ],
    "faces": {
