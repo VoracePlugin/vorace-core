@@ -148,7 +148,25 @@ public final class Modeles {
     public Map<String, byte[]> fichiersPack() {
         Map<String, byte[]> f = new java.util.TreeMap<>();
         for (ModeleBB m : modeles.values()) f.putAll(GenerateurModeles.generer(m));
+        f.putAll(ArmuresPantin.generer(modele(Pantins.SQUELETTE), armuresPantin()));
         return f;
+    }
+
+    /** Armures que le pantin sait porter : celles du jeu et celles de pantin.armures-perso (« babel:mythril »). */
+    public List<String> armuresPantin() {
+        List<String> l = new ArrayList<>(ArmuresPantin.VANILLE);
+        for (String a : plugin.getConfig().getStringList("pantin.armures-perso")) {
+            String n = a.toLowerCase(Locale.ROOT).trim();
+            if (n.isEmpty()) continue;
+            if (!n.contains(":")) n = "minecraft:" + n;
+            if (!l.contains(n)) l.add(n);
+        }
+        return l;
+    }
+
+    /** Objets d'armure du pantin à déclarer dans le pack (identifiant -> teint). */
+    public Map<String, Boolean> idsArmuresPantin() {
+        return ArmuresPantin.ids(modele(Pantins.SQUELETTE), armuresPantin());
     }
 
     public void demarrer() {
@@ -190,10 +208,19 @@ public final class Modeles {
 
     /** @param boucle l'animation recommence jusqu'à {@link #arreterJoueur} */
     public boolean animerJoueur(Player joueur, String id, String animation, boolean boucle, Map<String, ItemStack> peaux, Runnable fin) {
+        return animerJoueur(joueur, id, animation, boucle, peaux, List.of(), fin);
+    }
+
+    /**
+     * @param armure couches d'armure : nom d'os (« peau_corps_haut ») et objet affiché (modèle de {@link ArmuresPantin}),
+     *               posées par-dessus les morceaux du skin et animées avec eux
+     */
+    public boolean animerJoueur(Player joueur, String id, String animation, boolean boucle, Map<String, ItemStack> peaux,
+                                List<Map.Entry<String, ItemStack>> armure, Runnable fin) {
         ModeleBB m = modele(id);
         if (m == null) return false;
         Instance ancien = instances.get(joueur.getUniqueId());
-        if (ancien != null && ancien.pantin && ancien.modele == m && ancien.trouver(animation) != null) {
+        if (ancien != null && ancien.pantin && ancien.modele == m && ancien.trouver(animation) != null && ancien.memeArmure(armure)) {
             // coups enchaînés : le même pantin joue la suite, sans disparaître entre deux coups
             ancien.demarrer(animation, boucle, false);
             return true;
@@ -211,6 +238,14 @@ public final class Modeles {
         for (int k = 0; k < m.parties().size(); k++) {
             String n = m.parties().get(k).nom() == null ? "" : m.parties().get(k).nom().toLowerCase(Locale.ROOT);
             if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
+        }
+        for (Map.Entry<String, ItemStack> c : armure) {
+            for (int k = 0; k < m.parties().size(); k++) {
+                if (!c.getKey().equalsIgnoreCase(m.parties().get(k).nom())) continue;
+                i.armureOs.add(k);
+                i.armureObjets.add(c.getValue());
+                break;
+            }
         }
         instances.put(joueur.getUniqueId(), i);
         i.demarrer(animation, boucle, false);
@@ -494,6 +529,7 @@ public final class Modeles {
         private List<Display> affichages() {
             List<Display> l = new ArrayList<>(parties.length + etiquettes.length);
             for (ItemDisplay d : parties) if (d != null && d.isValid()) l.add(d);
+            for (ItemDisplay d : armures) if (d != null && d.isValid()) l.add(d);
             for (TextDisplay d : etiquettes) if (d != null && d.isValid()) l.add(d);
             return l;
         }
@@ -615,6 +651,20 @@ public final class Modeles {
                     if (spectateurs != null) d.setVisibleByDefault(false);
                 });
             }
+            armures = new ItemDisplay[armureObjets.size()];
+            armuresEnvoyees = new Transformation[armures.length];
+            for (int a = 0; a < armures.length; a++) {
+                ItemStack objet = armureObjets.get(a);
+                armures[a] = l.getWorld().spawn(l, ItemDisplay.class, d -> {
+                    d.setPersistent(false);
+                    d.setItemStack(objet);
+                    d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
+                    d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
+                    d.setTeleportDuration(2);
+                    d.setViewRange(vue);
+                    if (spectateurs != null) d.setVisibleByDefault(false);
+                });
+            }
             derniere = l;
             if (spectateurs != null) appliquerVisibilite();
             Player soi = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
@@ -622,11 +672,24 @@ public final class Modeles {
                 // cachée d'abord ; teteProprietaire la remontre si elle s'éloigne des yeux
                 int kt = indexTete();
                 if (kt >= 0 && kt < parties.length && parties[kt] != null) soi.hideEntity(plugin, parties[kt]);
+                for (int a = 0; a < armures.length; a++) if (armures[a] != null && armureOs.get(a) == kt) soi.hideEntity(plugin, armures[a]);
                 teteSoi = null;
             }
             // pantin monté : chaque morceau est passager du joueur ; son jeu le place lui-même à chaque image, sans retard
             if (monte()) for (Display d : affichages()) base.addPassenger(d);
             mettreAJour(1);
+        }
+
+        /** Couches d'armure du pantin : os porteur et objet affiché ; leurs entités et dernières transformations. */
+        final List<Integer> armureOs = new ArrayList<>();
+        final List<ItemStack> armureObjets = new ArrayList<>();
+        private ItemDisplay[] armures = new ItemDisplay[0];
+        private Transformation[] armuresEnvoyees = new Transformation[0];
+
+        boolean memeArmure(List<Map.Entry<String, ItemStack>> autre) {
+            if (autre.size() != armureObjets.size()) return false;
+            for (int k = 0; k < autre.size(); k++) if (!autre.get(k).getValue().isSimilar(armureObjets.get(k))) return false;
+            return true;
         }
 
         /** Tête du pantin montrée au joueur lui-même (null : pas encore décidé). */
@@ -657,6 +720,10 @@ public final class Modeles {
             boolean montrer = Boolean.TRUE.equals(teteSoi) ? d > 0.45 : d > 0.55;
             if (teteSoi != null && teteSoi == montrer) return;
             teteSoi = montrer;
+            for (int a = 0; a < armures.length; a++) {
+                if (armures[a] == null || armureOs.get(a) != k) continue;
+                if (montrer) soi.showEntity(plugin, armures[a]); else soi.hideEntity(plugin, armures[a]);
+            }
             if (montrer) {
                 soi.showEntity(plugin, parties[k]);
                 soi.sendEquipmentChange(soi, org.bukkit.inventory.EquipmentSlot.HEAD, new ItemStack(org.bukkit.Material.AIR));
@@ -675,6 +742,7 @@ public final class Modeles {
         void supprimerParties() {
             for (Display d : affichages()) d.remove();
             parties = new ItemDisplay[0];
+            armures = new ItemDisplay[0];
             etiquettes = new TextDisplay[0];
         }
 
@@ -975,6 +1043,22 @@ public final class Modeles {
                 d.setInterpolationDelay(0);
                 d.setInterpolationDuration(intervalle);
                 d.setTransformation(tr);
+            }
+            // couches d'armure : même pose que l'os qui les porte (modèle généré à l'échelle 1, pivot en 8, 8, 8)
+            for (int a = 0; a < armures.length; a++) {
+                ItemDisplay d = armures[a];
+                int k = armureOs.get(a);
+                if (d == null || !d.isValid() || k >= poses.length || poses[k] == null) continue;
+                Pose p = poses[k];
+                Vector3f ech = new Vector3f(p.echelle()).div((float) Math.max(1e-6, modele.parties().get(k).echelle()));
+                Vector3f tr = new Vector3f(p.translation());
+                if (siege != 0f && base.equals(d.getVehicle())) tr.sub(0, siege, 0);
+                Transformation t = new Transformation(tr, p.rotation(), ech, droite);
+                if (t.equals(armuresEnvoyees[a])) continue;
+                armuresEnvoyees[a] = t;
+                d.setInterpolationDelay(0);
+                d.setInterpolationDuration(intervalle);
+                d.setTransformation(t);
             }
             if (aEtiquettes) etiquettes(poses, l, intervalle);
             return true;

@@ -117,6 +117,12 @@ pantin:
   # l'intérieur sur tout l'écran) et il porte à la place sa propre tête en casque, que le jeu ne montre qu'en F5. Les
   # autres voient toujours la tête du pantin. false : il voit la tête du pantin même à la première personne.
   cacher-sa-tete: true
+  # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
+  # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
+  armure: true
+  # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
+  # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
+  armures-perso: []
   # Réglages de secours si les têtes du pantin sont mal tournées ou décalées en jeu.
   correction:
     rotation-y: 0

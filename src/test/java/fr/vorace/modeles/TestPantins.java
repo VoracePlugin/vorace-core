@@ -87,6 +87,31 @@ public final class TestPantins {
         verifier(simple.nom().equals("heart") && simple.nombre() == 6 && simple.os() == null, "ancienne écriture (nom seul) inchangée");
         boolean reperes = j.parties().stream().filter(p -> List.of("poing_droit", "poing_gauche", "pied_droit", "pied_gauche").contains(p.nom())).count() == 4;
         verifier(reperes, "joueur : repères poing_droit, poing_gauche, pied_droit, pied_gauche");
+
+        // armure du pantin : modèles posés sur les os, zones des textures d'équipement (64 x 32)
+        java.util.Map<String, byte[]> arm = ArmuresPantin.generer(j, ArmuresPantin.VANILLE);
+        java.util.Map<String, Boolean> idsArm = ArmuresPantin.ids(j, ArmuresPantin.VANILLE);
+        verifier(arm.containsKey("assets/minecraft/atlases/blocks.json") && idsArm.size() == 6 * 17 + 1 && arm.size() == idsArm.size() + 1,
+            "armure : atlas + un modèle par os, couche et matière (" + idsArm.size() + ")");
+        com.google.gson.JsonObject fer = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/iron/humanoid/corps_haut.json"),
+            java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+        com.google.gson.JsonObject el = fer.getAsJsonArray("elements").get(0).getAsJsonObject();
+        verifier(fer.getAsJsonObject("textures").get("0").getAsString().equals("minecraft:entity/equipment/humanoid/iron")
+                && el.get("from").toString().equals("[3.0,7.0,5.0]") && el.get("to").toString().equals("[13.0,15.0,11.0]")
+                && el.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[5.0,10.0,7.0,13.0]")
+                && !el.getAsJsonObject("faces").has("down"),
+            "armure : plastron sur le haut du tronc, gonflé d'un pixel, avant = zone avant du tronc lignes 0 à 5");
+        com.google.gson.JsonObject jb = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/iron/humanoid_leggings/jambe_gauche_bas.json"),
+            java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonArray("elements").get(0).getAsJsonObject();
+        verifier(jb.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[2.0,12.0,1.0,16.0]") && !jb.getAsJsonObject("faces").has("up"),
+            "armure : jambière gauche en miroir, moitié basse avec recouvrement (lignes 4 à 11)");
+        com.google.gson.JsonObject cuir = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/leather/humanoid/tete.json"),
+            java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+        verifier(cuir.getAsJsonArray("elements").size() == 2 && cuir.getAsJsonObject("textures").get("1").getAsString().endsWith("leather_overlay")
+                && idsArm.get("pantin_armure/minecraft/leather/humanoid/tete"),
+            "armure : cuir teint + couche non teinte");
+        verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
+            "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
         if (echecs > 0) System.exit(1);
     }
 }

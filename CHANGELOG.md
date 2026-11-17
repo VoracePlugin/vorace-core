@@ -23,6 +23,10 @@
   (le jeu ne dessine pas son casque à la première personne, mais bien en F5 : il n'est plus jamais sans tête). Dès que
   la tête du pantin s'éloigne des yeux (saut d'un ultime), elle redevient visible et le casque disparaît. Son armure de
   corps lui est aussi cachée pendant l'animation. Les autres voient toujours la tête du pantin.
+- Armure sur le pantin : casque, plastron, jambières et bottes portés sont dessinés sur le pantin et suivent
+  l'animation (modèles générés pour chaque os avec les textures d'équipement du jeu, ajoutées à l'atlas des objets ;
+  cuir teint de sa couleur, éclat des pièces enchantées). `pantin.armure`, `pantin.armures-perso` pour les armures d'un
+  pack. Les ornements (trims) ne sont pas dessinés.
 - Coudes, genoux et taille fermés : la moitié basse de chaque membre et du tronc reprend deux lignes du skin au-dessus
   de la jointure et remonte de deux pixels dans le morceau du dessus (un peu plus fine, sans scintillement).
 - `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.

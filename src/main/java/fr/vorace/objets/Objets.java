@@ -131,6 +131,11 @@ public final class Objets {
         }
         if (plugin.modeles() != null) {
             for (String id : plugin.modeles().idsParties()) visuels.add(new Visuel(id, "paper", null, null, false, cmdPour(id), null, GenerateurPack.NS + ":" + id));
+            // armure portée par le pantin des joueurs (cuir : teinte de l'objet, brun du jeu par défaut)
+            for (Map.Entry<String, Boolean> e : plugin.modeles().idsArmuresPantin().entrySet()) {
+                visuels.add(new Visuel(e.getKey(), "paper", null, null, false, cmdPour(e.getKey()), e.getValue() ? 0xFFA06540 : null,
+                    GenerateurPack.NS + ":" + e.getKey()));
+            }
             sauverCmd();
         }
         Map<String, byte[]> fichiers = new java.util.TreeMap<>(GenerateurPack.generer(visuels, dossierRessources(), format, journal));

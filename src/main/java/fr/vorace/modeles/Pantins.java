@@ -328,12 +328,77 @@ public final class Pantins implements Listener {
             pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
         }
         boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
-            () -> montrer(p));
+            armure(p), () -> montrer(p));
         if (ok) cacher(p);
         return ok;
     }
 
     private final Map<UUID, Boolean> invisiblesAvant = new HashMap<>();
+
+    private static final EquipmentSlot[] ARMURE = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    /**
+     * Armure portée par le joueur, à poser sur son pantin : pour chaque pièce, les couches de {@link ArmuresPantin}
+     * (cuir teint de sa couleur, éclat si enchantée). Une pièce sans modèle d'équipement connu (citrouille, tête...) est
+     * ignorée.
+     */
+    java.util.List<Map.Entry<String, ItemStack>> armure(Player p) {
+        java.util.List<Map.Entry<String, ItemStack>> l = new java.util.ArrayList<>();
+        if (!plugin.getConfig().getBoolean("pantin.armure", true) || plugin.objets() == null) return l;
+        java.util.List<String> connus = plugin.modeles() == null ? ArmuresPantin.VANILLE : plugin.modeles().armuresPantin();
+        for (EquipmentSlot e : ARMURE) {
+            ItemStack porte = p.getEquipment().getItem(e);
+            String asset = asset(porte);
+            if (asset == null || !connus.contains(asset)) continue;
+            for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset))) l.add(Map.entry(c.os(), objetArmure(c, porte)));
+        }
+        return l;
+    }
+
+    /** Modèle d'équipement d'une pièce d'armure (« minecraft:iron »), ou null. */
+    static String asset(ItemStack it) {
+        if (it == null || it.getType().isAir()) return null;
+        try {
+            org.bukkit.inventory.meta.ItemMeta meta = it.getItemMeta();
+            if (meta != null && meta.hasEquippable() && meta.getEquippable().getModel() != null) return meta.getEquippable().getModel().toString();
+        } catch (Throwable ignore) {
+            // API sans composant equippable : on se sert du nom de l'objet
+        }
+        String n = it.getType().name();
+        if (n.equals("TURTLE_HELMET")) return "minecraft:turtle_scute";
+        if (!(n.endsWith("_HELMET") || n.endsWith("_CHESTPLATE") || n.endsWith("_LEGGINGS") || n.endsWith("_BOOTS"))) return null;
+        String mat = n.substring(0, n.lastIndexOf('_'));
+        return switch (mat) {
+            case "LEATHER" -> "minecraft:leather";
+            case "CHAINMAIL" -> "minecraft:chainmail";
+            case "IRON" -> "minecraft:iron";
+            case "GOLDEN" -> "minecraft:gold";
+            case "DIAMOND" -> "minecraft:diamond";
+            case "NETHERITE" -> "minecraft:netherite";
+            default -> null;
+        };
+    }
+
+    private ItemStack objetArmure(ArmuresPantin.Couche c, ItemStack porte) {
+        ItemStack o = plugin.objets().objetVisuel(c.id());
+        if (c.teinte()) {
+            o = o.withType(Material.LEATHER_HORSE_ARMOR);
+            if (o.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta lm) {
+                org.bukkit.Color couleur = porte.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta pm ? pm.getColor()
+                    : org.bukkit.Color.fromRGB(0xA06540);
+                lm.setColor(couleur);
+                o.setItemMeta(lm);
+            }
+        }
+        if (!porte.getEnchantments().isEmpty()) {
+            org.bukkit.inventory.meta.ItemMeta meta = o.getItemMeta();
+            if (meta != null) {
+                meta.setEnchantmentGlintOverride(true);
+                o.setItemMeta(meta);
+            }
+        }
+        return o;
+    }
 
     private static final EquipmentSlot[] EMPLACEMENTS = {EquipmentSlot.HAND, EquipmentSlot.OFF_HAND, EquipmentSlot.HEAD,
         EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
