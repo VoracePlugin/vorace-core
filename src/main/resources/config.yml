@@ -99,13 +99,8 @@ pantin:
   # Pantin des joueurs : pendant une animation de compétence ou une emote, le joueur est caché et remplacé par un
   # modèle animé (modeles-animes/joueur.bbmodel) qui porte son vrai skin, sans mod.
   actif: true
-  # Clé de l'API MineSkin (https://account.mineskin.org/keys) : elle signe les morceaux du skin (10 par skin, gardés dans
-  # peaux/cache.yml). Vide : le pantin garde les habits par défaut du modèle (seule la tête est celle du joueur).
-  # Ne jamais publier cette clé.
-  mineskin-cle: ""
-  mineskin-adresse: "https://api.mineskin.org"
-  # Attente entre deux envois à MineSkin (millisecondes, offre gratuite).
-  delai-ms: 3500
+  # Le skin est lu sur les serveurs de Mojang (gardé ensuite dans peaux/) et dessiné pixel par pixel par des modèles du
+  # pack : plus besoin de MineSkin. Les anciennes clés mineskin-cle, mineskin-adresse et delai-ms ne servent plus.
   preparer-a-la-connexion: true
   # Le vrai joueur disparaît pour les autres pendant l'animation (corps invisible, équipement caché).
   cacher-joueur: true
@@ -113,20 +108,16 @@ pantin:
   # lui-même à la première personne). Pendant une animation, Paper refuse de téléporter un joueur qui a des passagers :
   # un plugin qui téléporte doit d'abord appeler VoraceAPI.arreterJoueur (Matsuri le fait). false : ancien suivi.
   monter-sur-le-joueur: true
-  # Tête du pantin pour le joueur lui-même : tant qu'elle entoure sa caméra, elle lui est cachée (le jeu en dessinerait
-  # l'intérieur sur tout l'écran) et il porte à la place sa propre tête en casque, que le jeu ne montre qu'en F5. Les
-  # autres voient toujours la tête du pantin. false : il voit la tête du pantin même à la première personne.
-  cacher-sa-tete: true
+  # Le joueur voit son propre pantin depuis ses yeux, tête comprise (le jeu n'en dessine pas l'intérieur). Sa copie est
+  # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
+  # lui sans avoir les épaules dans la caméra. Les autres voient le pantin à sa vraie place. 0 : pas de recul.
+  recul-pour-soi: 4
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true
   # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
   # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
   armures-perso: []
-  # Réglages de secours si les têtes du pantin sont mal tournées ou décalées en jeu.
-  correction:
-    rotation-y: 0
-    decalage-y: 0.25
 
 surveillance:
   # Reconstruit le pack tout seul quand un pack source ou un objet change (par exemple après /meg reload).

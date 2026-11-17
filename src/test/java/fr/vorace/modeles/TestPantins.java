@@ -112,6 +112,31 @@ public final class TestPantins {
             "armure : cuir teint + couche non teinte");
         verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
             "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
+
+        // skin pixel par pixel (PeauUV) : modèles du pack et couleurs d'un skin
+        java.util.Map<String, byte[]> uv = PeauUV.generer(j);
+        long objetsUV = uv.keySet().stream().filter(k -> k.startsWith("assets/vorace/items/pantin_peau/")).count();
+        verifier(objetsUV == 15 && uv.containsKey("assets/vorace/textures/item/pantin_pixel.png"),
+            "skin UV : 11 morceaux + 4 bras fins, texture d'un pixel blanc (" + objetsUV + ")");
+        com.google.gson.JsonObject baseTete = com.google.gson.JsonParser.parseString(new String(uv.get("assets/vorace/models/pantin_peau/tete/base.json"),
+            java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+        com.google.gson.JsonArray elTete = baseTete.getAsJsonArray("elements");
+        com.google.gson.JsonObject premier = elTete.get(0).getAsJsonObject();
+        verifier(elTete.size() == 384 && premier.get("from").toString().equals("[11.0,15.0,4.0]") && premier.get("to").toString().equals("[12.0,16.0,4.0]")
+                && premier.getAsJsonObject("faces").getAsJsonObject("north").get("tintindex").getAsInt() == 0,
+            "skin UV : tête = 384 carrés, premier pixel de l'avant en haut côté +x (droite du joueur)");
+        com.google.gson.JsonObject defTete = com.google.gson.JsonParser.parseString(new String(uv.get("assets/vorace/items/pantin_peau/tete.json"),
+            java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("model");
+        verifier(defTete.get("type").getAsString().equals("minecraft:composite") && defTete.getAsJsonArray("models").size() == 1 + 384
+                && defTete.getAsJsonArray("models").get(1).getAsJsonObject().get("type").getAsString().equals("minecraft:condition"),
+            "skin UV : objet = base + un carré par pixel du chapeau, affiché selon son drapeau");
+        java.util.Map<String, PeauUV.Donnees> dd = PeauUV.donnees(j, skin, false);
+        PeauUV.Donnees dt = dd.get("tete");
+        verifier(dd.size() == 11 && dt.couleurs().length == 768 && dt.drapeaux().length == 384 && dt.couleurs()[0] == (skin.getRGB(8, 8) & 0xFFFFFF),
+            "skin UV : couleurs de la tête (base puis chapeau), premier = pixel (8, 8) du skin");
+        PeauUV.Donnees bf = PeauUV.donnees(j, skin, true).get("bras_droit_haut");
+        verifier(bf != null && PeauUV.morceauObjet("bras_droit_haut", true).equals("bras_droit_haut_fin") && bf.couleurs().length < dd.get("bras_droit_haut").couleurs().length,
+            "skin UV : bras fins (3 pixels) pour les skins « slim »");
         if (echecs > 0) System.exit(1);
     }
 }

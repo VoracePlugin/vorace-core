@@ -3,26 +3,24 @@
 ## 1.4.0 (novembre 2026) : pantin des joueurs et réactions des monstres
 
 ### Pantin des joueurs (animations du corps entier avec le vrai skin, sans mod)
+- **Skin dessiné pixel par pixel** (même technique que BetterModel) : chaque morceau du pantin est un modèle du pack
+  fait d'un carré par pixel, coloré avec le skin du joueur par le composant custom_model_data (seconde couche
+  affichée selon un drapeau par pixel ; bras fins pour les skins « slim »). Plus de MineSkin ni de clé : le skin est lu
+  chez Mojang une fois puis gardé dans `peaux/`. Le jeu dessine ces modèles faces arrière élaguées : le joueur voit son
+  propre pantin depuis ses yeux, tête comprise, sans en voir l'intérieur, et se voit avec sa vraie tête en F5.
+- Copie du pantin pour le joueur lui-même, reculée de `pantin.recul-pour-soi` pixels (4, comme le mod « First Person
+  Model ») : à la première personne, il voit ses bras et ses poings partir devant lui sans les épaules dans la caméra.
 - `VoraceAPI.animerJoueur(joueur, modèle, animation)` : pendant l'animation, le joueur est caché (corps invisible,
-  équipement vide envoyé aux autres) et remplacé par un modèle animé dont chaque os « peau_... » porte une tête de
-  joueur étirée sur son cube. Le joueur ne voit pas sa propre tête (première personne). Le pantin disparaît à la fin.
+  équipement vide envoyé aux autres) et remplacé par un modèle animé dont chaque os « peau_... » porte le morceau de
+  skin correspondant. Le pantin disparaît à la fin.
 - Squelette `modeles-animes/joueur.bbmodel` (tête + tronc, bras et jambes en deux morceaux), remis s'il manque ; un
   modèle de classe reprend ce squelette et ajoute ses animations. Animations d'essai : `essai`, `salut`, `croix`.
-- Skin découpé en dix morceaux (`Peau`), signés par MineSkin (clé `pantin.mineskin-cle`, un envoi à la fois) et gardés
-  dans `peaux/cache.yml` ; préparé à la connexion. Sans clé ou pendant la préparation : habits par défaut du squelette.
-- Envois à MineSkin au rythme qu'il demande (délai lu dans chaque réponse, 3,5 s au moins) ; une erreur 5xx ou 429 est
-  réessayée cinq fois en attendant de plus en plus ; un morceau refusé n'arrête plus les autres et est renvoyé à la fin.
-  Message d'erreur lisible (code et texte de MineSkin) dans `/vorace pantin etat` et la console.
+- Skin préparé à la connexion ; pendant la préparation : habits par défaut du squelette.
 - Le pantin est monté sur le joueur (ses morceaux sont des passagers) : il le suit sans aucun retard, même à la
   première personne, et regarde là où le joueur regarde. Pendant une animation, Paper refuse de téléporter un joueur
   qui porte des passagers : appeler d'abord `VoraceAPI.arreterJoueur`. Le pantin s'arrête à la mort et au départ.
   `pantin.monter-sur-le-joueur: false` rend l'ancien suivi.
 - Pantin mis à jour à chaque tic.
-- Tête pour soi-même : le jeu dessine les têtes de joueur sans élaguer les faces, donc la tête du pantin est cachée au
-  joueur tant qu'elle entoure ses yeux, et il porte à la place sa propre tête en casque sur son vrai corps invisible
-  (le jeu ne dessine pas son casque à la première personne, mais bien en F5 : il n'est plus jamais sans tête). Dès que
-  la tête du pantin s'éloigne des yeux (saut d'un ultime), elle redevient visible et le casque disparaît. Son armure de
-  corps lui est aussi cachée pendant l'animation. Les autres voient toujours la tête du pantin.
 - Armure sur le pantin : casque, plastron, jambières et bottes portés sont dessinés sur le pantin et suivent
   l'animation (modèles générés pour chaque os avec les textures d'équipement du jeu, ajoutées à l'atlas des objets ;
   cuir teint de sa couleur, éclat des pièces enchantées). `pantin.armure`, `pantin.armures-perso` pour les armures d'un

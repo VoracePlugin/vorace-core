@@ -43,10 +43,9 @@ import java.util.concurrent.Executors;
  * Pantin des joueurs : pendant une animation (compétence, emote), le joueur est caché et remplacé par un modèle animé
  * dont chaque morceau porte son vrai skin, sans mod.
  *
- * <p>Le skin du joueur est découpé en dix morceaux ({@link Peau}) ; chaque morceau devient un skin signé par MineSkin
- * (https://mineskin.org, clé dans config.yml, pantin.mineskin-cle), gardé dans plugins/Vorace/peaux/cache.yml : un
- * même morceau n'est jamais envoyé deux fois. La tête est celle du joueur. Tant que ses morceaux ne sont pas prêts,
- * le pantin garde le dessin du modèle « joueur » (habits par défaut).
+ * <p>Chaque morceau du pantin (tête, moitiés du tronc, des bras et des jambes) est un modèle du pack fait d'un carré
+ * par pixel, coloré avec le skin du joueur par le composant custom_model_data ({@link PeauUV}, même technique que
+ * BetterModel). Tant que ses morceaux ne sont pas prêts, le pantin garde le dessin du modèle « joueur ».
  */
 public final class Pantins implements Listener {
 
@@ -119,71 +118,71 @@ public final class Pantins implements Listener {
         return e + " (" + (m == null ? 0 : m.size()) + "/" + (Peau.MORCEAUX.size() + 1) + " morceaux prêts)";
     }
 
-    /** Prépare les morceaux du skin du joueur (en arrière-plan). */
+    /**
+     * Prépare les morceaux du skin du joueur (en arrière-plan) : le skin est lu sur les serveurs de Mojang (gardé ensuite
+     * dans plugins/Vorace/peaux/ sous son empreinte, sans nouveau téléchargement), puis chaque morceau devient un objet
+     * coloré pixel par pixel ({@link PeauUV}). Rien n'est envoyé à MineSkin.
+     */
     public void preparer(Player p) {
         UUID id = p.getUniqueId();
         Map<String, ItemStack> m = new ConcurrentHashMap<>();
-        m.put("tete", tete(p.getPlayerProfile()));
         peaux.put(id, m);
-        String cle = cle();
-        if (cle.isEmpty()) {
-            etats.put(id, "pas de clé MineSkin (config.yml, pantin.mineskin-cle) : habits par défaut");
-            return;
-        }
         String[] texture = texture(p.getPlayerProfile());
         if (texture == null) {
             etats.put(id, "skin introuvable (joueur sans skin ou serveur hors ligne) : habits par défaut");
             return;
         }
+        ModeleBB squelette = plugin.modeles() == null ? null : plugin.modeles().modele(SQUELETTE);
+        if (squelette == null) {
+            etats.put(id, "squelette « joueur » absent : habits par défaut");
+            return;
+        }
         etats.put(id, "en cours");
         file.submit(() -> {
             try {
-                HttpResponse<byte[]> r = http.send(HttpRequest.newBuilder(URI.create(texture[0])).timeout(Duration.ofSeconds(20)).GET().build(),
-                    HttpResponse.BodyHandlers.ofByteArray());
-                if (r.statusCode() != 200) throw new IllegalStateException("skin : HTTP " + r.statusCode());
-                BufferedImage skin = ImageIO.read(new ByteArrayInputStream(r.body()));
+                String nom = texture[0].substring(texture[0].lastIndexOf('/') + 1).replaceAll("[^0-9a-zA-Z]", "");
+                File local = new File(new File(plugin.getDataFolder(), "peaux"), nom + ".png");
+                byte[] octets;
+                if (local.isFile()) {
+                    octets = java.nio.file.Files.readAllBytes(local.toPath());
+                } else {
+                    HttpResponse<byte[]> r = http.send(HttpRequest.newBuilder(URI.create(texture[0])).timeout(Duration.ofSeconds(20)).GET().build(),
+                        HttpResponse.BodyHandlers.ofByteArray());
+                    if (r.statusCode() != 200) throw new IllegalStateException("skin : HTTP " + r.statusCode());
+                    octets = r.body();
+                    local.getParentFile().mkdirs();
+                    java.nio.file.Files.write(local.toPath(), octets);
+                }
+                BufferedImage skin = ImageIO.read(new ByteArrayInputStream(octets));
                 if (skin == null) throw new IllegalStateException("skin illisible");
                 boolean fin = "slim".equals(texture[1]);
-                int faits = 0;
-                String derniereErreur = null;
-                java.util.List<String> rates = new java.util.ArrayList<>();
-                // deux passages : un morceau refusé une fois (MineSkin surchargé) est renvoyé à la fin
-                Map<String, BufferedImage> morceaux = Peau.decouper(skin, fin);
-                java.util.List<String> aFaire = new java.util.ArrayList<>(morceaux.keySet());
-                for (int passage = 0; passage < 2 && !aFaire.isEmpty(); passage++) {
-                    rates.clear();
-                    for (String morceau : aFaire) {
-                        byte[] png = png(morceaux.get(morceau));
-                        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(png)).substring(0, 32);
-                        String[] signe = cache.get(hash);
-                        if (signe == null) {
-                            try {
-                                signe = mineskin(cle, png, morceau);
-                            } catch (IllegalStateException ex) {
-                                derniereErreur = ex.getMessage();
-                                plugin.getLogger().warning("Pantins : morceau " + morceau + " de " + p.getName() + " : " + ex.getMessage());
-                                rates.add(morceau);
-                                continue;
-                            }
-                            sauverCache(hash, signe[0], signe[1]);
-                        }
-                        String[] sg = signe;
-                        Bukkit.getScheduler().runTask(plugin, () -> m.put(morceau, tete(sg[0], sg[1], hash)));
-                        faits++;
-                        etats.put(id, "en cours (" + faits + "/" + morceaux.size() + " morceaux prêts)");
-                    }
-                    aFaire = new java.util.ArrayList<>(rates);
-                }
-                if (rates.isEmpty()) etats.put(id, "prêt");
-                else etats.put(id, "prêt sauf " + rates.size() + " morceau(x) (" + String.join(", ", rates) + ") : " + derniereErreur
-                    + " ; relance /vorace pantin preparer");
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
+                Map<String, PeauUV.Donnees> donnees = PeauUV.donnees(squelette, skin, fin);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    for (Map.Entry<String, PeauUV.Donnees> e : donnees.entrySet()) m.put(e.getKey(), objetPeau(PeauUV.morceauObjet(e.getKey(), fin), e.getValue()));
+                    etats.put(id, "prêt");
+                });
             } catch (Exception ex) {
-                etats.put(id, "erreur : " + ex.getMessage() + " (habits par défaut pour les morceaux manquants)");
+                etats.put(id, "erreur : " + ex.getMessage() + " (habits par défaut)");
                 plugin.getLogger().warning("Pantins : skin de " + p.getName() + " : " + ex.getMessage());
             }
         });
+    }
+
+    /** Objet d'un morceau : modèle du pack (pantin_peau/...) et couleurs de ses pixels dans custom_model_data. */
+    private static ItemStack objetPeau(String morceau, PeauUV.Donnees d) {
+        ItemStack o = new ItemStack(Material.PAPER);
+        org.bukkit.inventory.meta.ItemMeta meta = o.getItemMeta();
+        meta.setItemModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, PeauUV.id(morceau)));
+        org.bukkit.inventory.meta.components.CustomModelDataComponent cmd = meta.getCustomModelDataComponent();
+        java.util.List<org.bukkit.Color> couleurs = new java.util.ArrayList<>(d.couleurs().length);
+        for (int c : d.couleurs()) couleurs.add(org.bukkit.Color.fromRGB(c & 0xFFFFFF));
+        java.util.List<Boolean> drapeaux = new java.util.ArrayList<>(d.drapeaux().length);
+        for (boolean b : d.drapeaux()) drapeaux.add(b);
+        cmd.setColors(couleurs);
+        cmd.setFlags(drapeaux);
+        meta.setCustomModelDataComponent(cmd);
+        o.setItemMeta(meta);
+        return o;
     }
 
     /** URL du skin et modèle (« slim » ou « classic ») depuis la propriété « textures » du profil, ou null. */
@@ -403,8 +402,8 @@ public final class Pantins implements Listener {
     private static final EquipmentSlot[] EMPLACEMENTS = {EquipmentSlot.HAND, EquipmentSlot.OFF_HAND, EquipmentSlot.HEAD,
         EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
-    /** Armure que le joueur lui-même ne doit plus voir sur son vrai corps (invisible) en F5 ; la tête est gérée par Modeles. */
-    private static final EquipmentSlot[] ARMURE_SOI = {EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+    /** Armure que le joueur lui-même ne doit plus voir sur son vrai corps invisible (son pantin la porte). */
+    private static final EquipmentSlot[] ARMURE_SOI = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
     /**
      * Le vrai joueur disparaît pour les autres (corps invisible, équipement vide envoyé à ceux qui le voient). Pour
@@ -431,7 +430,6 @@ public final class Pantins implements Listener {
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         }
         for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
-        p.sendEquipmentChange(p, EquipmentSlot.HEAD, p.getEquipment().getItem(EquipmentSlot.HEAD));
     }
 
     // ------------------------------------------------------------------ événements
