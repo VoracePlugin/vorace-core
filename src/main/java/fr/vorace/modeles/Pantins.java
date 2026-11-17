@@ -7,7 +7,6 @@ import com.google.gson.JsonParser;
 import fr.vorace.Vorace;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -20,18 +19,15 @@ import org.bukkit.inventory.meta.SkullMeta;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -55,26 +51,19 @@ public final class Pantins implements Listener {
     private final Vorace plugin;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
         .followRedirects(HttpClient.Redirect.NORMAL).build();
-    /** Un seul envoi à MineSkin à la fois (limite de l'offre gratuite). */
+    /** Lecture des skins en arrière-plan, une à la fois. */
     private final ExecutorService file = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "Vorace-Peaux");
         t.setDaemon(true);
         return t;
     });
-    /** Morceaux signés, par empreinte de l'image du morceau : « value » et « signature ». */
-    private final Map<String, String[]> cache = new ConcurrentHashMap<>();
     /** Têtes prêtes par joueur : nom du morceau -> tête de joueur qui porte ce morceau. */
     private final Map<UUID, Map<String, ItemStack>> peaux = new ConcurrentHashMap<>();
     /** État de la préparation par joueur (pour /vorace pantin etat). */
     private final Map<UUID, String> etats = new ConcurrentHashMap<>();
-    private File fichierCache;
 
     public Pantins(Vorace plugin) {
         this.plugin = plugin;
-    }
-
-    private String cle() {
-        return plugin.getConfig().getString("pantin.mineskin-cle", "").trim();
     }
 
     public boolean actif() {
@@ -82,32 +71,12 @@ public final class Pantins implements Listener {
     }
 
     public void charger() {
-        fichierCache = new File(new File(plugin.getDataFolder(), "peaux"), "cache.yml");
-        if (!fichierCache.isFile()) return;
-        YamlConfiguration y = YamlConfiguration.loadConfiguration(fichierCache);
-        for (String k : y.getKeys(false)) {
-            String v = y.getString(k + ".value"), sig = y.getString(k + ".signature");
-            if (v != null && sig != null) cache.put(k, new String[]{v, sig});
-        }
-        plugin.getLogger().info("Pantins : " + cache.size() + " morceau(x) de skin déjà signé(s)");
+        // rien à charger : les skins lus sont gardés dans peaux/<empreinte>.png
     }
 
     public void arreter() {
         file.shutdownNow();
         for (Player p : Bukkit.getOnlinePlayers()) montrer(p);
-    }
-
-    private synchronized void sauverCache(String hash, String value, String signature) {
-        cache.put(hash, new String[]{value, signature});
-        try {
-            fichierCache.getParentFile().mkdirs();
-            YamlConfiguration y = fichierCache.isFile() ? YamlConfiguration.loadConfiguration(fichierCache) : new YamlConfiguration();
-            y.set(hash + ".value", value);
-            y.set(hash + ".signature", signature);
-            y.save(fichierCache);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Pantins : cache des skins non sauvé : " + e.getMessage());
-        }
     }
 
     // ------------------------------------------------------------------ préparation
@@ -121,7 +90,7 @@ public final class Pantins implements Listener {
     /**
      * Prépare les morceaux du skin du joueur (en arrière-plan) : le skin est lu sur les serveurs de Mojang (gardé ensuite
      * dans plugins/Vorace/peaux/ sous son empreinte, sans nouveau téléchargement), puis chaque morceau devient un objet
-     * coloré pixel par pixel ({@link PeauUV}). Rien n'est envoyé à MineSkin.
+     * coloré pixel par pixel ({@link PeauUV}). Aucun service extérieur.
      */
     public void preparer(Player p) {
         UUID id = p.getUniqueId();
@@ -202,94 +171,6 @@ public final class Pantins implements Listener {
         return null;
     }
 
-    private static byte[] png(BufferedImage img) throws java.io.IOException {
-        ByteArrayOutputStream o = new ByteArrayOutputStream();
-        ImageIO.write(img, "png", o);
-        return o.toByteArray();
-    }
-
-    /**
-     * Envoie un morceau à MineSkin (POST /v2/generate, attend le résultat) ; renvoie {value, signature}.
-     * Trop de demandes (429) : attend puis recommence (5 essais).
-     */
-    /** Heure (ms) avant laquelle MineSkin ne veut pas de nouvel envoi (rateLimit.next / delay de ses réponses). */
-    private volatile long prochainEnvoi;
-
-    private void attendreMineSkin() throws InterruptedException {
-        long minimum = Math.max(0, plugin.getConfig().getLong("pantin.delai-ms", 3500));
-        long attente = Math.max(prochainEnvoi - System.currentTimeMillis(), 0);
-        Thread.sleep(Math.max(attente, minimum));
-    }
-
-    /** Lit le délai demandé par MineSkin dans sa réponse (succès ou erreur). */
-    private void noterDelai(String corps) {
-        try {
-            JsonObject rl = JsonParser.parseString(corps).getAsJsonObject().getAsJsonObject("rateLimit");
-            if (rl == null) return;
-            long next = rl.has("next") && rl.getAsJsonObject("next").has("absolute") ? rl.getAsJsonObject("next").get("absolute").getAsLong() : 0;
-            long delai = rl.has("delay") && rl.getAsJsonObject("delay").has("millis") ? rl.getAsJsonObject("delay").get("millis").getAsLong() : 0;
-            prochainEnvoi = Math.max(next, System.currentTimeMillis() + delai) + 250;
-        } catch (RuntimeException ignore) {
-            // réponse sans JSON : on garde le délai de la config
-        }
-    }
-
-    /** Message lisible d'une erreur MineSkin : code et texte de la première erreur. */
-    static String erreurMineSkin(int statut, String corps) {
-        try {
-            JsonObject j = JsonParser.parseString(corps).getAsJsonObject();
-            if (j.has("errors") && j.getAsJsonArray("errors").size() > 0) {
-                JsonObject e = j.getAsJsonArray("errors").get(0).getAsJsonObject();
-                return "MineSkin : HTTP " + statut + " " + (e.has("code") ? e.get("code").getAsString() : "") + " " + (e.has("message") ? e.get("message").getAsString() : "");
-            }
-        } catch (RuntimeException ignore) {
-            // pas du JSON
-        }
-        return "MineSkin : HTTP " + statut + " " + corps.substring(0, Math.min(160, corps.length()));
-    }
-
-    private String[] mineskin(String cle, byte[] png, String nom) throws Exception {
-        String limite = "----vorace" + UUID.randomUUID().toString().replace("-", "");
-        String derniere = "MineSkin : trop de demandes, réessaie plus tard";
-        for (int essai = 0; essai < 5; essai++) {
-            attendreMineSkin();
-            ByteArrayOutputStream corps = new ByteArrayOutputStream();
-            champ(corps, limite, "variant", "classic");
-            champ(corps, limite, "visibility", "unlisted");
-            champ(corps, limite, "name", "vorace_" + nom);
-            corps.write(("--" + limite + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + nom + ".png\"\r\n"
-                + "Content-Type: image/png\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-            corps.write(png);
-            corps.write(("\r\n--" + limite + "--\r\n").getBytes(StandardCharsets.UTF_8));
-            HttpRequest req = HttpRequest.newBuilder(URI.create(plugin.getConfig().getString("pantin.mineskin-adresse", "https://api.mineskin.org") + "/v2/generate"))
-                .timeout(Duration.ofSeconds(90))
-                .header("Authorization", "Bearer " + cle)
-                .header("User-Agent", "Vorace/" + plugin.getPluginMeta().getVersion())
-                .header("Content-Type", "multipart/form-data; boundary=" + limite)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(corps.toByteArray()))
-                .build();
-            HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString());
-            noterDelai(r.body());
-            if (r.statusCode() == 429 || r.statusCode() / 100 == 5) {
-                // trop de demandes ou MineSkin en difficulté : on attend de plus en plus longtemps et on recommence
-                derniere = erreurMineSkin(r.statusCode(), r.body());
-                plugin.getLogger().info("Pantins : " + derniere + " (essai " + (essai + 1) + "/5, nouvel essai)");
-                long attente = r.headers().firstValueAsLong("retry-after").orElse(0) * 1000;
-                Thread.sleep(Math.max(attente, 4000L * (essai + 1)));
-                continue;
-            }
-            if (r.statusCode() / 100 != 2) throw new IllegalStateException(erreurMineSkin(r.statusCode(), r.body()));
-            JsonObject data = JsonParser.parseString(r.body()).getAsJsonObject().getAsJsonObject("skin")
-                .getAsJsonObject("texture").getAsJsonObject("data");
-            return new String[]{data.get("value").getAsString(), data.get("signature").getAsString()};
-        }
-        throw new IllegalStateException(derniere);
-    }
-
-    private static void champ(ByteArrayOutputStream o, String limite, String nom, String valeur) {
-        o.writeBytes(("--" + limite + "\r\nContent-Disposition: form-data; name=\"" + nom + "\"\r\n\r\n" + valeur + "\r\n")
-            .getBytes(StandardCharsets.UTF_8));
-    }
 
     private static ItemStack tete(PlayerProfile profil) {
         ItemStack t = new ItemStack(Material.PLAYER_HEAD);
@@ -299,11 +180,6 @@ public final class Pantins implements Listener {
         return t;
     }
 
-    private static ItemStack tete(String value, String signature, String hash) {
-        PlayerProfile profil = Bukkit.createProfile(UUID.nameUUIDFromBytes(hash.getBytes(StandardCharsets.UTF_8)), "vorace_peau");
-        profil.setProperty(new ProfileProperty("textures", value, signature));
-        return tete(profil);
-    }
 
     // ------------------------------------------------------------------ animation
 
