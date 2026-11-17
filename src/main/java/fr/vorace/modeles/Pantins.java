@@ -254,6 +254,16 @@ public final class Pantins implements Listener {
 
     /** Joue une animation du pantin du joueur (modèle « joueur » ou un modèle au même squelette). */
     public boolean jouer(Player p, String modele, String animation) {
+        return jouer(p, modele, animation, false);
+    }
+
+    /** Arrête le pantin du joueur (fin d'une animation en boucle). */
+    public void arreter(Player p) {
+        if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
+    }
+
+    /** @param boucle animation répétée jusqu'à {@link #arreter(Player)} (Reprise de souffle) */
+    public boolean jouer(Player p, String modele, String animation, boolean boucle) {
         Modeles m = plugin.modeles();
         if (m == null || !actif()) return false;
         Map<String, ItemStack> pretes = peaux.get(p.getUniqueId());
@@ -261,7 +271,7 @@ public final class Pantins implements Listener {
             preparer(p);
             pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
         }
-        boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, new LinkedHashMap<>(pretes),
+        boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
             () -> montrer(p));
         if (ok) cacher(p);
         return ok;

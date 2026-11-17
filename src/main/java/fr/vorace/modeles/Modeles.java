@@ -165,9 +165,28 @@ public final class Modeles {
      * @return faux si le modèle ou l'animation n'existe pas
      */
     public boolean animerJoueur(Player joueur, String id, String animation, Map<String, ItemStack> peaux, Runnable fin) {
+        return animerJoueur(joueur, id, animation, false, peaux, fin);
+    }
+
+    /** Arrête l'animation du pantin du joueur (animation en boucle : Reprise de souffle) ; il disparaît. */
+    public void arreterJoueur(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin) return;
+        i.supprimerParties();
+        instances.remove(joueur.getUniqueId());
+        i.finir();
+    }
+
+    /** @param boucle l'animation recommence jusqu'à {@link #arreterJoueur} */
+    public boolean animerJoueur(Player joueur, String id, String animation, boolean boucle, Map<String, ItemStack> peaux, Runnable fin) {
         ModeleBB m = modele(id);
         if (m == null) return false;
         Instance ancien = instances.get(joueur.getUniqueId());
+        if (ancien != null && ancien.pantin && ancien.modele == m && ancien.trouver(animation) != null) {
+            // coups enchaînés : le même pantin joue la suite, sans disparaître entre deux coups
+            ancien.demarrer(animation, boucle, false);
+            return true;
+        }
         if (ancien != null) {
             ancien.supprimerParties();
             instances.remove(joueur.getUniqueId());
@@ -183,7 +202,7 @@ public final class Modeles {
             if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
         }
         instances.put(joueur.getUniqueId(), i);
-        i.demarrer(animation, false, false);
+        i.demarrer(animation, boucle, false);
         return true;
     }
 
@@ -785,7 +804,9 @@ public final class Modeles {
                     forcee = null;
                 } else if (!forceeBoucle && !fa.boucle().equals("loop") && tf >= fa.duree()) {
                     if (mort) return false;
-                    if (!fa.boucle().equals("hold") || forceePartielle || pantin) forcee = null;
+                    // pantin : garde la dernière pose 0,25 s (le coup suivant d'un combo reprend le même pantin)
+                    if (pantin && tf < fa.duree() + 0.25) { /* attend */ }
+                    else if (!fa.boucle().equals("hold") || forceePartielle || pantin) forcee = null;
                 }
             }
             if (pantin && forcee == null) return false;  // fin de l'animation du joueur : le pantin disparaît
@@ -895,26 +916,33 @@ public final class Modeles {
             fr.vorace.api.VoraceModeleEffetEvent ev = new fr.vorace.api.VoraceModeleEffetEvent(base, modele.id(), a.nom(), e.type(), e.valeur());
             Bukkit.getPluginManager().callEvent(ev);
             if (ev.isCancelled()) return;
-            Location l = position().add(0, modele.hauteur() / 32.0 * taille, 0);
+            EffetSpec sp = EffetSpec.lire(e.valeur());
+            Location l = sp.os() != null ? positionOs(sp.os()) : null;
+            if (l == null) l = position().add(0, modele.hauteur() / 32.0 * taille, 0);
             World w = l.getWorld();
             if (w == null) return;
             switch (e.type()) {
                 case "sound" -> {
-                    String son = e.valeur().toLowerCase(Locale.ROOT);
                     sonsJoues++;
-                    if (spectateurs == null) w.playSound(l, son, org.bukkit.SoundCategory.NEUTRAL, 1f, 1f);
-                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.playSound(l, son, org.bukkit.SoundCategory.NEUTRAL, 1f, 1f); }
+                    if (spectateurs == null) w.playSound(l, sp.nom(), org.bukkit.SoundCategory.PLAYERS, sp.volume(), sp.hauteur());
+                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.playSound(l, sp.nom(), org.bukkit.SoundCategory.PLAYERS, sp.volume(), sp.hauteur()); }
                 }
                 case "particle" -> {
-                    String nom = e.valeur().toLowerCase(Locale.ROOT);
-                    if (nom.startsWith("minecraft:")) nom = nom.substring(10);
                     org.bukkit.Particle p = null;
-                    try { p = org.bukkit.Registry.PARTICLE_TYPE.get(NamespacedKey.minecraft(nom)); } catch (IllegalArgumentException ignore) { }
-                    // particule de Bedrock, inconnue ou qui demande des données : seul l'événement est envoyé
-                    if (p == null || p.getDataType() != Void.class) return;
+                    try { p = org.bukkit.Registry.PARTICLE_TYPE.get(NamespacedKey.minecraft(sp.nom())); } catch (IllegalArgumentException ignore) { }
+                    if (p == null) return;
+                    Object donnees = null;
+                    if (p.getDataType() == org.bukkit.Particle.DustOptions.class) {
+                        donnees = new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(sp.couleur() < 0 ? 0xFFFFFF : sp.couleur()), sp.taille());
+                    } else if (p.getDataType() == org.bukkit.Color.class) {
+                        donnees = org.bukkit.Color.fromARGB(0xFF000000 | (sp.couleur() < 0 ? 0xFFFFFF : sp.couleur()));
+                    } else if (p.getDataType() != Void.class) {
+                        return;  // particule qui demande d'autres données (bloc, objet) : seul l'événement est envoyé
+                    }
                     particulesJouees++;
-                    if (spectateurs == null) w.spawnParticle(p, l, 6, 0.2, 0.2, 0.2, 0.02);
-                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.spawnParticle(p, l, 6, 0.2, 0.2, 0.2, 0.02); }
+                    double r = sp.ecart() * taille;
+                    if (spectateurs == null) w.spawnParticle(p, l, sp.nombre(), r, r, r, sp.vitesse(), donnees, true);
+                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.spawnParticle(p, l, sp.nombre(), r, r, r, sp.vitesse(), donnees, true); }
                 }
                 default -> { } // « timeline » : seulement l'événement, pour les plugins
             }

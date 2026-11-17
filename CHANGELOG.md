@@ -12,6 +12,14 @@
   dans `peaux/cache.yml` ; préparé à la connexion. Sans clé ou pendant la préparation : habits par défaut du squelette.
 - `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.
 - Réglages de secours `pantin.correction.rotation-y` et `decalage-y` si les têtes sont mal tournées en jeu.
+- Coups enchaînés : le même pantin joue l'animation suivante sans disparaître, et garde sa dernière pose 0,25 s.
+- `VoraceAPI.animerJoueurEnBoucle` et `arreterJoueur` (animation tenue, comme la Reprise de souffle).
+- Repères `poing_droit`, `poing_gauche`, `pied_droit`, `pied_gauche` dans le squelette (sans cube).
+
+### Clés d'effet plus riches (toutes les animations)
+- Particule : `nom[#RRGGBB[:taille]][*nombre][@os][~écart][^vitesse]`, par exemple `flame*30@poing_droit~0.3^0.05` ou
+  `dust#FF6A00:1.6*40~1.2` (particules colorées) ; placée sur l'os nommé, sinon au milieu du modèle.
+- Son : `nom[*volume][^hauteur]`, par exemple `entity.generic.explode*1.5^0.7`. L'ancienne écriture (nom seul) ne change pas.
 
 ### Réactions des monstres
 - `VoraceAPI.reaction(entité, réaction)` : le modèle du monstre joue `saisi`, `plaque`, `souleve`, `projete`,

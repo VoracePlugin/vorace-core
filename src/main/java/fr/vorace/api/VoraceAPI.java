@@ -240,6 +240,16 @@ public final class VoraceAPI {
         return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation);
     }
 
+    /** Comme {@link #animerJoueur(Player, String, String)}, en boucle jusqu'à {@link #arreterJoueur(Player)}. */
+    public static boolean animerJoueurEnBoucle(Player joueur, String modele, String animation) {
+        return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation, true);
+    }
+
+    /** Arrête l'animation du pantin du joueur (il redevient visible). */
+    public static void arreterJoueur(Player joueur) {
+        if (plugin != null && plugin.pantins() != null) plugin.pantins().arreter(joueur);
+    }
+
     /**
      * Réaction d'un monstre à une compétence (« saisi », « plaque », « souleve », « projete », « repousse »,
      * « etourdi », « resiste ») : son modèle animé la joue s'il l'a. Faux si l'entité n'a pas de modèle ou pas cette

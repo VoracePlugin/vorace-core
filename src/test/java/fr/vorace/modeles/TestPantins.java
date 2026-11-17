@@ -73,6 +73,20 @@ public final class TestPantins {
         verifier(blocs.size() == 3 && ConfigBlocs.cle(blocs.get(1)).equals("pantin") && blocs.get(1).startsWith("\n# le pantin\npantin:")
                 && blocs.get(1).contains("    rotation-y: 0") && ConfigBlocs.cle(blocs.get(2)).equals("autre"),
             "config.yml : sections découpées avec leurs commentaires " + blocs);
+        // clés d'effet enrichies
+        EffetSpec f = EffetSpec.lire("minecraft:flame*24@poing_droit~0.2^0.04");
+        verifier(f.nom().equals("flame") && f.nombre() == 24 && "poing_droit".equals(f.os()) && Math.abs(f.ecart() - 0.2) < 1e-9
+            && Math.abs(f.vitesse() - 0.04) < 1e-9, "particule : nom, nombre, os, écart, vitesse");
+        EffetSpec du = EffetSpec.lire("dust#FF6A00:1.8*18");
+        verifier(du.nom().equals("dust") && du.couleur() == 0xFF6A00 && Math.abs(du.taille() - 1.8f) < 1e-6 && du.nombre() == 18 && du.os() == null,
+            "particule colorée : dust#RRGGBB:taille");
+        EffetSpec son = EffetSpec.lire("entity.generic.explode*1.6^0.8");
+        verifier(son.nom().equals("entity.generic.explode") && Math.abs(son.volume() - 1.6f) < 1e-6 && Math.abs(son.hauteur() - 0.8f) < 1e-6,
+            "son : volume et hauteur");
+        EffetSpec simple = EffetSpec.lire("heart");
+        verifier(simple.nom().equals("heart") && simple.nombre() == 6 && simple.os() == null, "ancienne écriture (nom seul) inchangée");
+        boolean reperes = j.parties().stream().filter(p -> List.of("poing_droit", "poing_gauche", "pied_droit", "pied_gauche").contains(p.nom())).count() == 4;
+        verifier(reperes, "joueur : repères poing_droit, poing_gauche, pied_droit, pied_gauche");
         if (echecs > 0) System.exit(1);
     }
 }
