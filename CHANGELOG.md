@@ -43,6 +43,8 @@
   le joueur passe en spectateur rattaché à une caméra invisible (entité d'affichage, mouvements adoucis), le pantin
   reste sur place, puis le joueur retrouve son mode de jeu, sa place et son regard à la fin (même après un arrêt du
   serveur, à sa connexion). `pantin.camera-ultimes`.
+- La caméra est redonnée au joueur quelques tics après son apparition : le client ignore une caméra qu'il ne connaît
+  pas encore, et le joueur restait dans ses propres yeux.
 
 ### Apparitions (phénix, météorite, titan des ultimes)
 - `VoraceAPI.apparition(modèle, endroit, yaw, animation, taille)` : un modèle animé apparaît le temps d'une

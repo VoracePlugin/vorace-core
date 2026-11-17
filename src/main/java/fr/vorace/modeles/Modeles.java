@@ -825,6 +825,8 @@ public final class Modeles {
         private Location ancre;
         private ItemDisplay camera;
         private org.bukkit.GameMode modeAvant;
+        /** Tics depuis le début de la caméra : le client ne connaît l'entité caméra qu'au tic suivant son apparition. */
+        private int ticsCamera;
 
         private int indexOs(String nom) {
             for (int k = 0; k < modele.parties().size(); k++) if (nom.equalsIgnoreCase(modele.parties().get(k).nom())) return k;
@@ -861,6 +863,7 @@ public final class Modeles {
             p.getPersistentDataContainer().set(new NamespacedKey(plugin, CLE_CAMERA), PersistentDataType.STRING, modeAvant.name());
             p.setGameMode(org.bukkit.GameMode.SPECTATOR);
             p.setSpectatorTarget(camera);
+            ticsCamera = 0;
             majCamera();
         }
 
@@ -873,7 +876,15 @@ public final class Modeles {
             if (v != null && v.distanceSquared(c) > 1e-6) c.setDirection(v.toVector().subtract(c.toVector()));
             camera.teleport(c);
             Player p = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
-            if (p != null && p.getGameMode() == org.bukkit.GameMode.SPECTATOR && !camera.equals(p.getSpectatorTarget())) p.setSpectatorTarget(camera);
+            if (p == null || p.getGameMode() != org.bukkit.GameMode.SPECTATOR) return;
+            ticsCamera++;
+            // Le paquet « caméra » envoyé le tic où l'entité apparaît arrive avant elle chez le client, qui l'ignore
+            // (il reste dans les yeux du joueur). Le serveur, lui, croit la caméra posée et ne la renvoie pas :
+            // on la redonne une fois l'entité connue du client (tics 3 et 8, au cas où le réseau traîne).
+            if (ticsCamera == 3 || ticsCamera == 8) {
+                p.setSpectatorTarget(null);
+                p.setSpectatorTarget(camera);
+            } else if (!camera.equals(p.getSpectatorTarget())) p.setSpectatorTarget(camera);
         }
 
         void finCinema() {
