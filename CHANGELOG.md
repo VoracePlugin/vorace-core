@@ -10,6 +10,9 @@
   modèle de classe reprend ce squelette et ajoute ses animations. Animations d'essai : `essai`, `salut`, `croix`.
 - Skin découpé en dix morceaux (`Peau`), signés par MineSkin (clé `pantin.mineskin-cle`, un envoi à la fois) et gardés
   dans `peaux/cache.yml` ; préparé à la connexion. Sans clé ou pendant la préparation : habits par défaut du squelette.
+- Envois à MineSkin au rythme qu'il demande (délai lu dans chaque réponse, 3,5 s au moins) ; une erreur 5xx ou 429 est
+  réessayée cinq fois en attendant de plus en plus ; un morceau refusé n'arrête plus les autres et est renvoyé à la fin.
+  Message d'erreur lisible (code et texte de MineSkin) dans `/vorace pantin etat` et la console.
 - `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.
 - Réglages de secours `pantin.correction.rotation-y` et `decalage-y` si les têtes sont mal tournées en jeu.
 - Coups enchaînés : le même pantin joue l'animation suivante sans disparaître, et garde sa dernière pose 0,25 s.

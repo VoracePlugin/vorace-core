@@ -145,22 +145,38 @@ public final class Pantins implements Listener {
                 if (skin == null) throw new IllegalStateException("skin illisible");
                 boolean fin = "slim".equals(texture[1]);
                 int faits = 0;
-                for (Map.Entry<String, BufferedImage> e : Peau.decouper(skin, fin).entrySet()) {
-                    byte[] png = png(e.getValue());
-                    String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(png)).substring(0, 32);
-                    String[] signe = cache.get(hash);
-                    if (signe == null) {
-                        signe = mineskin(cle, png, e.getKey());
-                        sauverCache(hash, signe[0], signe[1]);
-                        Thread.sleep(Math.max(0, plugin.getConfig().getLong("pantin.delai-ms", 2000)));
+                String derniereErreur = null;
+                java.util.List<String> rates = new java.util.ArrayList<>();
+                // deux passages : un morceau refusé une fois (MineSkin surchargé) est renvoyé à la fin
+                Map<String, BufferedImage> morceaux = Peau.decouper(skin, fin);
+                java.util.List<String> aFaire = new java.util.ArrayList<>(morceaux.keySet());
+                for (int passage = 0; passage < 2 && !aFaire.isEmpty(); passage++) {
+                    rates.clear();
+                    for (String morceau : aFaire) {
+                        byte[] png = png(morceaux.get(morceau));
+                        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(png)).substring(0, 32);
+                        String[] signe = cache.get(hash);
+                        if (signe == null) {
+                            try {
+                                signe = mineskin(cle, png, morceau);
+                            } catch (IllegalStateException ex) {
+                                derniereErreur = ex.getMessage();
+                                plugin.getLogger().warning("Pantins : morceau " + morceau + " de " + p.getName() + " : " + ex.getMessage());
+                                rates.add(morceau);
+                                continue;
+                            }
+                            sauverCache(hash, signe[0], signe[1]);
+                        }
+                        String[] sg = signe;
+                        Bukkit.getScheduler().runTask(plugin, () -> m.put(morceau, tete(sg[0], sg[1], hash)));
+                        faits++;
+                        etats.put(id, "en cours (" + faits + "/" + morceaux.size() + " morceaux prêts)");
                     }
-                    String[] s = signe;
-                    String morceau = e.getKey();
-                    Bukkit.getScheduler().runTask(plugin, () -> m.put(morceau, tete(s[0], s[1], hash)));
-                    faits++;
-                    etats.put(id, "en cours (" + faits + "/" + Peau.MORCEAUX.size() + ")");
+                    aFaire = new java.util.ArrayList<>(rates);
                 }
-                etats.put(id, "prêt");
+                if (rates.isEmpty()) etats.put(id, "prêt");
+                else etats.put(id, "prêt sauf " + rates.size() + " morceau(x) (" + String.join(", ", rates) + ") : " + derniereErreur
+                    + " ; relance /vorace pantin preparer");
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             } catch (Exception ex) {
@@ -197,9 +213,47 @@ public final class Pantins implements Listener {
      * Envoie un morceau à MineSkin (POST /v2/generate, attend le résultat) ; renvoie {value, signature}.
      * Trop de demandes (429) : attend puis recommence (5 essais).
      */
+    /** Heure (ms) avant laquelle MineSkin ne veut pas de nouvel envoi (rateLimit.next / delay de ses réponses). */
+    private volatile long prochainEnvoi;
+
+    private void attendreMineSkin() throws InterruptedException {
+        long minimum = Math.max(0, plugin.getConfig().getLong("pantin.delai-ms", 3500));
+        long attente = Math.max(prochainEnvoi - System.currentTimeMillis(), 0);
+        Thread.sleep(Math.max(attente, minimum));
+    }
+
+    /** Lit le délai demandé par MineSkin dans sa réponse (succès ou erreur). */
+    private void noterDelai(String corps) {
+        try {
+            JsonObject rl = JsonParser.parseString(corps).getAsJsonObject().getAsJsonObject("rateLimit");
+            if (rl == null) return;
+            long next = rl.has("next") && rl.getAsJsonObject("next").has("absolute") ? rl.getAsJsonObject("next").get("absolute").getAsLong() : 0;
+            long delai = rl.has("delay") && rl.getAsJsonObject("delay").has("millis") ? rl.getAsJsonObject("delay").get("millis").getAsLong() : 0;
+            prochainEnvoi = Math.max(next, System.currentTimeMillis() + delai) + 250;
+        } catch (RuntimeException ignore) {
+            // réponse sans JSON : on garde le délai de la config
+        }
+    }
+
+    /** Message lisible d'une erreur MineSkin : code et texte de la première erreur. */
+    static String erreurMineSkin(int statut, String corps) {
+        try {
+            JsonObject j = JsonParser.parseString(corps).getAsJsonObject();
+            if (j.has("errors") && j.getAsJsonArray("errors").size() > 0) {
+                JsonObject e = j.getAsJsonArray("errors").get(0).getAsJsonObject();
+                return "MineSkin : HTTP " + statut + " " + (e.has("code") ? e.get("code").getAsString() : "") + " " + (e.has("message") ? e.get("message").getAsString() : "");
+            }
+        } catch (RuntimeException ignore) {
+            // pas du JSON
+        }
+        return "MineSkin : HTTP " + statut + " " + corps.substring(0, Math.min(160, corps.length()));
+    }
+
     private String[] mineskin(String cle, byte[] png, String nom) throws Exception {
         String limite = "----vorace" + UUID.randomUUID().toString().replace("-", "");
+        String derniere = "MineSkin : trop de demandes, réessaie plus tard";
         for (int essai = 0; essai < 5; essai++) {
+            attendreMineSkin();
             ByteArrayOutputStream corps = new ByteArrayOutputStream();
             champ(corps, limite, "variant", "classic");
             champ(corps, limite, "visibility", "unlisted");
@@ -216,19 +270,21 @@ public final class Pantins implements Listener {
                 .POST(HttpRequest.BodyPublishers.ofByteArray(corps.toByteArray()))
                 .build();
             HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString());
-            if (r.statusCode() == 429) {
-                long attente = r.headers().firstValueAsLong("retry-after").orElse(10) * 1000;
-                Thread.sleep(Math.max(2000, Math.min(60_000, attente)));
+            noterDelai(r.body());
+            if (r.statusCode() == 429 || r.statusCode() / 100 == 5) {
+                // trop de demandes ou MineSkin en difficulté : on attend de plus en plus longtemps et on recommence
+                derniere = erreurMineSkin(r.statusCode(), r.body());
+                plugin.getLogger().info("Pantins : " + derniere + " (essai " + (essai + 1) + "/5, nouvel essai)");
+                long attente = r.headers().firstValueAsLong("retry-after").orElse(0) * 1000;
+                Thread.sleep(Math.max(attente, 4000L * (essai + 1)));
                 continue;
             }
-            if (r.statusCode() / 100 != 2) {
-                throw new IllegalStateException("MineSkin : HTTP " + r.statusCode() + " " + r.body().substring(0, Math.min(200, r.body().length())));
-            }
+            if (r.statusCode() / 100 != 2) throw new IllegalStateException(erreurMineSkin(r.statusCode(), r.body()));
             JsonObject data = JsonParser.parseString(r.body()).getAsJsonObject().getAsJsonObject("skin")
                 .getAsJsonObject("texture").getAsJsonObject("data");
             return new String[]{data.get("value").getAsString(), data.get("signature").getAsString()};
         }
-        throw new IllegalStateException("MineSkin : trop de demandes, réessaie plus tard");
+        throw new IllegalStateException(derniere);
     }
 
     private static void champ(ByteArrayOutputStream o, String limite, String nom, String valeur) {
