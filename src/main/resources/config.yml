@@ -95,6 +95,25 @@ modeles:
   # Sons et particules des clés « Effets » des animations de Blockbench.
   effets: true
 
+pantin:
+  # Pantin des joueurs : pendant une animation de compétence ou une emote, le joueur est caché et remplacé par un
+  # modèle animé (modeles-animes/joueur.bbmodel) qui porte son vrai skin, sans mod.
+  actif: true
+  # Clé de l'API MineSkin (https://account.mineskin.org/keys) : elle signe les morceaux du skin (10 par skin, gardés dans
+  # peaux/cache.yml). Vide : le pantin garde les habits par défaut du modèle (seule la tête est celle du joueur).
+  # Ne jamais publier cette clé.
+  mineskin-cle: ""
+  mineskin-adresse: "https://api.mineskin.org"
+  # Attente entre deux envois à MineSkin (millisecondes, offre gratuite).
+  delai-ms: 2000
+  preparer-a-la-connexion: true
+  # Le vrai joueur disparaît pour les autres pendant l'animation (corps invisible, équipement caché).
+  cacher-joueur: true
+  # Réglages de secours si les têtes du pantin sont mal tournées ou décalées en jeu.
+  correction:
+    rotation-y: 0
+    decalage-y: 0.25
+
 surveillance:
   # Reconstruit le pack tout seul quand un pack source ou un objet change (par exemple après /meg reload).
   actif: true

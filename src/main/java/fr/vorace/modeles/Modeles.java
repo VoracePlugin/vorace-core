@@ -46,20 +46,32 @@ import java.util.stream.Stream;
 public final class Modeles {
 
     /** Noms d'animations reconnus automatiquement (anglais de ModelEngine et français). */
-    public static final Map<String, List<String>> AUTO = Map.of(
-        "repos", List.of("idle", "repos", "attente"),
-        "marche", List.of("walk", "marche", "walking"),
-        "course", List.of("run", "course", "running"),
-        "degat", List.of("hurt", "degat", "damage"),
-        "mort", List.of("death", "mort", "die"),
-        "attaque", List.of("attack", "attaque"),
-        "clic", List.of("interact", "clic", "interaction"));
+    public static final Map<String, List<String>> AUTO = Map.ofEntries(
+        Map.entry("repos", List.of("idle", "repos", "attente")),
+        Map.entry("marche", List.of("walk", "marche", "walking")),
+        Map.entry("course", List.of("run", "course", "running")),
+        Map.entry("degat", List.of("hurt", "degat", "damage")),
+        Map.entry("mort", List.of("death", "mort", "die")),
+        Map.entry("attaque", List.of("attack", "attaque")),
+        Map.entry("clic", List.of("interact", "clic", "interaction")),
+        Map.entry("saisi", List.of("saisi", "grabbed", "grab")),
+        Map.entry("plaque", List.of("plaque", "slam", "slammed")),
+        Map.entry("souleve", List.of("souleve", "launched", "launch")),
+        Map.entry("projete", List.of("projete", "thrown", "throw")),
+        Map.entry("repousse", List.of("repousse", "knockback", "pushed")),
+        Map.entry("etourdi", List.of("etourdi", "stunned", "stun")),
+        Map.entry("resiste", List.of("resiste", "resist")));
+
+    /** Réactions qu'une compétence peut demander à un modèle (VoraceAPI.reaction). */
+    public static final List<String> REACTIONS = List.of("saisi", "plaque", "souleve", "projete", "repousse", "etourdi", "resiste");
 
     private final Vorace plugin;
     private final NamespacedKey clePose, cleMob, clePartie, cleTaille;
     /** Réglages (config.yml, section modeles). */
     private int intervalle = 2, distance = 48, fonduTics = 4;
     private boolean teinteDegats = true, suiviTete = true, effetsActifs = true;
+    /** Pantin des joueurs : rotation (degrés) et décalage vertical (blocs) des têtes de joueur qui portent le skin. */
+    private float peauRotationY = 0f, peauDecalageY = 0.25f;
     private volatile Map<String, ModeleBB> modeles = Map.of();
     private final Map<UUID, Instance> instances = new LinkedHashMap<>();
     private BukkitTask tache;
@@ -138,8 +150,91 @@ public final class Modeles {
 
     public void arreter() {
         if (tache != null) tache.cancel();
-        for (Instance i : new ArrayList<>(instances.values())) i.supprimerParties();
+        for (Instance i : new ArrayList<>(instances.values())) {
+            i.supprimerParties();
+            i.finir();
+        }
         instances.clear();
+    }
+
+    /**
+     * Le pantin d'un joueur joue une animation de ce modèle (« joueur », ou un modèle qui a le même squelette).
+     * Les os « peau_... » portent les têtes de {@code peaux} (nom sans « peau_ » : tete, corps_haut...) ; sans tête
+     * prête, la partie garde le dessin du modèle. Le pantin disparaît à la fin de l'animation ; {@code fin} est appelé.
+     *
+     * @return faux si le modèle ou l'animation n'existe pas
+     */
+    public boolean animerJoueur(Player joueur, String id, String animation, Map<String, ItemStack> peaux, Runnable fin) {
+        return animerJoueur(joueur, id, animation, false, peaux, fin);
+    }
+
+    /** Arrête l'animation du pantin du joueur (animation en boucle : Reprise de souffle) ; il disparaît. */
+    public void arreterJoueur(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin) return;
+        i.supprimerParties();
+        instances.remove(joueur.getUniqueId());
+        i.finir();
+    }
+
+    /** @param boucle l'animation recommence jusqu'à {@link #arreterJoueur} */
+    public boolean animerJoueur(Player joueur, String id, String animation, boolean boucle, Map<String, ItemStack> peaux, Runnable fin) {
+        ModeleBB m = modele(id);
+        if (m == null) return false;
+        Instance ancien = instances.get(joueur.getUniqueId());
+        if (ancien != null && ancien.pantin && ancien.modele == m && ancien.trouver(animation) != null) {
+            // coups enchaînés : le même pantin joue la suite, sans disparaître entre deux coups
+            ancien.demarrer(animation, boucle, false);
+            return true;
+        }
+        if (ancien != null) {
+            ancien.supprimerParties();
+            instances.remove(joueur.getUniqueId());
+            ancien.finir();
+        }
+        Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
+        if (i.trouver(animation) == null) return false;
+        i.pantin = true;
+        i.proprietaire = joueur.getUniqueId();
+        i.fin = fin;
+        for (int k = 0; k < m.parties().size(); k++) {
+            String n = m.parties().get(k).nom() == null ? "" : m.parties().get(k).nom().toLowerCase(Locale.ROOT);
+            if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
+        }
+        instances.put(joueur.getUniqueId(), i);
+        i.demarrer(animation, boucle, false);
+        return true;
+    }
+
+    /**
+     * Apparition : le modèle est posé le temps d'une seule animation, puis il disparaît (phénix, météorite ou titan
+     * d'un ultime). Rien n'est gardé avec le monde. Depuis une animation, la clé de script (piste « Effets »,
+     * timeline) {@code apparition <modèle> <animation> [taille]} le fait apparaître à l'endroit du modèle qui la joue,
+     * tourné comme lui : on dessine donc l'apparition dans le même repère que l'animation qui l'appelle.
+     *
+     * @return null si le modèle ou l'animation n'existe pas
+     */
+    public Instance apparition(String id, Location ou, float yaw, String animation, float taille) {
+        ModeleBB m = modele(id);
+        if (m == null || ou == null || ou.getWorld() == null) return null;
+        Location l = ou.clone();
+        l.setYaw(yaw);
+        l.setPitch(0);
+        org.bukkit.entity.Marker base = l.getWorld().spawn(l, org.bukkit.entity.Marker.class, e -> e.setPersistent(false));
+        Instance i = new Instance(m, base, false, yaw);
+        if (i.trouver(animation) == null) { base.remove(); return null; }
+        i.pantin = true;  // comme un pantin : il ne joue que cette animation et disparaît à la fin
+        i.taille = Math.max(0.05f, Math.min(16f, taille));
+        i.fin = base::remove;
+        instances.put(base.getUniqueId(), i);
+        i.demarrer(animation, false, false);
+        return i;
+    }
+
+    /** Le joueur a un pantin en train de jouer. */
+    public boolean pantinActif(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        return i != null && i.pantin;
     }
 
     // ------------------------------------------------------------------ création
@@ -253,6 +348,8 @@ public final class Modeles {
             teinteDegats = plugin.getConfig().getBoolean("modeles.teinte-degats", true);
             suiviTete = plugin.getConfig().getBoolean("modeles.suivi-tete", true);
             effetsActifs = plugin.getConfig().getBoolean("modeles.effets", true);
+            peauRotationY = (float) plugin.getConfig().getDouble("pantin.correction.rotation-y", 0);
+            peauDecalageY = (float) plugin.getConfig().getDouble("pantin.correction.decalage-y", 0.25);
         } catch (Throwable t) {
             intervalle = 2;
         }
@@ -267,9 +364,10 @@ public final class Modeles {
                 if (verifier || i.distanceJoueur < 0) i.verifierDistance(joueurs);
                 if (i.endormi) {
                     // personne ne regarde : aucune entité d'affichage, aucun calcul ; seulement la fin du modèle
-                    if (i.fixe != null || !i.base.isValid() || i.base.isDead()) {
+                    if (i.fixe != null || !i.base.isValid() || i.base.isDead() || (i.pantin && i.forcee == null)) {
                         i.supprimerParties();
                         instances.remove(i.base.getUniqueId());
+                        i.finir();
                     }
                     continue;
                 }
@@ -277,6 +375,7 @@ public final class Modeles {
                 if (!i.mettreAJour(iv)) {
                     i.supprimerParties();
                     instances.remove(i.base.getUniqueId());
+                    i.finir();
                 }
             } catch (Throwable ex) {
                 // une erreur (même de type Error) ne doit jamais figer tous les modèles : on la note une fois et on continue
@@ -332,6 +431,20 @@ public final class Modeles {
         private Pose[] dernieresPoses;
         /** Regard imposé par l'API (degrés, par rapport au corps) ; NaN = celui du mob. */
         private float regardYaw = Float.NaN, regardPitch = Float.NaN;
+        /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
+        boolean pantin;
+        UUID proprietaire;
+        Runnable fin;
+        final Map<Integer, ItemStack> peaux = new HashMap<>();
+
+        /** Appelé une fois quand le modèle disparaît (pantin : le joueur redevient visible). */
+        void finir() {
+            Runnable r = fin;
+            fin = null;
+            if (r != null) {
+                try { r.run(); } catch (Throwable t) { plugin.getLogger().warning("Fin du pantin : " + t); }
+            }
+        }
 
         Instance(ModeleBB modele, Entity base, boolean mob, float yaw) {
             this.modele = modele;
@@ -472,7 +585,9 @@ public final class Modeles {
             for (int k = 0; k < n; k++) {
                 if (!modele.parties().get(k).visible()) continue;
                 String id = GenerateurModeles.idPartie(modele.id(), k);
-                ItemStack objet = plugin.objets().objetVisuel(id);
+                ItemStack peau = peaux.get(k);
+                ItemStack objet = peau != null ? peau : plugin.objets().objetVisuel(id);
+                final int k2 = k;
                 objets[k] = objet;
                 parties[k] = l.getWorld().spawn(l, ItemDisplay.class, d -> {
                     d.setPersistent(false);
@@ -481,11 +596,22 @@ public final class Modeles {
                     d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
                     d.setTeleportDuration(2);
                     d.setViewRange(vue);
+                    // os « lum_... » : toujours éclairé à fond (feu, météorite, fissures qui brillent dans le noir)
+                    String nomOs = modele.parties().get(k2).nom();
+                    if (nomOs != null && nomOs.toLowerCase(Locale.ROOT).startsWith("lum_")) d.setBrightness(new Display.Brightness(15, 15));
                     if (spectateurs != null) d.setVisibleByDefault(false);
                 });
             }
             derniere = l;
             if (spectateurs != null) appliquerVisibilite();
+            // pantin : le joueur ne voit pas sa propre tête (elle serait dans sa caméra à la première personne)
+            Player soi = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
+            if (soi != null) {
+                for (int k = 0; k < parties.length; k++) {
+                    String nomOs = modele.parties().get(k).nom();
+                    if (parties[k] != null && nomOs != null && nomOs.equalsIgnoreCase("peau_tete")) soi.hideEntity(plugin, parties[k]);
+                }
+            }
             mettreAJour(1);
         }
 
@@ -554,7 +680,7 @@ public final class Modeles {
             return demarrer(nom, boucle, true);
         }
 
-        private boolean demarrer(String nom, boolean boucle, boolean dessus) {
+        boolean demarrer(String nom, boolean boucle, boolean dessus) {
             Animation a = trouver(nom);
             if (a == null) return false;
             if (Bukkit.isPrimaryThread()) {
@@ -582,6 +708,7 @@ public final class Modeles {
 
         /** Joue une animation automatique (dégâts, attaque...) si le modèle l'a. */
         public boolean jouerAuto(String role) {
+            if (pantin) return false;  // le pantin d'un joueur ne joue que l'animation demandée
             for (String n : AUTO.getOrDefault(role, List.of())) {
                 if (modele.animations().containsKey(n)) {
                     if (Bukkit.isPrimaryThread()) {
@@ -606,6 +733,7 @@ public final class Modeles {
 
         /** Le mob est touché : animation « degat » par-dessus et teinte rouge un court instant. */
         public void blesser() {
+            if (pantin) return;
             jouerAuto("degat");
             if (!teinteDegats || endormi) return;
             if (rouges == null) {
@@ -628,6 +756,7 @@ public final class Modeles {
 
         /** Le mob est mort : le modèle joue « mort » sur place puis disparaît. */
         public void mourir() {
+            if (pantin) { forcee = null; return; }
             fixe = base.getLocation();
             if (finTeinte >= 0) finirTeinte();
             if (!jouerAuto("mort")) fixe = null;
@@ -704,9 +833,12 @@ public final class Modeles {
                     forcee = null;
                 } else if (!forceeBoucle && !fa.boucle().equals("loop") && tf >= fa.duree()) {
                     if (mort) return false;
-                    if (!fa.boucle().equals("hold") || forceePartielle) forcee = null;
+                    // pantin : garde la dernière pose 0,25 s (le coup suivant d'un combo reprend le même pantin)
+                    if (pantin && tf < fa.duree() + 0.25) { /* attend */ }
+                    else if (!fa.boucle().equals("hold") || forceePartielle || pantin) forcee = null;
                 }
             }
+            if (pantin && forcee == null) return false;  // fin de l'animation du joueur : le pantin disparaît
 
             // animation complète (demandée ou automatique), avec fondu depuis la précédente
             String pNom = forcee != null && !forceePartielle ? forcee : auto;
@@ -762,7 +894,8 @@ public final class Modeles {
                 ItemDisplay d = parties[k];
                 if (d == null || poses[k] == null || !d.isValid()) continue;
                 Pose p = poses[k];
-                Transformation tr = new Transformation(p.translation(), p.rotation(), p.echelle(), droite);
+                Transformation tr = peaux.containsKey(k) ? transformationPeau(k, p)
+                    : new Transformation(p.translation(), p.rotation(), p.echelle(), droite);
                 if (tr.equals(envoyees[k])) continue;
                 envoyees[k] = tr;
                 d.setInterpolationDelay(0);
@@ -771,6 +904,29 @@ public final class Modeles {
             }
             if (aEtiquettes) etiquettes(poses, l, intervalle);
             return true;
+        }
+
+        /**
+         * Os « peau_ » : une tête de joueur (cube de 8 pixels que le jeu dessine entre y = -0,5 et 0 autour de l'origine
+         * de l'entité) étirée sur le cube de l'os. Le jeu tourne lui-même l'objet d'un demi-tour, ce qui met le visage
+         * de la tête vers l'avant du modèle : pas de demi-tour à annuler ici. Réglages de secours :
+         * pantin.correction.rotation-y et decalage-y.
+         */
+        private Transformation transformationPeau(int k, Pose p) {
+            ModeleBB.Partie partie = modele.parties().get(k);
+            ModeleBB.Cube c = partie.cubes().get(0);
+            double[] piv = partie.pivot();
+            float ech = (float) (1.0 / Math.max(1e-6, partie.echelle()));
+            // T · R · S1 · translation(c) · S2 · translation(0, dy, 0) · Ry, sans cisaillement :
+            // translation = T + R(S1 ∘ (c + S2 ∘ d)), rotation gauche R, échelle S1 ∘ S2, rotation droite Ry
+            Vector3f s1 = new Vector3f(p.echelle()).mul(ech);
+            Vector3f s2 = new Vector3f((float) ((c.a()[0] - c.de()[0]) / 8), (float) ((c.a()[1] - c.de()[1]) / 8), (float) ((c.a()[2] - c.de()[2]) / 8));
+            Vector3f centre = new Vector3f((float) (((c.de()[0] + c.a()[0]) / 2 - piv[0]) / 16), (float) (((c.de()[1] + c.a()[1]) / 2 - piv[1]) / 16),
+                (float) (((c.de()[2] + c.a()[2]) / 2 - piv[2]) / 16));
+            Vector3f local = new Vector3f(0, peauDecalageY, 0).mul(s2).add(centre).mul(s1);
+            Vector3f translation = new Vector3f(local).rotate(p.rotation()).add(p.translation());
+            return new Transformation(translation, new Quaternionf(p.rotation()), new Vector3f(s1).mul(s2),
+                new Quaternionf().rotateY((float) Math.toRadians(peauRotationY)));
         }
 
         /** Joue les clés d'effet atteintes depuis le dernier passage ; renvoie le nouveau temps vu. */
@@ -789,28 +945,49 @@ public final class Modeles {
             fr.vorace.api.VoraceModeleEffetEvent ev = new fr.vorace.api.VoraceModeleEffetEvent(base, modele.id(), a.nom(), e.type(), e.valeur());
             Bukkit.getPluginManager().callEvent(ev);
             if (ev.isCancelled()) return;
-            Location l = position().add(0, modele.hauteur() / 32.0 * taille, 0);
+            EffetSpec sp = EffetSpec.lire(e.valeur());
+            Location l = sp.os() != null ? positionOs(sp.os()) : null;
+            if (l == null) l = position().add(0, modele.hauteur() / 32.0 * taille, 0);
             World w = l.getWorld();
             if (w == null) return;
             switch (e.type()) {
                 case "sound" -> {
-                    String son = e.valeur().toLowerCase(Locale.ROOT);
                     sonsJoues++;
-                    if (spectateurs == null) w.playSound(l, son, org.bukkit.SoundCategory.NEUTRAL, 1f, 1f);
-                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.playSound(l, son, org.bukkit.SoundCategory.NEUTRAL, 1f, 1f); }
+                    if (spectateurs == null) w.playSound(l, sp.nom(), org.bukkit.SoundCategory.PLAYERS, sp.volume(), sp.hauteur());
+                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.playSound(l, sp.nom(), org.bukkit.SoundCategory.PLAYERS, sp.volume(), sp.hauteur()); }
                 }
                 case "particle" -> {
-                    String nom = e.valeur().toLowerCase(Locale.ROOT);
-                    if (nom.startsWith("minecraft:")) nom = nom.substring(10);
                     org.bukkit.Particle p = null;
-                    try { p = org.bukkit.Registry.PARTICLE_TYPE.get(NamespacedKey.minecraft(nom)); } catch (IllegalArgumentException ignore) { }
-                    // particule de Bedrock, inconnue ou qui demande des données : seul l'événement est envoyé
-                    if (p == null || p.getDataType() != Void.class) return;
+                    try { p = org.bukkit.Registry.PARTICLE_TYPE.get(NamespacedKey.minecraft(sp.nom())); } catch (IllegalArgumentException ignore) { }
+                    if (p == null) return;
+                    Object donnees = null;
+                    if (p.getDataType() == org.bukkit.Particle.DustOptions.class) {
+                        donnees = new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(sp.couleur() < 0 ? 0xFFFFFF : sp.couleur()), sp.taille());
+                    } else if (p.getDataType() == org.bukkit.Color.class) {
+                        donnees = org.bukkit.Color.fromARGB(0xFF000000 | (sp.couleur() < 0 ? 0xFFFFFF : sp.couleur()));
+                    } else if (p.getDataType() != Void.class) {
+                        return;  // particule qui demande d'autres données (bloc, objet) : seul l'événement est envoyé
+                    }
                     particulesJouees++;
-                    if (spectateurs == null) w.spawnParticle(p, l, 6, 0.2, 0.2, 0.2, 0.02);
-                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.spawnParticle(p, l, 6, 0.2, 0.2, 0.2, 0.02); }
+                    double r = sp.ecart() * taille;
+                    if (spectateurs == null) w.spawnParticle(p, l, sp.nombre(), r, r, r, sp.vitesse(), donnees, true);
+                    else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.spawnParticle(p, l, sp.nombre(), r, r, r, sp.vitesse(), donnees, true); }
                 }
-                default -> { } // « timeline » : seulement l'événement, pour les plugins
+                case "timeline" -> {
+                    // « apparition <modèle> <animation> [taille] » : un modèle éphémère au même endroit, tourné pareil
+                    String[] p = e.valeur().trim().split("\\s+");
+                    if (p.length < 3 || !p[0].equalsIgnoreCase("apparition")) return;
+                    float t = 1f;
+                    try { if (p.length > 3) t = Float.parseFloat(p[3]); } catch (NumberFormatException ignore) { }
+                    Location ici = position();
+                    Instance inv = apparition(p[1], ici, yaw, p[2], t * taille);
+                    if (inv != null && spectateurs != null) {
+                        List<Player> vus = new ArrayList<>();
+                        for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) vus.add(j); }
+                        inv.visiblePour(vus);
+                    }
+                }
+                default -> { }
             }
         }
 
@@ -853,6 +1030,7 @@ public final class Modeles {
     }
 
     private static final int COULEUR_DEGATS = 0xFF6464;
+
 
     private static float limiter(float v, float max) {
         return Math.max(-max, Math.min(max, v));
@@ -905,6 +1083,14 @@ public final class Modeles {
             Files.createDirectories(dossier());
             Path liste = plugin.getDataFolder().toPath().resolve("donnees").resolve("exemples.txt");
             List<String> faits = new ArrayList<>(Files.isRegularFile(liste) ? Files.readAllLines(liste) : List.of());
+            // squelette du pantin des joueurs et mannequin des réactions : toujours remis s'ils manquent
+            for (String f : List.of("joueur.bbmodel", "mannequin_reactions.bbmodel")) {
+                Path c = dossier().resolve(f);
+                if (Files.exists(c)) continue;
+                try (InputStream in = plugin.getClass().getClassLoader().getResourceAsStream("exemples/modeles/" + f)) {
+                    if (in != null) Files.copy(in, c);
+                }
+            }
             if (faits.contains("modeles")) return;
             Path cible = dossier().resolve("golem_rubis.bbmodel");
             if (!Files.exists(cible)) {

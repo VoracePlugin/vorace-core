@@ -1,5 +1,44 @@
 # Journal des changements
 
+## 1.4.0 (novembre 2026) : pantin des joueurs et réactions des monstres
+
+### Pantin des joueurs (animations du corps entier avec le vrai skin, sans mod)
+- `VoraceAPI.animerJoueur(joueur, modèle, animation)` : pendant l'animation, le joueur est caché (corps invisible,
+  équipement vide envoyé aux autres) et remplacé par un modèle animé dont chaque os « peau_... » porte une tête de
+  joueur étirée sur son cube. Le joueur ne voit pas sa propre tête (première personne). Le pantin disparaît à la fin.
+- Squelette `modeles-animes/joueur.bbmodel` (tête + tronc, bras et jambes en deux morceaux), remis s'il manque ; un
+  modèle de classe reprend ce squelette et ajoute ses animations. Animations d'essai : `essai`, `salut`, `croix`.
+- Skin découpé en dix morceaux (`Peau`), signés par MineSkin (clé `pantin.mineskin-cle`, un envoi à la fois) et gardés
+  dans `peaux/cache.yml` ; préparé à la connexion. Sans clé ou pendant la préparation : habits par défaut du squelette.
+- `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.
+- Réglages de secours `pantin.correction.rotation-y` et `decalage-y` si les têtes sont mal tournées en jeu.
+- Coups enchaînés : le même pantin joue l'animation suivante sans disparaître, et garde sa dernière pose 0,25 s.
+- `VoraceAPI.animerJoueurEnBoucle` et `arreterJoueur` (animation tenue, comme la Reprise de souffle).
+- Repères `poing_droit`, `poing_gauche`, `pied_droit`, `pied_gauche` dans le squelette (sans cube).
+
+### Clés d'effet plus riches (toutes les animations)
+- Particule : `nom[#RRGGBB[:taille]][*nombre][@os][~écart][^vitesse]`, par exemple `flame*30@poing_droit~0.3^0.05` ou
+  `dust#FF6A00:1.6*40~1.2` (particules colorées) ; placée sur l'os nommé, sinon au milieu du modèle.
+- Son : `nom[*volume][^hauteur]`, par exemple `entity.generic.explode*1.5^0.7`. L'ancienne écriture (nom seul) ne change pas.
+
+### Apparitions (phénix, météorite, titan des ultimes)
+- `VoraceAPI.apparition(modèle, endroit, yaw, animation, taille)` : un modèle animé apparaît le temps d'une
+  animation puis disparaît (rien n'est gardé avec le monde ; base invisible côté joueurs).
+- Depuis une animation : clé de script (piste « Effets », timeline) `apparition <modèle> <animation> [taille]` ; le
+  modèle apparaît à l'endroit du modèle qui joue l'animation, tourné comme lui (le pantin d'un joueur : à ses pieds,
+  dans la direction où il regarde). On dessine donc l'apparition dans le même repère que l'animation qui l'appelle.
+- Os dont le nom commence par `lum_` : toujours éclairés à fond (feu, braise, yeux qui brillent la nuit).
+- `/vorace modele apparition <modèle> <animation> [taille]` (devant soi), avec l'auto-complétion.
+
+### Réactions des monstres
+- `VoraceAPI.reaction(entité, réaction)` : le modèle du monstre joue `saisi`, `plaque`, `souleve`, `projete`,
+  `repousse`, `etourdi` ou `resiste` s'il a cette animation (noms anglais acceptés : grabbed, slam, launched...).
+- Mannequin d'essai `mannequin_reactions.bbmodel` avec les sept réactions ; `/vorace modele reaction <réaction>`.
+
+### Divers
+- config.yml : les sections de premier niveau ajoutées par une nouvelle version sont écrites à la fin du fichier du
+  serveur, avec leurs commentaires.
+
 ## 1.3.1 (novembre 2026) : corrections
 
 - **Joueurs déconnectés par « Recursive update »** : la couche paquets nommait les paquets rangés dans un autre
