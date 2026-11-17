@@ -17,8 +17,12 @@
   première personne, et regarde là où le joueur regarde. Pendant une animation, Paper refuse de téléporter un joueur
   qui porte des passagers : appeler d'abord `VoraceAPI.arreterJoueur`. Le pantin s'arrête à la mort et au départ.
   `pantin.monter-sur-le-joueur: false` rend l'ancien suivi.
-- Pantin mis à jour à chaque tic. Le joueur ne voit pas la tête de son propre pantin (`pantin.cacher-sa-tete`) : sa
-  caméra est dedans et le jeu en dessinerait l'intérieur ; les autres la voient.
+- Pantin mis à jour à chaque tic.
+- Tête pour soi-même : le jeu dessine les têtes de joueur sans élaguer les faces, donc la tête du pantin est cachée au
+  joueur tant qu'elle entoure ses yeux, et il porte à la place sa propre tête en casque sur son vrai corps invisible
+  (le jeu ne dessine pas son casque à la première personne, mais bien en F5 : il n'est plus jamais sans tête). Dès que
+  la tête du pantin s'éloigne des yeux (saut d'un ultime), elle redevient visible et le casque disparaît. Son armure de
+  corps lui est aussi cachée pendant l'animation. Les autres voient toujours la tête du pantin.
 - Coudes, genoux et taille fermés : la moitié basse de chaque membre et du tronc reprend deux lignes du skin au-dessus
   de la jointure et remonte de deux pixels dans le morceau du dessus (un peu plus fine, sans scintillement).
 - `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.

@@ -75,8 +75,12 @@ public final class Modeles {
     /** Pantin monté sur le joueur (passagers) : il suit le joueur sans aucun retard, même pour lui-même. */
     private boolean pantinMonte = true;
     /**
-     * Le joueur ne voit pas la tête de son propre pantin : le jeu dessine les têtes de joueur sans élaguer les faces, et
-     * la caméra à la première personne est dedans (l'intérieur de la tête couvrirait l'écran). Les autres la voient.
+     * Tête du pantin pour le joueur lui-même. Le jeu dessine les têtes de joueur sans élaguer les faces : quand la tête
+     * du pantin entoure sa caméra (première personne), il en verrait l'intérieur sur tout l'écran. Elle lui est donc
+     * cachée tant qu'elle est autour de ses yeux, et remplacée par sa propre tête portée en casque sur son vrai corps
+     * (invisible) : le jeu ne dessine jamais son casque à la première personne, mais bien en F5. Dès que la tête du
+     * pantin s'éloigne des yeux (saut d'un ultime), elle redevient visible et le casque disparaît. Les autres joueurs
+     * voient toujours la tête du pantin.
      */
     private boolean pantinCacherTete = true;
     private volatile Map<String, ModeleBB> modeles = Map.of();
@@ -615,14 +619,52 @@ public final class Modeles {
             if (spectateurs != null) appliquerVisibilite();
             Player soi = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
             if (soi != null && pantinCacherTete) {
-                for (int k = 0; k < parties.length; k++) {
-                    String nomOs = modele.parties().get(k).nom();
-                    if (parties[k] != null && nomOs != null && nomOs.equalsIgnoreCase("peau_tete")) soi.hideEntity(plugin, parties[k]);
-                }
+                // cachée d'abord ; teteProprietaire la remontre si elle s'éloigne des yeux
+                int kt = indexTete();
+                if (kt >= 0 && kt < parties.length && parties[kt] != null) soi.hideEntity(plugin, parties[kt]);
+                teteSoi = null;
             }
             // pantin monté : chaque morceau est passager du joueur ; son jeu le place lui-même à chaque image, sans retard
             if (monte()) for (Display d : affichages()) base.addPassenger(d);
             mettreAJour(1);
+        }
+
+        /** Tête du pantin montrée au joueur lui-même (null : pas encore décidé). */
+        private Boolean teteSoi;
+
+        /** Index de l'os « peau_tete » (-1 : aucun). */
+        private int indexTete() {
+            for (int k = 0; k < modele.parties().size(); k++) if ("peau_tete".equalsIgnoreCase(modele.parties().get(k).nom())) return k;
+            return -1;
+        }
+
+        /**
+         * Tête du pantin pour son propre joueur : cachée tant qu'elle entoure ses yeux (casque à la place, visible en F5),
+         * montrée dès qu'elle s'en éloigne. Seuil avec un écart pour ne pas clignoter.
+         */
+        private void teteProprietaire(Pose[] poses) {
+            if (!pantin || proprietaire == null || !pantinCacherTete) return;
+            Player soi = Bukkit.getPlayer(proprietaire);
+            int k = indexTete();
+            if (soi == null || k < 0 || k >= parties.length || parties[k] == null || poses[k] == null) return;
+            ModeleBB.Partie partie = modele.parties().get(k);
+            if (partie.cubes().isEmpty()) return;
+            ModeleBB.Cube c = partie.cubes().get(0);
+            double[] piv = partie.pivot();
+            Vector3f centre = new Vector3f((float) (((c.de()[0] + c.a()[0]) / 2 - piv[0]) / 16), (float) (((c.de()[1] + c.a()[1]) / 2 - piv[1]) / 16),
+                (float) (((c.de()[2] + c.a()[2]) / 2 - piv[2]) / 16)).mul(taille).rotate(poses[k].rotation()).add(poses[k].translation());
+            double d = Math.sqrt(centre.x * centre.x + Math.pow(centre.y - soi.getEyeHeight(), 2) + centre.z * centre.z);
+            boolean montrer = Boolean.TRUE.equals(teteSoi) ? d > 0.45 : d > 0.55;
+            if (teteSoi != null && teteSoi == montrer) return;
+            teteSoi = montrer;
+            if (montrer) {
+                soi.showEntity(plugin, parties[k]);
+                soi.sendEquipmentChange(soi, org.bukkit.inventory.EquipmentSlot.HEAD, new ItemStack(org.bukkit.Material.AIR));
+            } else {
+                soi.hideEntity(plugin, parties[k]);
+                ItemStack casque = peaux.get(k);
+                soi.sendEquipmentChange(soi, org.bukkit.inventory.EquipmentSlot.HEAD, casque != null ? casque : new ItemStack(org.bukkit.Material.AIR));
+            }
         }
 
         /** Pantin d'un joueur dont les morceaux sont ses passagers. */
@@ -915,6 +957,7 @@ public final class Modeles {
 
             Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
             dernieresPoses = poses;
+            teteProprietaire(poses);
             Quaternionf droite = Animateur.demiTour();
             float siege = monte() ? (float) base.getHeight() : 0f;
             for (int k = 0; k < parties.length; k++) {

@@ -338,7 +338,13 @@ public final class Pantins implements Listener {
     private static final EquipmentSlot[] EMPLACEMENTS = {EquipmentSlot.HAND, EquipmentSlot.OFF_HAND, EquipmentSlot.HEAD,
         EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
-    /** Le vrai joueur disparaît pour les autres (corps invisible, équipement vide envoyé à ceux qui le voient). */
+    /** Armure que le joueur lui-même ne doit plus voir sur son vrai corps (invisible) en F5 ; la tête est gérée par Modeles. */
+    private static final EquipmentSlot[] ARMURE_SOI = {EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    /**
+     * Le vrai joueur disparaît pour les autres (corps invisible, équipement vide envoyé à ceux qui le voient). Pour
+     * lui-même, son armure de corps disparaît aussi (en F5 elle flotterait autour du pantin) ; ses mains ne changent pas.
+     */
     private void cacher(Player p) {
         if (!plugin.getConfig().getBoolean("pantin.cacher-joueur", true)) return;
         invisiblesAvant.putIfAbsent(p.getUniqueId(), p.isInvisible());
@@ -348,6 +354,7 @@ public final class Pantins implements Listener {
             if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, vide);
         }
+        for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
     }
 
     private void montrer(Player p) {
@@ -358,6 +365,8 @@ public final class Pantins implements Listener {
             if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         }
+        for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        p.sendEquipmentChange(p, EquipmentSlot.HEAD, p.getEquipment().getItem(EquipmentSlot.HEAD));
     }
 
     // ------------------------------------------------------------------ événements
