@@ -53,13 +53,26 @@ public final class Modeles {
         "degat", List.of("hurt", "degat", "damage"),
         "mort", List.of("death", "mort", "die"),
         "attaque", List.of("attack", "attaque"),
-        "clic", List.of("interact", "clic", "interaction"));
+        "clic", List.of("interact", "clic", "interaction"),
+        // réactions aux compétences des joueurs (phase 3 de Babel) : jouées si le modèle du monstre les a
+        "saisi", List.of("saisi", "grabbed", "grab"),
+        "plaque", List.of("plaque", "slam", "slammed"),
+        "souleve", List.of("souleve", "launched", "launch"),
+        "projete", List.of("projete", "thrown", "throw"),
+        "repousse", List.of("repousse", "knockback", "pushed"),
+        "etourdi", List.of("etourdi", "stunned", "stun"),
+        "resiste", List.of("resiste", "resist"));
+
+    /** Réactions qu'une compétence peut demander à un modèle (VoraceAPI.reaction). */
+    public static final List<String> REACTIONS = List.of("saisi", "plaque", "souleve", "projete", "repousse", "etourdi", "resiste");
 
     private final Vorace plugin;
     private final NamespacedKey clePose, cleMob, clePartie, cleTaille;
     /** Réglages (config.yml, section modeles). */
     private int intervalle = 2, distance = 48, fonduTics = 4;
     private boolean teinteDegats = true, suiviTete = true, effetsActifs = true;
+    /** Pantin des joueurs : rotation (degrés) et décalage vertical (blocs) des têtes de joueur qui portent le skin. */
+    private float peauRotationY = 0f, peauDecalageY = 0.25f;
     private volatile Map<String, ModeleBB> modeles = Map.of();
     private final Map<UUID, Instance> instances = new LinkedHashMap<>();
     private BukkitTask tache;
@@ -138,8 +151,47 @@ public final class Modeles {
 
     public void arreter() {
         if (tache != null) tache.cancel();
-        for (Instance i : new ArrayList<>(instances.values())) i.supprimerParties();
+        for (Instance i : new ArrayList<>(instances.values())) {
+            i.supprimerParties();
+            i.finir();
+        }
         instances.clear();
+    }
+
+    /**
+     * Le pantin d'un joueur joue une animation de ce modèle (« joueur », ou un modèle qui a le même squelette).
+     * Les os « peau_... » portent les têtes de {@code peaux} (nom sans « peau_ » : tete, corps_haut...) ; sans tête
+     * prête, la partie garde le dessin du modèle. Le pantin disparaît à la fin de l'animation ; {@code fin} est appelé.
+     *
+     * @return faux si le modèle ou l'animation n'existe pas
+     */
+    public boolean animerJoueur(Player joueur, String id, String animation, Map<String, ItemStack> peaux, Runnable fin) {
+        ModeleBB m = modele(id);
+        if (m == null) return false;
+        Instance ancien = instances.get(joueur.getUniqueId());
+        if (ancien != null) {
+            ancien.supprimerParties();
+            instances.remove(joueur.getUniqueId());
+            ancien.finir();
+        }
+        Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
+        if (i.trouver(animation) == null) return false;
+        i.pantin = true;
+        i.proprietaire = joueur.getUniqueId();
+        i.fin = fin;
+        for (int k = 0; k < m.parties().size(); k++) {
+            String n = m.parties().get(k).nom() == null ? "" : m.parties().get(k).nom().toLowerCase(Locale.ROOT);
+            if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
+        }
+        instances.put(joueur.getUniqueId(), i);
+        i.demarrer(animation, false, false);
+        return true;
+    }
+
+    /** Le joueur a un pantin en train de jouer. */
+    public boolean pantinActif(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        return i != null && i.pantin;
     }
 
     // ------------------------------------------------------------------ création
@@ -253,6 +305,8 @@ public final class Modeles {
             teinteDegats = plugin.getConfig().getBoolean("modeles.teinte-degats", true);
             suiviTete = plugin.getConfig().getBoolean("modeles.suivi-tete", true);
             effetsActifs = plugin.getConfig().getBoolean("modeles.effets", true);
+            peauRotationY = (float) plugin.getConfig().getDouble("pantin.correction.rotation-y", 0);
+            peauDecalageY = (float) plugin.getConfig().getDouble("pantin.correction.decalage-y", 0.25);
         } catch (Throwable t) {
             intervalle = 2;
         }
@@ -267,9 +321,10 @@ public final class Modeles {
                 if (verifier || i.distanceJoueur < 0) i.verifierDistance(joueurs);
                 if (i.endormi) {
                     // personne ne regarde : aucune entité d'affichage, aucun calcul ; seulement la fin du modèle
-                    if (i.fixe != null || !i.base.isValid() || i.base.isDead()) {
+                    if (i.fixe != null || !i.base.isValid() || i.base.isDead() || (i.pantin && i.forcee == null)) {
                         i.supprimerParties();
                         instances.remove(i.base.getUniqueId());
+                        i.finir();
                     }
                     continue;
                 }
@@ -277,6 +332,7 @@ public final class Modeles {
                 if (!i.mettreAJour(iv)) {
                     i.supprimerParties();
                     instances.remove(i.base.getUniqueId());
+                    i.finir();
                 }
             } catch (Throwable ex) {
                 // une erreur (même de type Error) ne doit jamais figer tous les modèles : on la note une fois et on continue
@@ -332,6 +388,20 @@ public final class Modeles {
         private Pose[] dernieresPoses;
         /** Regard imposé par l'API (degrés, par rapport au corps) ; NaN = celui du mob. */
         private float regardYaw = Float.NaN, regardPitch = Float.NaN;
+        /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
+        boolean pantin;
+        UUID proprietaire;
+        Runnable fin;
+        final Map<Integer, ItemStack> peaux = new HashMap<>();
+
+        /** Appelé une fois quand le modèle disparaît (pantin : le joueur redevient visible). */
+        void finir() {
+            Runnable r = fin;
+            fin = null;
+            if (r != null) {
+                try { r.run(); } catch (Throwable t) { plugin.getLogger().warning("Fin du pantin : " + t); }
+            }
+        }
 
         Instance(ModeleBB modele, Entity base, boolean mob, float yaw) {
             this.modele = modele;
@@ -472,7 +542,8 @@ public final class Modeles {
             for (int k = 0; k < n; k++) {
                 if (!modele.parties().get(k).visible()) continue;
                 String id = GenerateurModeles.idPartie(modele.id(), k);
-                ItemStack objet = plugin.objets().objetVisuel(id);
+                ItemStack peau = peaux.get(k);
+                ItemStack objet = peau != null ? peau : plugin.objets().objetVisuel(id);
                 objets[k] = objet;
                 parties[k] = l.getWorld().spawn(l, ItemDisplay.class, d -> {
                     d.setPersistent(false);
@@ -486,6 +557,14 @@ public final class Modeles {
             }
             derniere = l;
             if (spectateurs != null) appliquerVisibilite();
+            // pantin : le joueur ne voit pas sa propre tête (elle serait dans sa caméra à la première personne)
+            Player soi = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
+            if (soi != null) {
+                for (int k = 0; k < parties.length; k++) {
+                    String n = modele.parties().get(k).nom();
+                    if (parties[k] != null && n != null && n.equalsIgnoreCase("peau_tete")) soi.hideEntity(plugin, parties[k]);
+                }
+            }
             mettreAJour(1);
         }
 
@@ -554,7 +633,7 @@ public final class Modeles {
             return demarrer(nom, boucle, true);
         }
 
-        private boolean demarrer(String nom, boolean boucle, boolean dessus) {
+        boolean demarrer(String nom, boolean boucle, boolean dessus) {
             Animation a = trouver(nom);
             if (a == null) return false;
             if (Bukkit.isPrimaryThread()) {
@@ -582,6 +661,7 @@ public final class Modeles {
 
         /** Joue une animation automatique (dégâts, attaque...) si le modèle l'a. */
         public boolean jouerAuto(String role) {
+            if (pantin) return false;  // le pantin d'un joueur ne joue que l'animation demandée
             for (String n : AUTO.getOrDefault(role, List.of())) {
                 if (modele.animations().containsKey(n)) {
                     if (Bukkit.isPrimaryThread()) {
@@ -606,6 +686,7 @@ public final class Modeles {
 
         /** Le mob est touché : animation « degat » par-dessus et teinte rouge un court instant. */
         public void blesser() {
+            if (pantin) return;
             jouerAuto("degat");
             if (!teinteDegats || endormi) return;
             if (rouges == null) {
@@ -628,6 +709,7 @@ public final class Modeles {
 
         /** Le mob est mort : le modèle joue « mort » sur place puis disparaît. */
         public void mourir() {
+            if (pantin) { forcee = null; return; }
             fixe = base.getLocation();
             if (finTeinte >= 0) finirTeinte();
             if (!jouerAuto("mort")) fixe = null;
@@ -704,9 +786,10 @@ public final class Modeles {
                     forcee = null;
                 } else if (!forceeBoucle && !fa.boucle().equals("loop") && tf >= fa.duree()) {
                     if (mort) return false;
-                    if (!fa.boucle().equals("hold") || forceePartielle) forcee = null;
+                    if (!fa.boucle().equals("hold") || forceePartielle || pantin) forcee = null;
                 }
             }
+            if (pantin && forcee == null) return false;  // fin de l'animation du joueur : le pantin disparaît
 
             // animation complète (demandée ou automatique), avec fondu depuis la précédente
             String pNom = forcee != null && !forceePartielle ? forcee : auto;
@@ -762,7 +845,8 @@ public final class Modeles {
                 ItemDisplay d = parties[k];
                 if (d == null || poses[k] == null || !d.isValid()) continue;
                 Pose p = poses[k];
-                Transformation tr = new Transformation(p.translation(), p.rotation(), p.echelle(), droite);
+                Transformation tr = peaux.containsKey(k) ? transformationPeau(k, p)
+                    : new Transformation(p.translation(), p.rotation(), p.echelle(), droite);
                 if (tr.equals(envoyees[k])) continue;
                 envoyees[k] = tr;
                 d.setInterpolationDelay(0);
@@ -771,6 +855,29 @@ public final class Modeles {
             }
             if (aEtiquettes) etiquettes(poses, l, intervalle);
             return true;
+        }
+
+        /**
+         * Os « peau_ » : une tête de joueur (cube de 8 pixels que le jeu dessine entre y = -0,5 et 0 autour de l'origine
+         * de l'entité) étirée sur le cube de l'os. Le jeu tourne lui-même l'objet d'un demi-tour, ce qui met le visage
+         * de la tête vers l'avant du modèle : pas de demi-tour à annuler ici. Réglages de secours :
+         * pantin.correction.rotation-y et decalage-y.
+         */
+        private Transformation transformationPeau(int k, Pose p) {
+            ModeleBB.Partie partie = modele.parties().get(k);
+            ModeleBB.Cube c = partie.cubes().get(0);
+            double[] piv = partie.pivot();
+            float ech = (float) (1.0 / Math.max(1e-6, partie.echelle()));
+            // T · R · S1 · translation(c) · S2 · translation(0, dy, 0) · Ry, sans cisaillement :
+            // translation = T + R(S1 ∘ (c + S2 ∘ d)), rotation gauche R, échelle S1 ∘ S2, rotation droite Ry
+            Vector3f s1 = new Vector3f(p.echelle()).mul(ech);
+            Vector3f s2 = new Vector3f((float) ((c.a()[0] - c.de()[0]) / 8), (float) ((c.a()[1] - c.de()[1]) / 8), (float) ((c.a()[2] - c.de()[2]) / 8));
+            Vector3f centre = new Vector3f((float) (((c.de()[0] + c.a()[0]) / 2 - piv[0]) / 16), (float) (((c.de()[1] + c.a()[1]) / 2 - piv[1]) / 16),
+                (float) (((c.de()[2] + c.a()[2]) / 2 - piv[2]) / 16));
+            Vector3f local = new Vector3f(0, peauDecalageY, 0).mul(s2).add(centre).mul(s1);
+            Vector3f translation = new Vector3f(local).rotate(p.rotation()).add(p.translation());
+            return new Transformation(translation, new Quaternionf(p.rotation()), new Vector3f(s1).mul(s2),
+                new Quaternionf().rotateY((float) Math.toRadians(peauRotationY)));
         }
 
         /** Joue les clés d'effet atteintes depuis le dernier passage ; renvoie le nouveau temps vu. */
@@ -854,6 +961,7 @@ public final class Modeles {
 
     private static final int COULEUR_DEGATS = 0xFF6464;
 
+
     private static float limiter(float v, float max) {
         return Math.max(-max, Math.min(max, v));
     }
@@ -905,6 +1013,14 @@ public final class Modeles {
             Files.createDirectories(dossier());
             Path liste = plugin.getDataFolder().toPath().resolve("donnees").resolve("exemples.txt");
             List<String> faits = new ArrayList<>(Files.isRegularFile(liste) ? Files.readAllLines(liste) : List.of());
+            // squelette du pantin des joueurs et mannequin des réactions : toujours remis s'ils manquent
+            for (String f : List.of("joueur.bbmodel", "mannequin_reactions.bbmodel")) {
+                Path c = dossier().resolve(f);
+                if (Files.exists(c)) continue;
+                try (InputStream in = plugin.getClass().getClassLoader().getResourceAsStream("exemples/modeles/" + f)) {
+                    if (in != null) Files.copy(in, c);
+                }
+            }
             if (faits.contains("modeles")) return;
             Path cible = dossier().resolve("golem_rubis.bbmodel");
             if (!Files.exists(cible)) {

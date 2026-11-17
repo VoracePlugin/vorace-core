@@ -1,5 +1,27 @@
 # Journal des changements
 
+## 1.4.0 (novembre 2026) : pantin des joueurs et réactions des monstres
+
+### Pantin des joueurs (animations du corps entier avec le vrai skin, sans mod)
+- `VoraceAPI.animerJoueur(joueur, modèle, animation)` : pendant l'animation, le joueur est caché (corps invisible,
+  équipement vide envoyé aux autres) et remplacé par un modèle animé dont chaque os « peau_... » porte une tête de
+  joueur étirée sur son cube. Le joueur ne voit pas sa propre tête (première personne). Le pantin disparaît à la fin.
+- Squelette `modeles-animes/joueur.bbmodel` (tête + tronc, bras et jambes en deux morceaux), remis s'il manque ; un
+  modèle de classe reprend ce squelette et ajoute ses animations. Animations d'essai : `essai`, `salut`, `croix`.
+- Skin découpé en dix morceaux (`Peau`), signés par MineSkin (clé `pantin.mineskin-cle`, un envoi à la fois) et gardés
+  dans `peaux/cache.yml` ; préparé à la connexion. Sans clé ou pendant la préparation : habits par défaut du squelette.
+- `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.
+- Réglages de secours `pantin.correction.rotation-y` et `decalage-y` si les têtes sont mal tournées en jeu.
+
+### Réactions des monstres
+- `VoraceAPI.reaction(entité, réaction)` : le modèle du monstre joue `saisi`, `plaque`, `souleve`, `projete`,
+  `repousse`, `etourdi` ou `resiste` s'il a cette animation (noms anglais acceptés : grabbed, slam, launched...).
+- Mannequin d'essai `mannequin_reactions.bbmodel` avec les sept réactions ; `/vorace modele reaction <réaction>`.
+
+### Divers
+- config.yml : les sections de premier niveau ajoutées par une nouvelle version sont écrites à la fin du fichier du
+  serveur, avec leurs commentaires.
+
 ## 1.3.1 (novembre 2026) : corrections
 
 - **Joueurs déconnectés par « Recursive update »** : la couche paquets nommait les paquets rangés dans un autre

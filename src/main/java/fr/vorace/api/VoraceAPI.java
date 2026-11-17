@@ -228,4 +228,26 @@ public final class VoraceAPI {
     public static boolean paquetsActifs() {
         return plugin != null && plugin.paquets() != null;
     }
+
+    // ------------------------------------------------------------------ pantins et réactions (1.4.0)
+
+    /**
+     * Le joueur joue une animation avec tout son corps et son vrai skin (pantin : le joueur est caché pendant
+     * l'animation). {@code modele} : « joueur » (squelette de base) ou un modèle .bbmodel au même squelette, par exemple
+     * un fichier par classe. Faux si le modèle ou l'animation n'existe pas, ou si les pantins sont coupés.
+     */
+    public static boolean animerJoueur(Player joueur, String modele, String animation) {
+        return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation);
+    }
+
+    /**
+     * Réaction d'un monstre à une compétence (« saisi », « plaque », « souleve », « projete », « repousse »,
+     * « etourdi », « resiste ») : son modèle animé la joue s'il l'a. Faux si l'entité n'a pas de modèle ou pas cette
+     * animation (le plugin appelant garde alors son effet générique).
+     */
+    public static boolean reaction(Entity cible, String reaction) {
+        if (plugin == null || plugin.modeles() == null || cible == null || reaction == null) return false;
+        fr.vorace.modeles.Modeles.Instance i = plugin.modeles().instance(cible);
+        return i != null && i.jouerAuto(reaction.toLowerCase(java.util.Locale.ROOT));
+    }
 }
