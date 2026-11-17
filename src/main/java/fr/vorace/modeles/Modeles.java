@@ -46,22 +46,21 @@ import java.util.stream.Stream;
 public final class Modeles {
 
     /** Noms d'animations reconnus automatiquement (anglais de ModelEngine et français). */
-    public static final Map<String, List<String>> AUTO = Map.of(
-        "repos", List.of("idle", "repos", "attente"),
-        "marche", List.of("walk", "marche", "walking"),
-        "course", List.of("run", "course", "running"),
-        "degat", List.of("hurt", "degat", "damage"),
-        "mort", List.of("death", "mort", "die"),
-        "attaque", List.of("attack", "attaque"),
-        "clic", List.of("interact", "clic", "interaction"),
-        // réactions aux compétences des joueurs (phase 3 de Babel) : jouées si le modèle du monstre les a
-        "saisi", List.of("saisi", "grabbed", "grab"),
-        "plaque", List.of("plaque", "slam", "slammed"),
-        "souleve", List.of("souleve", "launched", "launch"),
-        "projete", List.of("projete", "thrown", "throw"),
-        "repousse", List.of("repousse", "knockback", "pushed"),
-        "etourdi", List.of("etourdi", "stunned", "stun"),
-        "resiste", List.of("resiste", "resist"));
+    public static final Map<String, List<String>> AUTO = Map.ofEntries(
+        Map.entry("repos", List.of("idle", "repos", "attente")),
+        Map.entry("marche", List.of("walk", "marche", "walking")),
+        Map.entry("course", List.of("run", "course", "running")),
+        Map.entry("degat", List.of("hurt", "degat", "damage")),
+        Map.entry("mort", List.of("death", "mort", "die")),
+        Map.entry("attaque", List.of("attack", "attaque")),
+        Map.entry("clic", List.of("interact", "clic", "interaction")),
+        Map.entry("saisi", List.of("saisi", "grabbed", "grab")),
+        Map.entry("plaque", List.of("plaque", "slam", "slammed")),
+        Map.entry("souleve", List.of("souleve", "launched", "launch")),
+        Map.entry("projete", List.of("projete", "thrown", "throw")),
+        Map.entry("repousse", List.of("repousse", "knockback", "pushed")),
+        Map.entry("etourdi", List.of("etourdi", "stunned", "stun")),
+        Map.entry("resiste", List.of("resiste", "resist")));
 
     /** Réactions qu'une compétence peut demander à un modèle (VoraceAPI.reaction). */
     public static final List<String> REACTIONS = List.of("saisi", "plaque", "souleve", "projete", "repousse", "etourdi", "resiste");
@@ -561,8 +560,8 @@ public final class Modeles {
             Player soi = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
             if (soi != null) {
                 for (int k = 0; k < parties.length; k++) {
-                    String n = modele.parties().get(k).nom();
-                    if (parties[k] != null && n != null && n.equalsIgnoreCase("peau_tete")) soi.hideEntity(plugin, parties[k]);
+                    String nomOs = modele.parties().get(k).nom();
+                    if (parties[k] != null && nomOs != null && nomOs.equalsIgnoreCase("peau_tete")) soi.hideEntity(plugin, parties[k]);
                 }
             }
             mettreAJour(1);
