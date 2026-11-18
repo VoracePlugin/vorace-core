@@ -893,6 +893,7 @@ public final class Modeles {
             if (p != null) {
                 p.setSpectatorTarget(null);
                 p.setGameMode(modeAvant == null ? org.bukkit.GameMode.SURVIVAL : modeAvant);
+                p.setSneaking(false);
                 if (ancre != null) p.teleport(ancre);
                 p.getPersistentDataContainer().remove(new NamespacedKey(plugin, CLE_CAMERA));
             }

@@ -188,6 +188,21 @@ public final class Pantins implements Listener {
         return jouer(p, modele, animation, false);
     }
 
+    /**
+     * Rend le joueur visible quoi qu'il arrive (pantin arrêté, invisibilité retirée, armure renvoyée) : secours si un
+     * joueur est resté invisible.
+     */
+    public void rendreVisible(Player p) {
+        arreter(p);
+        invisiblesAvant.remove(p.getUniqueId());
+        p.setInvisible(false);
+        for (Player autre : p.getWorld().getPlayers()) {
+            if (autre == p) continue;
+            for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        }
+        for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+    }
+
     /** Arrête le pantin du joueur (fin d'une animation en boucle). */
     public void arreter(Player p) {
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
@@ -287,7 +302,9 @@ public final class Pantins implements Listener {
      */
     private void cacher(Player p) {
         if (!plugin.getConfig().getBoolean("pantin.cacher-joueur", true)) return;
-        invisiblesAvant.putIfAbsent(p.getUniqueId(), p.isInvisible());
+        // pendant une caméra de cinéma le joueur est spectateur, donc invisible pour le jeu : ce n'est pas son état à lui
+        boolean cinema = p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA));
+        invisiblesAvant.putIfAbsent(p.getUniqueId(), !cinema && p.getGameMode() != org.bukkit.GameMode.SPECTATOR && p.isInvisible());
         p.setInvisible(true);
         ItemStack vide = new ItemStack(Material.AIR);
         for (Player autre : p.getWorld().getPlayers()) {
@@ -309,6 +326,18 @@ public final class Pantins implements Listener {
     }
 
     // ------------------------------------------------------------------ événements
+
+    /**
+     * Pendant une caméra de cinéma, Maj ne détache pas le joueur de la caméra (le serveur la lui redonnait aussitôt, d'où
+     * de petits à-coups).
+     */
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST, ignoreCancelled = true)
+    public void maj(org.bukkit.event.player.PlayerToggleSneakEvent e) {
+        if (e.isSneaking() && e.getPlayer().getGameMode() == org.bukkit.GameMode.SPECTATOR
+            && e.getPlayer().getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA))) {
+            e.setCancelled(true);
+        }
+    }
 
     /** Arrêt du serveur pendant une caméra de cinéma : le joueur retrouve son mode de jeu à sa connexion. */
     @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)

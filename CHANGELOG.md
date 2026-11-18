@@ -43,6 +43,9 @@
   le joueur passe en spectateur rattaché à une caméra invisible (entité d'affichage, mouvements adoucis), le pantin
   reste sur place, puis le joueur retrouve son mode de jeu, sa place et son regard à la fin (même après un arrêt du
   serveur, à sa connexion). `pantin.camera-ultimes`.
+- Fin d'une caméra de cinéma : le joueur ne reste plus invisible (son état d'avant était lu alors qu'il était déjà
+  spectateur). `/vorace pantin visible [joueur]` rend visible un joueur resté invisible.
+- Maj pendant une caméra de cinéma ne la détache plus (plus d'à-coups).
 - La caméra est redonnée au joueur quelques tics après son apparition : le client ignore une caméra qu'il ne connaît
   pas encore, et le joueur restait dans ses propres yeux.
 
