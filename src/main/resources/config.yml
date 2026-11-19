@@ -116,6 +116,9 @@ pantin:
   # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
   # ces quelques secondes, comme les plugins de cinématiques ; seulement pour les animations qui ont un os « camera ».
   camera-ultimes: true
+  # « spectateur » : caméra fluide, sans barre d'objets ni interface (cinématique). « monture » : le joueur monte sur
+  # un support invisible et garde sa barre d'objets, mais la caméra est moins fluide.
+  camera-mode: spectateur
   # Objets tenus (arme, bouclier, arme de poing par paire) dans les mains du pantin, placés comme le jeu les tient.
   objets-en-main: true
   # Pendant l'animation, chez le joueur lui-même : plus d'armure sur son corps invisible (F5) ni d'objets en main (ils

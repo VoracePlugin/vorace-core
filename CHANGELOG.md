@@ -1,5 +1,12 @@
 # Journal des changements
 
+## 1.4.10 (novembre 2026)
+
+- Caméra de cinéma : de nouveau en mode spectateur rattaché à un affichage invisible (fluide, sans barre d'objets ni
+  interface). `pantin.camera-mode: monture` pour garder la barre d'objets (moins fluide).
+- Emojis du chat collés tels quels : gardés pour un joueur qui a leur permission (glyphes à raccourci, hors fonds de
+  menus, 16 pixels de haut au plus). Les autres caractères des polices (interface, espaces négatifs) restent retirés.
+
 ## 1.4.9 (novembre 2026)
 
 - Caméra de cinéma : la monture est un support d'armure invisible (marqueur) au lieu d'un affichage d'objet ; le client

@@ -89,6 +89,8 @@ public final class Modeles {
      * voient le pantin à sa vraie place. 0 : pas de copie.
      */
     private float pantinRecul = 4f;
+    /** Caméra de cinéma en montant le joueur sur un support (barre d'objets gardée, moins fluide) au lieu du mode spectateur. */
+    private boolean cameraMonture;
     /** Caméra de cinéma pour les animations qui ont un os « camera » animé (ultimes). */
     private boolean cameraCinema = true;
     /** Préfixes de nom d'os des objets tenus par le pantin (« main:poing_droit ») dans la liste des couches d'armure. */
@@ -450,6 +452,7 @@ public final class Modeles {
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
             cameraCinema = plugin.getConfig().getBoolean("pantin.camera-ultimes", true);
+            cameraMonture = "monture".equalsIgnoreCase(plugin.getConfig().getString("pantin.camera-mode", "spectateur"));
         } catch (Throwable t) {
             intervalle = 2;
         }
@@ -891,7 +894,7 @@ public final class Modeles {
         /** Pendant une caméra de cinéma : le pantin reste là où le joueur était (le joueur, spectateur, suit la caméra). */
         private Location ancre;
         /** Monture de la caméra : support d'armure invisible (le client adoucit ses déplacements, contrairement à un affichage). */
-        private org.bukkit.entity.ArmorStand camera;
+        private org.bukkit.entity.Entity camera;
         private org.bukkit.GameMode modeAvant;
         /** Tics depuis le début de la caméra : le client ne connaît l'entité caméra qu'au tic suivant son apparition. */
         private int ticsCamera;
@@ -923,6 +926,22 @@ public final class Modeles {
             for (ItemDisplay d : partiesSoi) if (d != null) p.hideEntity(plugin, d);
             for (ItemDisplay d : armuresSoi) if (d != null) p.hideEntity(plugin, d);
             Location depart = p.getEyeLocation();
+            p.getPersistentDataContainer().set(new NamespacedKey(plugin, CLE_CAMERA), PersistentDataType.STRING, modeAvant.name());
+            ticsCamera = 0;
+            cameraParPaquet = false;
+            if (!cameraMonture) {
+                // mode spectateur rattaché à un affichage invisible : mouvement fluide (interpolé par le client), sans
+                // barre d'objets ni interface, comme une vraie cinématique
+                camera = depart.getWorld().spawn(depart, ItemDisplay.class, d -> {
+                    d.setPersistent(false);
+                    d.setTeleportDuration(2);
+                    d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
+                });
+                p.setGameMode(org.bukkit.GameMode.SPECTATOR);
+                p.setSpectatorTarget(camera);
+                majCamera();
+                return;
+            }
             camera = depart.getWorld().spawn(depart, org.bukkit.entity.ArmorStand.class, d -> {
                 d.setPersistent(false);
                 d.setMarker(true);
@@ -933,8 +952,6 @@ public final class Modeles {
                 d.setBasePlate(false);
                 d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
             });
-            p.getPersistentDataContainer().set(new NamespacedKey(plugin, CLE_CAMERA), PersistentDataType.STRING, modeAvant.name());
-            ticsCamera = 0;
             // le joueur (invisible) monte sur l'entité caméra : ses yeux suivent la caméra, il garde son mode de jeu, sa
             // barre d'objets et son interface (le jeu ne les dessine que si la caméra est le joueur lui-même) ; son
             // regard est tourné vers la cible à chaque tic. Si la monture est refusée : mode spectateur comme avant.

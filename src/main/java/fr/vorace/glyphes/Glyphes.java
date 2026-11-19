@@ -204,6 +204,19 @@ public final class Glyphes {
             .decoration(TextDecoration.STRIKETHROUGH, false);
     }
 
+    /**
+     * Vrai si ce caractère est un emoji du chat que ce joueur peut écrire tel quel : glyphe à raccourci, hors fond de
+     * menu, pas plus haut que 16 pixels (pas d'image qui couvre l'écran ni d'espace négatif).
+     */
+    public boolean emojiPermis(Player p, int code) {
+        for (Glyphe g : glyphes.values()) {
+            if (g.code() != code) continue;
+            DefinitionGlyphe d = g.def();
+            return !d.menu() && !d.raccourcis().isEmpty() && g.hauteur() > 0 && g.hauteur() <= 16 && autorise(p, g);
+        }
+        return false;
+    }
+
     public static boolean autorise(Player p, Glyphe g) {
         return p == null || g.def().permission() == null || p.hasPermission(g.def().permission());
     }

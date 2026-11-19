@@ -22,8 +22,9 @@ public final class EcouteurGlyphes implements Listener {
     /**
      * Caractères des polices du pack (zone d'usage privé d'Unicode : U+E000 à U+F8FF et plans 15-16) : images de
      * l'interface, espaces négatifs, emojis. Tapés ou collés par un joueur, ils pourraient couvrir l'écran des autres,
-     * imiter l'interface ou un message du serveur : on les retire de ce qu'écrivent les joueurs (les emojis passent par
-     * leurs raccourcis, ajoutés ensuite).
+     * imiter l'interface ou un message du serveur : on les retire de ce qu'écrivent les joueurs. Les emojis du chat
+     * (glyphes à raccourci, hors fonds de menus, pas plus hauts qu'une ligne) restent, collés tels quels ou par leurs
+     * raccourcis, si le joueur a leur permission.
      */
     static final java.util.regex.Pattern PRIVES = java.util.regex.Pattern.compile("[\\uE000-\\uF8FF\\x{F0000}-\\x{10FFFF}]");
 
@@ -31,17 +32,28 @@ public final class EcouteurGlyphes implements Listener {
         return p.hasPermission("vorace.admin") || p.hasPermission("vorace.glyphes.bruts");
     }
 
-    static String nettoyer(String s) {
-        return s == null ? null : PRIVES.matcher(s).replaceAll("");
+    /** Retire les caractères privés, sauf les emojis du chat que ce joueur a le droit d'utiliser (collés tels quels). */
+    String nettoyer(org.bukkit.entity.Player p, String s) {
+        if (s == null) return null;
+        java.util.regex.Matcher m = PRIVES.matcher(s);
+        StringBuilder b = new StringBuilder();
+        while (m.find()) m.appendReplacement(b, emojiPermis(p, m.group()) ? java.util.regex.Matcher.quoteReplacement(m.group()) : "");
+        m.appendTail(b);
+        return b.toString();
     }
 
-    static Component nettoyer(Component c) {
-        return c == null ? null : c.replaceText(net.kyori.adventure.text.TextReplacementConfig.builder().match(PRIVES).replacement("").build());
+    Component nettoyer(org.bukkit.entity.Player p, Component c) {
+        return c == null ? null : c.replaceText(net.kyori.adventure.text.TextReplacementConfig.builder().match(PRIVES)
+            .replacement((r, t) -> emojiPermis(p, r.group()) ? t : Component.empty()).build());
+    }
+
+    private boolean emojiPermis(org.bukkit.entity.Player p, String car) {
+        return plugin.glyphes() != null && plugin.glyphes().emojiPermis(p, car.codePointAt(0));
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void chatNettoye(AsyncChatEvent e) {
-        if (!libre(e.getPlayer())) e.message(nettoyer(e.message()));
+        if (!libre(e.getPlayer())) e.message(nettoyer(e.getPlayer(), e.message()));
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -52,7 +64,7 @@ public final class EcouteurGlyphes implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void commande(org.bukkit.event.player.PlayerCommandPreprocessEvent e) {
-        if (!libre(e.getPlayer()) && PRIVES.matcher(e.getMessage()).find()) e.setMessage(nettoyer(e.getMessage()));
+        if (!libre(e.getPlayer()) && PRIVES.matcher(e.getMessage()).find()) e.setMessage(nettoyer(e.getPlayer(), e.getMessage()));
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -60,9 +72,9 @@ public final class EcouteurGlyphes implements Listener {
         if (libre(e.getPlayer())) return;
         org.bukkit.inventory.meta.BookMeta m = e.getNewBookMeta();
         java.util.List<Component> pages = new java.util.ArrayList<>();
-        for (Component c : m.pages()) pages.add(nettoyer(c));
+        for (Component c : m.pages()) pages.add(nettoyer(e.getPlayer(), c));
         m.pages(pages);
-        if (m.title() != null) m.title(nettoyer(m.title()));
+        if (m.title() != null) m.title(nettoyer(e.getPlayer(), m.title()));
         e.setNewBookMeta(m);
     }
 
@@ -71,8 +83,10 @@ public final class EcouteurGlyphes implements Listener {
         if (!(e.getView().getPlayer() instanceof org.bukkit.entity.Player p) || libre(p)) return;
         String nom = e.getView().getRenameText();
         if (nom == null || !PRIVES.matcher(nom).find() || e.getResult() == null) return;
+        String propre = nettoyer(p, nom);
+        if (propre.equals(nom)) return;
         org.bukkit.inventory.ItemStack r = e.getResult().clone();
-        r.editMeta(m -> m.displayName(Component.text(nettoyer(nom))));
+        r.editMeta(m -> m.displayName(Component.text(propre)));
         e.setResult(r);
     }
 
@@ -82,7 +96,7 @@ public final class EcouteurGlyphes implements Listener {
         for (int i = 0; i < 4; i++) {
             Component l = e.line(i);
             if (l == null) continue;
-            if (!libre) l = nettoyer(l);
+            if (!libre) l = nettoyer(e.getPlayer(), l);
             if (plugin.getConfig().getBoolean("glyphes.panneaux", true)) l = plugin.glyphes().remplacer(e.getPlayer(), l);
             e.line(i, l);
         }
