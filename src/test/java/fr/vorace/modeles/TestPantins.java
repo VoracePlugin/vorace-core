@@ -97,10 +97,10 @@ public final class TestPantins {
             java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
         com.google.gson.JsonObject el = fer.getAsJsonArray("elements").get(0).getAsJsonObject();
         verifier(fer.getAsJsonObject("textures").get("0").getAsString().equals("minecraft:entity/equipment/humanoid/iron")
-                && el.get("from").toString().equals("[3.0,7.0,5.0]") && el.get("to").toString().equals("[13.0,15.0,11.0]")
+                && el.get("from").toString().equals("[2.95,6.5,4.95]") && el.get("to").toString().equals("[13.05,15.0,11.05]")
                 && el.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[5.0,10.0,7.0,13.0]")
                 && !el.getAsJsonObject("faces").has("down"),
-            "armure : plastron sur le haut du tronc, gonflé d'un pixel, avant = zone avant du tronc lignes 0 à 5");
+            "armure : plastron sur le haut du tronc (qui descend d'un demi-pixel sur le bas), gonflé d'un pixel, avant = zone avant du tronc lignes 0 à 5");
         com.google.gson.JsonObject jb = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/iron/humanoid_leggings/jambe_gauche_bas.json"),
             java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonArray("elements").get(0).getAsJsonObject();
         verifier(jb.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[2.0,12.0,1.0,16.0]") && !jb.getAsJsonObject("faces").has("up"),
