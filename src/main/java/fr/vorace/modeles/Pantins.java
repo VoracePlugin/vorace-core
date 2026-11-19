@@ -126,9 +126,12 @@ public final class Pantins implements Listener {
                 if (skin == null) throw new IllegalStateException("skin illisible");
                 boolean fin = "slim".equals(texture[1]);
                 Map<String, PeauUV.Donnees> donnees = PeauUV.donnees(squelette, skin, fin);
+                int[] bras = PeauUV.couleursBrasTenu(skin, fin);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     for (Map.Entry<String, PeauUV.Donnees> e : donnees.entrySet()) m.put(e.getKey(), objetPeau(PeauUV.morceauObjet(e.getKey(), fin), e.getValue()));
                     etats.put(id, "prêt");
+                    // bras du joueur à la première personne avec une arme de poing (vorace-item)
+                    if (caches != null && p.isOnline()) caches.bras(p, bras, fin);
                 });
             } catch (Exception ex) {
                 etats.put(id, "erreur : " + ex.getMessage() + " (habits par défaut)");
@@ -317,7 +320,16 @@ public final class Pantins implements Listener {
             pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
         }
         java.util.List<Map.Entry<String, ItemStack>> porte = armure(p);
-        porte.addAll(mains(p));
+        java.util.List<Map.Entry<String, ItemStack>> tenus = mains(p);
+        // arme par paire (gantelets, bandes...) : elle couvre les avant-bras ; la manche d'armure dessous ressortirait
+        // par endroits pendant les coups, on ne la pose pas
+        boolean paire = false;
+        for (Map.Entry<String, ItemStack> t : tenus) {
+            ItemStack o = t.getValue();
+            if (o.hasItemMeta() && o.getItemMeta().getPersistentDataContainer().has(PAIRE)) paire = true;
+        }
+        if (paire) porte.removeIf(c -> c.getKey().startsWith("peau_bras_") && c.getKey().endsWith("_bas"));
+        porte.addAll(tenus);
         boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
             porte, () -> montrer(p));
         if (ok) cacher(p);

@@ -42,7 +42,7 @@ import java.util.logging.Level;
 public final class ObjetsCaches {
 
     /** Drapeaux de custom_model_data lus par les définitions d'objets de vorace-item. */
-    public static final int CACHE_EN_MAIN = 0, PAIRE = 1;
+    public static final int CACHE_EN_MAIN = 0, PAIRE = 1, BRAS_FIN = 2;
 
     private final Vorace plugin;
     private final Set<UUID> cachesSoi = ConcurrentHashMap.newKeySet();
@@ -86,10 +86,27 @@ public final class ObjetsCaches {
     private void creatif(Paquet p) throws ReflectiveOperationException {
         Object o = p.lire("itemStack");
         if (o == null || (boolean) estVide.invoke(o)) return;
-        if (!marque((ItemStack) versBukkit.invoke(null, o))) return;
-        p.annuler();
+        ItemStack b = (ItemStack) versBukkit.invoke(null, o);
         Player j = p.joueur();
-        if (j != null) Bukkit.getScheduler().runTask(plugin, j::updateInventory);
+        if (marque(b)) {
+            p.annuler();
+            if (j != null) Bukkit.getScheduler().runTask(plugin, j::updateInventory);
+            return;
+        }
+        // arme par paire revenue du client avec les couleurs de son bras : on les retire, l'objet reste le sien
+        if (j != null && brasSoi.containsKey(j.getUniqueId()) && b.hasItemMeta()
+            && b.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE)) {
+            ItemMeta m = b.getItemMeta();
+            CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+            cmd.setColors(List.of());
+            List<Boolean> f = new ArrayList<>(cmd.getFlags());
+            if (f.size() > BRAS_FIN) f.set(BRAS_FIN, false);
+            while (!f.isEmpty() && !f.get(f.size() - 1)) f.remove(f.size() - 1);
+            cmd.setFlags(f);
+            m.setCustomModelDataComponent(cmd);
+            b.setItemMeta(m);
+            p.ecrire("itemStack", versJeu.invoke(null, b));
+        }
     }
 
     /** Copie marquée par Vorace (drapeau 0 ou 1 de custom_model_data). */
@@ -141,6 +158,7 @@ public final class ObjetsCaches {
     }
 
     public void oublier(Player p) {
+        brasSoi.remove(p.getUniqueId());
         cachesSoi.remove(p.getUniqueId());
         entitesCachees.remove(p.getEntityId());
         pairesSoi.remove(p.getUniqueId());
@@ -169,7 +187,9 @@ public final class ObjetsCaches {
         if (m == null) return c;
         EquippableComponent e = m.getEquippable();
         e.setSlot(place);
-        e.setModel(null);
+        // un équipement sans couche (pas « aucun modèle » : un casque sans modèle porté serait dessiné comme un objet
+        // posé sur la tête)
+        e.setModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, "vide"));
         m.setEquippable(e);
         c.setItemMeta(m);
         return c;
@@ -205,17 +225,62 @@ public final class ObjetsCaches {
     /** Objet d'une case du menu de l'inventaire (5 à 8 armure, 36 à 44 barre, 45 main gauche) tel que le joueur le voit. */
     private Object caseMenu(Player j, int slot, Object o) throws ReflectiveOperationException {
         boolean vid = (boolean) estVide.invoke(o);
-        if (cachesSoi.contains(j.getUniqueId())) {
-            if (vid) return o;
-            if (slot >= 5 && slot <= 8) return armure(o, PLACES_MENU[slot - 5]);
-            if ((slot >= 36 && slot <= 44) || slot == 45) return enMain(o);
+        boolean cache = cachesSoi.contains(j.getUniqueId());
+        if (vid) {
+            if (!cache && slot == 45) {
+                Object paire = pairesSoi.get(j.getUniqueId());
+                if (paire != null) return paire;
+            }
             return o;
         }
-        if (slot == 45 && vid) {
-            Object paire = pairesSoi.get(j.getUniqueId());
-            if (paire != null) return paire;
+        if (cache && slot >= 5 && slot <= 8) return armure(o, PLACES_MENU[slot - 5]);
+        boolean barre = slot >= 36 && slot <= 44;
+        Bras bras = barre ? brasSoi.get(j.getUniqueId()) : null;
+        if (!cache && bras == null) return o;
+        if (!barre && slot != 45) return o;
+        ItemStack b = (ItemStack) versBukkit.invoke(null, o);
+        boolean change = false;
+        if (bras != null && b.hasItemMeta() && b.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE)) {
+            b = avecBras(b, bras);
+            change = true;
         }
-        return o;
+        if (cache) {
+            b = avecDrapeau(b, CACHE_EN_MAIN);
+            change = true;
+        }
+        return change ? versJeu.invoke(null, b) : o;
+    }
+
+    /** Couleurs du bras droit du joueur (son skin) et bras fin ou non. */
+    public record Bras(java.util.List<org.bukkit.Color> couleurs, boolean fin) {}
+
+    private final Map<UUID, Bras> brasSoi = new ConcurrentHashMap<>();
+
+    /**
+     * Arme par paire tenue à la première personne : vorace-item dessine le bras du joueur avec (le jeu ne le dessine
+     * plus dès qu'un objet est en main). Ses couleurs viennent du skin, sur la copie envoyée au joueur seulement.
+     */
+    public void bras(Player p, int[] couleurs, boolean fin) {
+        java.util.List<org.bukkit.Color> l = new ArrayList<>(couleurs.length);
+        for (int c : couleurs) l.add(org.bukkit.Color.fromRGB(c & 0xFFFFFF));
+        brasSoi.put(p.getUniqueId(), new Bras(List.copyOf(l), fin));
+        if (p.isOnline()) p.updateInventory();
+    }
+
+    /** Couleurs du bras (custom_model_data « colors ») et drapeau 2 « bras fin ». */
+    static ItemStack avecBras(ItemStack o, Bras bras) {
+        ItemStack c = o.clone();
+        ItemMeta m = c.getItemMeta();
+        if (m == null) return c;
+        CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+        cmd.setColors(bras.couleurs());
+        List<Boolean> f = new ArrayList<>(cmd.getFlags());
+        while (f.size() <= BRAS_FIN) f.add(false);
+        f.set(BRAS_FIN, bras.fin());
+        cmd.setFlags(f);
+        m.setCustomModelDataComponent(cmd);
+        c.setItemMeta(m);
+        return c;
     }
 
     private static final EquipmentSlot[] PLACES_MENU = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};

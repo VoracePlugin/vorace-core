@@ -214,7 +214,7 @@ public final class PeauUV {
      * modèle par pixel de seconde couche, et la définition d'objet qui les assemble.
      */
     public static Map<String, byte[]> generer(ModeleBB squelette) {
-        Map<String, byte[]> sortie = new TreeMap<>();
+        Map<String, byte[]> sortie = new TreeMap<>(genererBrasTenu());
         if (squelette == null) return sortie;
         sortie.put("assets/" + GenerateurPack.NS + "/textures/item/pantin_pixel.png", pixelBlanc());
         List<Morceau> tous = new ArrayList<>(morceaux(squelette, false));
@@ -264,6 +264,97 @@ public final class PeauUV {
             sortie.put("assets/" + GenerateurPack.NS + "/items/" + id(m.nom()) + ".json", octets(def));
         }
         return sortie;
+    }
+
+    // ------------------------------------------------------------------ bras tenu à la première personne
+
+    /**
+     * Réglage d'affichage « première personne » qui pose un modèle exprimé dans le repère des armes de poing de
+     * vorace-item (bras du joueur en x 6 à 10, y 4 à 8, z 8 à 20, bout du poing en z = 8) exactement là où le jeu
+     * dessine le bras du joueur à la première personne quand sa main est vide (ItemInHandRenderer.renderPlayerArm :
+     * translation (0,64 ; -0,6 ; -0,72), rotations y 45°, z 120°, x 200°, y -135°, puis le bras au pivot (-5, 2, 0) tourné
+     * de 0,1 rad), vu depuis le repère des objets tenus (translation (0,56 ; -0,52 ; -0,72)). Calculé une fois :
+     * rotation x, y, z en degrés, translation en seizièmes.
+     */
+    public static final double[] PREMIERE_ROTATION = {35.569, -21.633, 69.021}, PREMIERE_TRANSLATION = {1.387, 2.296, -6.147};
+
+    /** Modèle du bras droit tenu (« pantin_bras/tenu_droit », « _fin ») pour vorace-item. */
+    public static final String BRAS_TENU = "pantin_bras/tenu_droit";
+
+    /** Faces du skin du bras droit entier (haut et bas), comme le jeu le dessine à la première personne. */
+    static List<Face> facesBrasTenu(boolean fin) {
+        return faces(40, 16, fin ? 3 : 4, 4, 0, 12, true, true);
+    }
+
+    /** Nombre de pixels (de teintes) du bras tenu. */
+    public static int pixelsBrasTenu(boolean fin) {
+        int n = 0;
+        for (Face f : facesBrasTenu(fin)) n += f.l() * f.h();
+        return n;
+    }
+
+    /** Couleurs du bras tenu pour un skin, dans l'ordre des carrés du modèle. */
+    public static int[] couleursBrasTenu(BufferedImage skin, boolean fin) {
+        BufferedImage s = Peau.format64(skin);
+        int[] c = new int[pixelsBrasTenu(fin)];
+        int i = 0;
+        for (Face f : facesBrasTenu(fin)) for (int ty = 0; ty < f.h(); ty++) for (int tx = 0; tx < f.l(); tx++) c[i++] = pixel(s, f.x0() + tx, f.y0() + ty) & 0xFFFFFF;
+        return c;
+    }
+
+    /** Nom d'une face Blockbench une fois passée dans le repère des armes de poing (x + 2, 6 - z, y - 4). */
+    private static String faceTenue(String f) {
+        return switch (f) {
+            case "north" -> "up";
+            case "south" -> "down";
+            case "up" -> "south";
+            case "down" -> "north";
+            default -> f;
+        };
+    }
+
+    /** Modèles du bras droit tenu, large et fin : un carré teinté par pixel, dans le repère des armes de poing. */
+    static Map<String, byte[]> genererBrasTenu() {
+        Map<String, byte[]> sortie = new TreeMap<>();
+        for (boolean fin : new boolean[]{false, true}) {
+            // bras droit entier (Blockbench, y en haut, droite en +x) : x 4 à 8 (fin : 7, côté extérieur retiré)
+            double[] de = {4, 12, -2}, a = {fin ? 7 : 8, 24, 2};
+            List<Carre> carres = carres(de, a, 0, facesBrasTenu(fin));
+            JsonArray el = new JsonArray();
+            for (int i = 0; i < carres.size(); i++) {
+                Carre c = carres.get(i);
+                double[] p0 = vers(c.de(), fin), p1 = vers(c.a(), fin);
+                double[] d = new double[3], f = new double[3];
+                for (int k = 0; k < 3; k++) {
+                    d[k] = Math.min(p0[k], p1[k]);
+                    f[k] = Math.max(p0[k], p1[k]);
+                }
+                el.add(element(new Carre(faceTenue(c.face()), d, f), i));
+            }
+            JsonObject m = modele(el);
+            JsonObject display = new JsonObject();
+            for (String ctx : List.of("firstperson_righthand", "firstperson_lefthand")) {
+                JsonObject t = new JsonObject();
+                JsonArray r = new JsonArray(), tr = new JsonArray(), sc = new JsonArray();
+                for (double v : PREMIERE_ROTATION) r.add(v);
+                for (double v : PREMIERE_TRANSLATION) tr.add(v);
+                for (int k = 0; k < 3; k++) sc.add(1);
+                t.add("rotation", r);
+                t.add("translation", tr);
+                t.add("scale", sc);
+                display.add(ctx, t);
+            }
+            m.add("display", display);
+            sortie.put("assets/" + GenerateurPack.NS + "/models/" + BRAS_TENU + (fin ? "_fin" : "") + ".json", octets(m));
+        }
+        // équipement sans couche : une pièce d'armure qui ne se dessine pas (ObjetsCaches, pendant une animation)
+        sortie.put("assets/" + GenerateurPack.NS + "/equipment/vide.json", "{\"layers\":{}}".getBytes(StandardCharsets.UTF_8));
+        return sortie;
+    }
+
+    /** Blockbench (absolu) vers le repère des armes de poing ; bras fin : le jeu le pose un demi-pixel plus bas. */
+    private static double[] vers(double[] p, boolean fin) {
+        return new double[]{p[0] + 2, 6 - p[2], p[1] - 4 - (fin ? 0.5 : 0)};
     }
 
     /** Couleurs (base puis seconde couche) et drapeaux (seconde couche visible) d'un morceau pour un skin. */

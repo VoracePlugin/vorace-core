@@ -1,5 +1,17 @@
 # Journal des changements
 
+## 1.4.5 (novembre 2026)
+
+- **Bras à la première personne avec une arme de poing** : le jeu ne dessine plus le bras dès qu'un objet est en main ;
+  Vorace fournit un modèle du bras droit (un carré teinté par pixel, large et fin) posé exactement là où le jeu met le
+  bras à main vide (`PeauUV.PREMIERE_ROTATION` / `PREMIERE_TRANSLATION`), et envoie au joueur seulement ses armes par
+  paire avec les couleurs de son skin (custom_model_data, drapeau 2 « bras fin ») ; vorace-item 0.14.9 les assemble.
+  En créatif, ces couleurs sont retirées de ce que le client renvoie.
+- **Casque pendant une animation** : il apparaissait comme un objet posé sur la tête (pièce sans modèle porté) ; il
+  reçoit maintenant un équipement sans couche (`vorace:vide`).
+- **Manches sur le pantin** : avec une arme par paire, la manche d'armure des avant-bras n'est plus posée (elle ressortait
+  par endroits à travers l'arme pendant les coups).
+
 ## 1.4.4 (novembre 2026)
 
 - Fin d'animation : l'armure et les objets du joueur ne revenaient pas chez lui (la fin ne rendait pas la main à
