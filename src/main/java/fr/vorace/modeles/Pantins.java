@@ -119,6 +119,7 @@ public final class Pantins implements Listener {
                         HttpResponse.BodyHandlers.ofByteArray());
                     if (r.statusCode() != 200) throw new IllegalStateException("skin : HTTP " + r.statusCode());
                     octets = r.body();
+                    if (octets.length > 256 * 1024) throw new IllegalStateException("skin trop lourd (" + octets.length + " octets)");
                     local.getParentFile().mkdirs();
                     java.nio.file.Files.write(local.toPath(), octets);
                 }
@@ -166,7 +167,14 @@ public final class Pantins implements Listener {
                 JsonObject skin = j.getAsJsonObject("textures").getAsJsonObject("SKIN");
                 String modele = skin.has("metadata") && skin.getAsJsonObject("metadata").has("model")
                     ? skin.getAsJsonObject("metadata").get("model").getAsString() : "classic";
-                return new String[]{skin.get("url").getAsString(), modele};
+                String url = skin.get("url").getAsString();
+                // seulement les serveurs de skins de Mojang : un profil trafiqué ne fait pas télécharger n'importe quoi
+                // au serveur (adresse interne, gros fichier)
+                java.net.URI u = java.net.URI.create(url);
+                String hote = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.ROOT);
+                if (!("http".equals(u.getScheme()) || "https".equals(u.getScheme())) || !(hote.equals("textures.minecraft.net")
+                    || hote.endsWith(".minecraft.net") || hote.endsWith(".mojang.com"))) return null;
+                return new String[]{url, modele};
             } catch (RuntimeException e) {
                 return null;
             }

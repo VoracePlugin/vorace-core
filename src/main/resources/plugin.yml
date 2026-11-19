@@ -27,3 +27,6 @@ permissions:
   vorace.emojis:
     description: Voir la liste des emojis avec /emojis
     default: true
+  vorace.glyphes.bruts:
+    description: Écrire les caractères des polices du pack (images, espaces négatifs) dans le chat, les panneaux, les livres
+    default: op

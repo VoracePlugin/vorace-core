@@ -38,6 +38,8 @@ public final class Commande implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
+    private final java.util.Map<java.util.UUID, Long> demandesPack = new java.util.concurrent.ConcurrentHashMap<>();
+
     @Override
     public boolean onCommand(CommandSender s, Command c, String label, String[] a) {
         if (c.getName().equalsIgnoreCase("emojis")) {
@@ -82,6 +84,14 @@ public final class Commande implements CommandExecutor, TabCompleter {
             }
             case "pack" -> {
                 if (!(s instanceof Player p)) { s.sendMessage(Messages.brut("<red>Commande réservée aux joueurs.")); return true; }
+                // une demande toutes les 10 s : renvoyer le pack en boucle chargerait le serveur et le réseau
+                long t = System.currentTimeMillis();
+                Long avant = demandesPack.get(p.getUniqueId());
+                if (avant != null && t - avant < 10_000 && !s.hasPermission("vorace.admin")) {
+                    s.sendMessage(Messages.brut("<red>Attends quelques secondes avant de redemander le pack."));
+                    return true;
+                }
+                demandesPack.put(p.getUniqueId(), t);
                 plugin.envoi().envoyer(p);
             }
             case "give", "donner" -> donner(s, a);

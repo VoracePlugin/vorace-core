@@ -1,5 +1,15 @@
 # Journal des changements
 
+## 1.4.8 (novembre 2026) : sécurité
+
+- Caractères des polices du pack (zone d'usage privé d'Unicode : images de l'interface, espaces négatifs) retirés de ce
+  qu'écrivent les joueurs : chat, commandes, panneaux, livres, renommage à l'enclume. Ils pouvaient couvrir l'écran des
+  autres ou imiter l'interface et les messages du serveur. Les emojis passent toujours par leurs raccourcis. Permission
+  `vorace.glyphes.bruts` (op) pour les écrire quand même.
+- Skins du pantin : téléchargés seulement depuis les serveurs de Mojang (un profil trafiqué ne fait plus télécharger
+  n'importe quelle adresse au serveur), 256 Ko au plus.
+- `/vorace pack` : une demande toutes les 10 secondes pour un joueur.
+
 ## 1.4.7 (novembre 2026)
 
 - **Caméra de cinéma, interface gardée** : le jeu ne dessine la barre d'objets que si la caméra est le joueur lui-même ;
