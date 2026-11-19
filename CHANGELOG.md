@@ -2,10 +2,11 @@
 
 ## 1.4.4 (novembre 2026)
 
-- Fin d'animation : l'armure et les objets du joueur revenaient pas chez lui (la fin ne rendait pas la main à
+- Fin d'animation : l'armure et les objets du joueur ne revenaient pas chez lui (la fin ne rendait pas la main à
   `ObjetsCaches`) ; filet en plus : chaque seconde, un joueur qui n'est plus caché par son pantin revoit tout.
 - Arme par paire : la copie de la main gauche (qui n'existe que chez le client) ne peut plus devenir un vrai objet en
-  mode créatif (paquet de case créative refusé, inventaire renvoyé).
+  mode créatif (paquet de case créative refusé, inventaire renvoyé). Revue toutes les demi-secondes (mode combat et
+  plugins qui changent l'inventaire sans événement), renvoyée seulement quand elle change.
 
 ## 1.4.3 (novembre 2026)
 

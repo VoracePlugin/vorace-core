@@ -207,6 +207,8 @@ public final class Pantins implements Listener {
 
     // ------------------------------------------------------------------ armes par paire
 
+    private final Map<UUID, ItemStack> dernieresPaires = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** Joueurs à qui l'on montre une arme par paire dans la main gauche (copie, l'inventaire n'est pas touché). */
     private final java.util.Set<UUID> pairesMontrees = new java.util.HashSet<>();
 
@@ -226,8 +228,17 @@ public final class Pantins implements Listener {
      * à tous et au joueur (une copie envoyée au client ; l'inventaire du serveur ne change pas).
      */
     public void envoyerPaire(Player p) {
+        envoyerPaire(p, true);
+    }
+
+    /** @param toujours renvoyer même si rien n'a changé (sinon : seulement quand la copie montrée change) */
+    private void envoyerPaire(Player p, boolean toujours) {
         if (!p.isOnline()) return;
         ItemStack copie = paire(p);
+        ItemStack avant = dernieresPaires.get(p.getUniqueId());
+        if (!toujours && (copie == null ? avant == null : copie.equals(avant))) return;
+        if (copie == null) dernieresPaires.remove(p.getUniqueId());
+        else dernieresPaires.put(p.getUniqueId(), copie);
         if (caches != null) caches.paire(p, copie);
         if (copie == null && !pairesMontrees.remove(p.getUniqueId())) return;
         if (copie != null) pairesMontrees.add(p.getUniqueId());
@@ -439,8 +450,10 @@ public final class Pantins implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (caches.cache(p) && !invisiblesAvant.containsKey(p.getUniqueId())) caches.montrer(p);
+                // l'inventaire change aussi sans événement (mode combat, plugins) : la paire suit
+                envoyerPaire(p, false);
             }
-        }, 20, 20);
+        }, 20, 10);
     }
 
     private void montrer(Player p) {
@@ -500,6 +513,7 @@ public final class Pantins implements Listener {
     @EventHandler
     public void depart(PlayerQuitEvent e) {
         pairesMontrees.remove(e.getPlayer().getUniqueId());
+        dernieresPaires.remove(e.getPlayer().getUniqueId());
         if (caches != null) caches.oublier(e.getPlayer());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getPlayer());
         montrer(e.getPlayer());
