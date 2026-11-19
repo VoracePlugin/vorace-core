@@ -911,10 +911,55 @@ public final class Modeles {
                 d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
             });
             p.getPersistentDataContainer().set(new NamespacedKey(plugin, CLE_CAMERA), PersistentDataType.STRING, modeAvant.name());
-            p.setGameMode(org.bukkit.GameMode.SPECTATOR);
-            p.setSpectatorTarget(camera);
             ticsCamera = 0;
+            // caméra par paquet (le joueur garde son mode de jeu : sa barre d'objets et son interface restent à l'écran) ;
+            // sans la couche paquets, mode spectateur comme avant
+            cameraParPaquet = plugin.paquets() != null && envoyerCamera(p, camera);
+            if (cameraParPaquet) {
+                figer(p, true);
+            } else {
+                p.setGameMode(org.bukkit.GameMode.SPECTATOR);
+                p.setSpectatorTarget(camera);
+            }
             majCamera();
+        }
+
+        /** Vrai : la caméra est posée par le paquet du jeu (le joueur reste dans son mode, immobile et intouchable). */
+        private boolean cameraParPaquet;
+        private boolean invulnerableAvant;
+        private float vitesseVolAvant;
+
+        /** Envoie au client le paquet « caméra » (ClientboundSetCameraPacket) sur cette entité ; faux si impossible. */
+        private boolean envoyerCamera(Player p, org.bukkit.entity.Entity e) {
+            try {
+                Object nms = e.getClass().getMethod("getHandle").invoke(e);
+                Class<?> c = Class.forName("net.minecraft.network.protocol.game.ClientboundSetCameraPacket");
+                Object paquet = null;
+                for (java.lang.reflect.Constructor<?> k : c.getConstructors()) {
+                    if (k.getParameterCount() == 1 && k.getParameterTypes()[0].isInstance(nms)) paquet = k.newInstance(nms);
+                }
+                if (paquet == null) return false;
+                plugin.paquets().envoyer(p, paquet, false);
+                return true;
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                plugin.getLogger().warning("Caméra de cinéma par paquet impossible (" + ex + ") : mode spectateur");
+                return false;
+            }
+        }
+
+        /** Pendant la caméra : le joueur ne bouge plus et ne prend pas de coups ; rendu tel quel à la fin. */
+        private void figer(Player p, boolean oui) {
+            if (oui) {
+                invulnerableAvant = p.isInvulnerable();
+                vitesseVolAvant = p.getFlySpeed();
+                p.setInvulnerable(true);
+                p.setFlySpeed(0f);
+                Pantins.figerMouvements(p, true);
+            } else {
+                p.setInvulnerable(invulnerableAvant);
+                p.setFlySpeed(vitesseVolAvant <= 0 ? 0.1f : vitesseVolAvant);
+                Pantins.figerMouvements(p, false);
+            }
         }
 
         /** Place la caméra sur l'os « camera », tournée vers « camera_cible ». */
@@ -926,7 +971,21 @@ public final class Modeles {
             if (v != null && v.distanceSquared(c) > 1e-6) c.setDirection(v.toVector().subtract(c.toVector()));
             camera.teleport(c);
             Player p = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
-            if (p == null || p.getGameMode() != org.bukkit.GameMode.SPECTATOR) return;
+            if (p == null) return;
+            if (cameraParPaquet) {
+                ticsCamera++;
+                // l'entité caméra n'est connue du client qu'un tic après son apparition : on redonne la caméra
+                if (ticsCamera == 3 || ticsCamera == 8) envoyerCamera(p, camera);
+                // le joueur reste où il était (ce que ses touches demandent n'est pas suivi)
+                if (ancre != null && p.getWorld().equals(ancre.getWorld()) && p.getLocation().distanceSquared(ancre) > 0.04) {
+                    Location l = ancre.clone();
+                    l.setYaw(p.getLocation().getYaw());
+                    l.setPitch(p.getLocation().getPitch());
+                    p.teleport(l);
+                }
+                return;
+            }
+            if (p.getGameMode() != org.bukkit.GameMode.SPECTATOR) return;
             ticsCamera++;
             // Le paquet « caméra » envoyé le tic où l'entité apparaît arrive avant elle chez le client, qui l'ignore
             // (il reste dans les yeux du joueur). Le serveur, lui, croit la caméra posée et ne la renvoie pas :
@@ -940,7 +999,12 @@ public final class Modeles {
         void finCinema() {
             if (camera == null) return;
             Player p = proprietaire == null ? null : Bukkit.getPlayer(proprietaire);
-            if (p != null) {
+            if (p != null && cameraParPaquet) {
+                envoyerCamera(p, p);
+                figer(p, false);
+                if (ancre != null) p.teleport(ancre);
+                p.getPersistentDataContainer().remove(new NamespacedKey(plugin, CLE_CAMERA));
+            } else if (p != null) {
                 p.setSpectatorTarget(null);
                 p.setGameMode(modeAvant == null ? org.bukkit.GameMode.SURVIVAL : modeAvant);
                 p.setSneaking(false);
@@ -950,6 +1014,7 @@ public final class Modeles {
             camera.remove();
             camera = null;
             ancre = null;
+            cameraParPaquet = false;
         }
 
         // -------------------------------------------------------------- taille, regard, repères

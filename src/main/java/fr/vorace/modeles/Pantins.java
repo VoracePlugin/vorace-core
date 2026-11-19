@@ -466,6 +466,24 @@ public final class Pantins implements Listener {
                 envoyerPaire(p, false);
             }
         }, 20, 10);
+        // réparation : objets abîmés par une copie revenue du client en mode créatif (versions 1.4.3 à 1.4.5)
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player p : Bukkit.getOnlinePlayers()) reparer(p);
+        }, 40, 40);
+    }
+
+    /** Remet d'aplomb les objets de l'inventaire d'un joueur marqués par Vorace (armure invisible, casque posé...). */
+    public void reparer(Player p) {
+        org.bukkit.inventory.PlayerInventory inv = p.getInventory();
+        boolean change = false;
+        for (int i = 0; i < inv.getSize(); i++) {
+            ItemStack r = ObjetsCaches.reparer(inv.getItem(i));
+            if (r != null) {
+                inv.setItem(i, r);
+                change = true;
+            }
+        }
+        if (change) plugin.getLogger().info("Objets réparés chez " + p.getName() + " (copies de l'animation revenues en mode créatif)");
     }
 
     private void montrer(Player p) {
@@ -495,13 +513,31 @@ public final class Pantins implements Listener {
         }
     }
 
+    private static final org.bukkit.NamespacedKey FIGE = new org.bukkit.NamespacedKey("vorace", "cinema_fige");
+
+    /** Caméra de cinéma : vitesse de marche et saut à zéro (modificateurs d'attributs, retirés ensuite). */
+    static void figerMouvements(Player p, boolean oui) {
+        for (org.bukkit.attribute.Attribute a : new org.bukkit.attribute.Attribute[]{org.bukkit.attribute.Attribute.MOVEMENT_SPEED,
+            org.bukkit.attribute.Attribute.JUMP_STRENGTH}) {
+            org.bukkit.attribute.AttributeInstance i = p.getAttribute(a);
+            if (i == null) continue;
+            i.removeModifier(FIGE);
+            if (oui) i.addModifier(new org.bukkit.attribute.AttributeModifier(FIGE, -1, org.bukkit.attribute.AttributeModifier.Operation.MULTIPLY_SCALAR_1,
+                org.bukkit.inventory.EquipmentSlotGroup.ANY));
+        }
+    }
+
     /** Arrêt du serveur pendant une caméra de cinéma : le joueur retrouve son mode de jeu à sa connexion. */
     @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
     public void retourCinema(PlayerJoinEvent e) {
+        figerMouvements(e.getPlayer(), false);
         org.bukkit.NamespacedKey cle = new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA);
         String mode = e.getPlayer().getPersistentDataContainer().get(cle, org.bukkit.persistence.PersistentDataType.STRING);
         if (mode == null) return;
         e.getPlayer().getPersistentDataContainer().remove(cle);
+        // caméra par paquet interrompue : plus intouchable, vol rendu
+        e.getPlayer().setInvulnerable(false);
+        if (e.getPlayer().getFlySpeed() <= 0f) e.getPlayer().setFlySpeed(0.1f);
         try {
             e.getPlayer().setGameMode(org.bukkit.GameMode.valueOf(mode));
         } catch (IllegalArgumentException ignore) {

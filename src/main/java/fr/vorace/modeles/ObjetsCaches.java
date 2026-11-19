@@ -42,7 +42,7 @@ import java.util.logging.Level;
 public final class ObjetsCaches {
 
     /** Drapeaux de custom_model_data lus par les définitions d'objets de vorace-item. */
-    public static final int CACHE_EN_MAIN = 0, PAIRE = 1, BRAS_FIN = 2;
+    public static final int CACHE_EN_MAIN = 0, PAIRE = 1, BRAS_FIN = 2, ARMURE_CACHEE = 3;
 
     private final Vorace plugin;
     private final Set<UUID> cachesSoi = ConcurrentHashMap.newKeySet();
@@ -114,7 +114,8 @@ public final class ObjetsCaches {
         if (o == null || !o.hasItemMeta()) return false;
         ItemMeta m = o.getItemMeta();
         List<Boolean> f = m.getCustomModelDataComponent().getFlags();
-        return (f.size() > CACHE_EN_MAIN && Boolean.TRUE.equals(f.get(CACHE_EN_MAIN))) || (f.size() > PAIRE && Boolean.TRUE.equals(f.get(PAIRE)));
+        for (int i : new int[]{CACHE_EN_MAIN, PAIRE, ARMURE_CACHEE}) if (i < f.size() && Boolean.TRUE.equals(f.get(i))) return true;
+        return m.hasEquippable() && VIDE.equals(m.getEquippable().getModel());
     }
 
     public boolean actif() {
@@ -189,10 +190,51 @@ public final class ObjetsCaches {
         e.setSlot(place);
         // un équipement sans couche (pas « aucun modèle » : un casque sans modèle porté serait dessiné comme un objet
         // posé sur la tête)
-        e.setModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, "vide"));
+        e.setModel(VIDE);
         m.setEquippable(e);
         c.setItemMeta(m);
-        return c;
+        // marquée : en mode créatif, le client renvoie ses objets ; celle-ci ne doit jamais redevenir un vrai objet
+        return avecDrapeau(c, ARMURE_CACHEE);
+    }
+
+    static final org.bukkit.NamespacedKey VIDE = new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, "vide");
+
+    /**
+     * Objet du serveur abîmé par une copie revenue du client en mode créatif (avant la 1.4.6 : armure sans modèle porté
+     * ou avec l'équipement vide, drapeaux 0, 1 ou 3) : sa version réparée, ou null s'il est sain.
+     */
+    public static ItemStack reparer(ItemStack o) {
+        if (o == null || o.getType().isAir() || !o.hasItemMeta()) return null;
+        ItemMeta m = o.getItemMeta();
+        boolean change = false;
+        CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+        List<Boolean> f = new ArrayList<>(cmd.getFlags());
+        for (int i : new int[]{CACHE_EN_MAIN, PAIRE, ARMURE_CACHEE}) {
+            if (i < f.size() && Boolean.TRUE.equals(f.get(i))) {
+                f.set(i, false);
+                change = true;
+            }
+        }
+        if (change) {
+            while (!f.isEmpty() && !f.get(f.size() - 1)) f.remove(f.size() - 1);
+            cmd.setFlags(f);
+            m.setCustomModelDataComponent(cmd);
+        }
+        if (m.hasEquippable()) {
+            org.bukkit.NamespacedKey modele = m.getEquippable().getModel();
+            String n = o.getType().name();
+            // les casques 3D de vorace-item n'ont volontairement pas de modèle porté : on ne touche qu'aux armures du jeu
+            boolean voraceItem = m.getPersistentDataContainer().has(new org.bukkit.NamespacedKey("voraceitem", "modele"));
+            boolean armureDuJeu = !voraceItem && (n.endsWith("_HELMET") || n.endsWith("_CHESTPLATE") || n.endsWith("_LEGGINGS") || n.endsWith("_BOOTS"));
+            if (VIDE.equals(modele) || (modele == null && armureDuJeu)) {
+                m.setEquippable(null);   // retour à l'équipement d'origine de l'objet (vorace-item refait le sien à la connexion)
+                change = true;
+            }
+        }
+        if (!change) return null;
+        ItemStack r = o.clone();
+        r.setItemMeta(m);
+        return r;
     }
 
     // ------------------------------------------------------------------ paquets (fil réseau)

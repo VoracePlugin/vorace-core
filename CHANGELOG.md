@@ -1,5 +1,15 @@
 # Journal des changements
 
+## 1.4.6 (novembre 2026)
+
+- **Armure invisible, casque posé sur la tête** : en mode créatif, le client renvoie ses objets au serveur ; les copies
+  d'armure de l'animation devenaient de vrais objets. Elles sont maintenant marquées (drapeau 3) et refusées, et les
+  objets déjà abîmés sont réparés toutes les deux secondes (armure du jeu rendue à son équipement d'origine ; les objets
+  de vorace-item retrouvent le leur à la connexion suivante).
+- **Caméra de cinéma sans mode spectateur** : la caméra est posée par le paquet du jeu ; le joueur garde son mode de
+  jeu, sa barre d'objets et son interface, immobile (marche, saut et vol à zéro, ramené à sa place) et intouchable
+  jusqu'à la fin. Sans la couche paquets, mode spectateur comme avant.
+
 ## 1.4.5 (novembre 2026)
 
 - **Bras à la première personne avec une arme de poing** : le jeu ne dessine plus le bras dès qu'un objet est en main ;
