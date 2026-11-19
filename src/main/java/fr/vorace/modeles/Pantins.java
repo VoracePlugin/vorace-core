@@ -247,7 +247,7 @@ public final class Pantins implements Listener {
         if (copie != null) pairesMontrees.add(p.getUniqueId());
         ItemStack montre = copie != null ? copie : p.getInventory().getItemInOffHand();
         for (Player autre : p.getWorld().getPlayers()) {
-            if (autre != p && autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
+            if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             autre.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, montre);
         }
     }
@@ -514,6 +514,15 @@ public final class Pantins implements Listener {
     }
 
     private static final org.bukkit.NamespacedKey FIGE = new org.bukkit.NamespacedKey("vorace", "cinema_fige");
+
+    /** Caméra de cinéma : le joueur reste monté sur la caméra (Maj ne le fait pas descendre). */
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST)
+    public void descenteCinema(org.bukkit.event.entity.EntityDismountEvent e) {
+        if (e.getEntity() instanceof Player p && p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA))
+            && p.isOnline() && !p.isDead()) {
+            e.setCancelled(true);
+        }
+    }
 
     /** Caméra de cinéma : vitesse de marche et saut à zéro (modificateurs d'attributs, retirés ensuite). */
     static void figerMouvements(Player p, boolean oui) {

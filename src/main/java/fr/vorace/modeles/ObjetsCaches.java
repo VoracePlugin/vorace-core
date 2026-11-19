@@ -150,8 +150,9 @@ public final class ObjetsCaches {
             return;
         }
         try {
+            // aux autres seulement : chez le joueur, une copie dans sa main gauche ferait apparaître la case de la main
+            // gauche à côté de la barre d'objets (retour d'Antoine, 19 nov.)
             Object jeu = versJeu.invoke(null, copie);
-            pairesSoi.put(p.getUniqueId(), jeu);
             pairesEntites.put(p.getEntityId(), jeu);
         } catch (ReflectiveOperationException e) {
             plugin.getLogger().warning("Paire : " + e);
@@ -337,7 +338,7 @@ public final class ObjetsCaches {
 
     private void contenu(Paquet p, Player j) throws ReflectiveOperationException {
         if ((int) p.lire("containerId") != 0) return;
-        if (!cachesSoi.contains(j.getUniqueId()) && !pairesSoi.containsKey(j.getUniqueId())) return;
+        if (!cachesSoi.contains(j.getUniqueId()) && !pairesSoi.containsKey(j.getUniqueId()) && !brasSoi.containsKey(j.getUniqueId())) return;
         @SuppressWarnings("unchecked")
         List<Object> objets = (List<Object>) p.lire("items");
         List<Object> nouveaux = new ArrayList<>(objets);
@@ -368,7 +369,7 @@ public final class ObjetsCaches {
         boolean soi = id == voit.getEntityId();
         boolean cacheAutres = !soi && entitesCachees.contains(id);
         boolean cacheSoi = soi && cachesSoi.contains(voit.getUniqueId());
-        Object paire = cacheAutres || cacheSoi ? null : pairesEntites.get(id);
+        Object paire = cacheAutres || cacheSoi || soi ? null : pairesEntites.get(id);
         if (!cacheAutres && !cacheSoi && paire == null) return;
         @SuppressWarnings("unchecked")
         List<Object> places = (List<Object>) p.lire("slots");

@@ -1,5 +1,14 @@
 # Journal des changements
 
+## 1.4.7 (novembre 2026)
+
+- **Caméra de cinéma, interface gardée** : le jeu ne dessine la barre d'objets que si la caméra est le joueur lui-même ;
+  le joueur (invisible) monte donc sur l'entité caméra, son regard est tourné vers la cible à chaque tic
+  (ClientboundPlayerRotationPacket) ; Maj ne le fait pas descendre. Sans monture possible : mode spectateur.
+- **Arme par paire** : la copie de la main gauche n'est plus envoyée au joueur lui-même (la case de la main gauche
+  apparaissait à côté de sa barre d'objets) ; les autres le voient toujours avec une arme dans chaque main.
+- Couleurs du bras à la première personne appliquées aussi quand tout l'inventaire est renvoyé.
+
 ## 1.4.6 (novembre 2026)
 
 - **Armure invisible, casque posé sur la tête** : en mode créatif, le client renvoie ses objets au serveur ; les copies
