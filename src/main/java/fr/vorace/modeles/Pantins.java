@@ -200,8 +200,8 @@ public final class Pantins implements Listener {
             if (autre == p) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         }
-        for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
-        if (mainsCachees.remove(p.getUniqueId())) p.updateInventory();
+        if (caches != null && caches.cache(p)) caches.montrer(p);
+        else for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         envoyerPaire(p);
     }
 
@@ -210,12 +210,15 @@ public final class Pantins implements Listener {
     /** Joueurs à qui l'on montre une arme par paire dans la main gauche (copie, l'inventaire n'est pas touché). */
     private final java.util.Set<UUID> pairesMontrees = new java.util.HashSet<>();
 
-    /** L'arme par paire à montrer dans la main gauche de ce joueur (main gauche vide), ou null. */
+    /**
+     * L'arme par paire à montrer dans la main gauche de ce joueur (main gauche vide), ou null : une copie avec le
+     * drapeau « paire » (vue à la troisième personne seulement : à la première personne, comme le jeu).
+     */
     private ItemStack paire(Player p) {
-        if (!plugin.getConfig().getBoolean("pantin.paires", true) || invisiblesAvant.containsKey(p.getUniqueId())) return null;
+        if (!plugin.getConfig().getBoolean("pantin.paires", true) || caches == null || invisiblesAvant.containsKey(p.getUniqueId())) return null;
         ItemStack d = p.getInventory().getItemInMainHand(), g = p.getInventory().getItemInOffHand();
         if (d == null || d.getType().isAir() || !d.hasItemMeta() || !d.getItemMeta().getPersistentDataContainer().has(PAIRE)) return null;
-        return g == null || g.getType().isAir() ? d.clone() : null;
+        return g == null || g.getType().isAir() ? ObjetsCaches.avecDrapeau(d, ObjetsCaches.PAIRE) : null;
     }
 
     /**
@@ -225,6 +228,7 @@ public final class Pantins implements Listener {
     public void envoyerPaire(Player p) {
         if (!p.isOnline()) return;
         ItemStack copie = paire(p);
+        if (caches != null) caches.paire(p, copie);
         if (copie == null && !pairesMontrees.remove(p.getUniqueId())) return;
         if (copie != null) pairesMontrees.add(p.getUniqueId());
         ItemStack montre = copie != null ? copie : p.getInventory().getItemInOffHand();
@@ -418,18 +422,19 @@ public final class Pantins implements Listener {
             if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, vide);
         }
-        for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
-        // ses objets tenus sont dans les mains de son pantin : le jeu ne les dessine plus en plus (première personne,
-        // F5) ; l'inventaire du jeu est renvoyé à la fin de l'animation
-        if (plugin.getConfig().getBoolean("pantin.objets-en-main", true) && plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)
-            && !mains(p).isEmpty()) {
-            p.sendEquipmentChange(p, EquipmentSlot.HAND, vide);
-            p.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, vide);
-            mainsCachees.add(p.getUniqueId());
-        }
+        // chez lui : ni armure sur son corps invisible (F5), ni objets en main (ils sont dans les mains de son pantin) ;
+        // l'inventaire du serveur n'est pas touché, seules les copies envoyées changent (ObjetsCaches)
+        if (caches != null && caches.actif() && plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)) caches.cacher(p);
+        else for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
     }
 
-    private final java.util.Set<UUID> mainsCachees = new java.util.HashSet<>();
+    private ObjetsCaches caches;
+
+    /** Après la couche paquets de Vorace : ce que le joueur voit sur lui pendant une animation, armes par paire. */
+    public void brancherObjetsCaches() {
+        ObjetsCaches c = new ObjetsCaches(plugin);
+        if (c.demarrer()) caches = c;
+    }
 
     private void montrer(Player p) {
         Boolean avant = invisiblesAvant.remove(p.getUniqueId());
@@ -486,7 +491,7 @@ public final class Pantins implements Listener {
     @EventHandler
     public void depart(PlayerQuitEvent e) {
         pairesMontrees.remove(e.getPlayer().getUniqueId());
-        mainsCachees.remove(e.getPlayer().getUniqueId());
+        if (caches != null) caches.oublier(e.getPlayer());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getPlayer());
         montrer(e.getPlayer());
         invisiblesAvant.remove(e.getPlayer().getUniqueId());

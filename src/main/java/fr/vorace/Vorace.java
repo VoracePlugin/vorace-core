@@ -174,6 +174,13 @@ public final class Vorace extends JavaPlugin {
                 getLogger().log(java.util.logging.Level.SEVERE, "Impossible d'activer la couche paquets", t);
             }
         }
+        if (pantins != null) {
+            try {
+                pantins.brancherObjetsCaches();
+            } catch (Throwable t) {
+                getLogger().log(java.util.logging.Level.WARNING, "Objets cachés du pantin indisponibles", t);
+            }
+        }
         try {
             Bukkit.getPluginManager().registerEvents(new EcouteurGlyphes(this), this);
         } catch (Throwable t) {

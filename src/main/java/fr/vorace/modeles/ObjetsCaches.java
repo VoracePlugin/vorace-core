@@ -1,0 +1,319 @@
+package fr.vorace.modeles;
+
+import fr.vorace.Vorace;
+import fr.vorace.paquets.Paquet;
+import fr.vorace.paquets.Sens;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
+import org.bukkit.inventory.meta.components.EquippableComponent;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+
+/**
+ * Ce que le jeu dessine sur le joueur lui-même pendant une animation du pantin, et l'arme par paire de la main gauche,
+ * sans jamais toucher à l'inventaire du serveur : Vorace change seulement, au passage, les objets des paquets envoyés
+ * aux clients.
+ *
+ * <ul>
+ * <li>Pendant une animation, le joueur est invisible et son pantin le remplace. Chez lui, le jeu dessinerait encore
+ * son armure et ses objets tenus sur son corps invisible (en F5), et ses objets en main (première personne), à chaque
+ * mise à jour de son inventaire (un coup qui use une arme suffit). Ses pièces d'armure lui sont donc envoyées sans
+ * modèle porté (composant equippable sans asset) et ses objets en main avec le drapeau 0 de custom_model_data
+ * (« caché en main », lu par les définitions de vorace-item) : les icônes de l'inventaire restent.</li>
+ * <li>Les autres joueurs reçoivent son équipement vide pendant l'animation.</li>
+ * <li>Arme par paire (armes de poing) sans rien dans l'autre main : sa main gauche reçoit une copie avec le drapeau 1
+ * (« paire » : vue à la troisième personne seulement).</li>
+ * </ul>
+ * Les objets du serveur ne portent jamais ces changements : à la fin, l'inventaire est renvoyé tel quel.
+ */
+public final class ObjetsCaches {
+
+    /** Drapeaux de custom_model_data lus par les définitions d'objets de vorace-item. */
+    public static final int CACHE_EN_MAIN = 0, PAIRE = 1;
+
+    private final Vorace plugin;
+    private final Set<UUID> cachesSoi = ConcurrentHashMap.newKeySet();
+    private final Set<Integer> entitesCachees = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Object> pairesSoi = new ConcurrentHashMap<>();
+    private final Map<Integer, Object> pairesEntites = new ConcurrentHashMap<>();
+    private boolean actif;
+
+    private Method versBukkit, versJeu, estVide;
+    private Object vide;
+    private Class<?> classePaire;
+    private Method paireDe;
+
+    public ObjetsCaches(Vorace plugin) {
+        this.plugin = plugin;
+    }
+
+    /** Branche les écoutes de paquets ; faux si la couche paquets de Vorace n'est pas là. */
+    public boolean demarrer() {
+        if (plugin.paquets() == null) return false;
+        try {
+            Class<?> craft = Class.forName(Bukkit.getServer().getClass().getPackageName() + ".inventory.CraftItemStack");
+            versJeu = craft.getMethod("asNMSCopy", ItemStack.class);
+            Class<?> objetJeu = versJeu.getReturnType();
+            versBukkit = craft.getMethod("asBukkitCopy", objetJeu);
+            estVide = objetJeu.getMethod("isEmpty");
+            vide = versJeu.invoke(null, new ItemStack(org.bukkit.Material.AIR));
+        } catch (ReflectiveOperationException e) {
+            plugin.getLogger().log(Level.WARNING, "Objets cachés du pantin : CraftItemStack introuvable", e);
+            return false;
+        }
+        plugin.paquets().ecouter(plugin, Sens.SORTANT, this::paquet, "ClientboundSetEquipmentPacket",
+            "ClientboundContainerSetSlotPacket", "ClientboundContainerSetContentPacket", "ClientboundSetPlayerInventoryPacket");
+        actif = true;
+        return true;
+    }
+
+    public boolean actif() {
+        return actif;
+    }
+
+    // ------------------------------------------------------------------ état (fil principal)
+
+    /** Début d'une animation : le joueur ne voit plus rien sur lui, les autres plus rien en main ni sur lui. */
+    public void cacher(Player p) {
+        cachesSoi.add(p.getUniqueId());
+        entitesCachees.add(p.getEntityId());
+        p.updateInventory();
+    }
+
+    /** Fin de l'animation : l'inventaire du serveur est renvoyé tel quel. */
+    public void montrer(Player p) {
+        boolean etait = cachesSoi.remove(p.getUniqueId());
+        entitesCachees.remove(p.getEntityId());
+        if (etait && p.isOnline()) p.updateInventory();
+    }
+
+    public boolean cache(Player p) {
+        return cachesSoi.contains(p.getUniqueId());
+    }
+
+    /** Arme par paire montrée dans la main gauche (copie avec le drapeau « paire »), ou null pour ne plus rien montrer. */
+    public void paire(Player p, ItemStack copie) {
+        if (copie == null) {
+            pairesSoi.remove(p.getUniqueId());
+            pairesEntites.remove(p.getEntityId());
+            return;
+        }
+        try {
+            Object jeu = versJeu.invoke(null, copie);
+            pairesSoi.put(p.getUniqueId(), jeu);
+            pairesEntites.put(p.getEntityId(), jeu);
+        } catch (ReflectiveOperationException e) {
+            plugin.getLogger().warning("Paire : " + e);
+        }
+    }
+
+    public void oublier(Player p) {
+        cachesSoi.remove(p.getUniqueId());
+        entitesCachees.remove(p.getEntityId());
+        pairesSoi.remove(p.getUniqueId());
+        pairesEntites.remove(p.getEntityId());
+    }
+
+    /** Copie d'un objet avec un drapeau de custom_model_data levé (les autres valeurs gardées). */
+    public static ItemStack avecDrapeau(ItemStack o, int index) {
+        ItemStack c = o.clone();
+        ItemMeta m = c.getItemMeta();
+        if (m == null) return c;
+        CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+        List<Boolean> f = new ArrayList<>(cmd.getFlags());
+        while (f.size() <= index) f.add(false);
+        f.set(index, true);
+        cmd.setFlags(f);
+        m.setCustomModelDataComponent(cmd);
+        c.setItemMeta(m);
+        return c;
+    }
+
+    /** Copie d'une pièce d'armure qui ne se dessine plus sur le corps (equippable sans modèle porté). */
+    static ItemStack sansModelePorte(ItemStack o, EquipmentSlot place) {
+        ItemStack c = o.clone();
+        ItemMeta m = c.getItemMeta();
+        if (m == null) return c;
+        EquippableComponent e = m.getEquippable();
+        e.setSlot(place);
+        e.setModel(null);
+        m.setEquippable(e);
+        c.setItemMeta(m);
+        return c;
+    }
+
+    // ------------------------------------------------------------------ paquets (fil réseau)
+
+    private void paquet(Paquet p) throws ReflectiveOperationException {
+        Player j = p.joueur();
+        if (j == null) return;
+        switch (p.nom()) {
+            case "ClientboundSetEquipmentPacket" -> equipement(p, j);
+            case "ClientboundContainerSetSlotPacket" -> {
+                if ((int) p.lire("containerId") != 0) return;
+                Object o = p.lire("itemStack");
+                Object n = caseMenu(j, (int) p.lire("slot"), o);
+                if (n != o) p.remplacer(nouveau(p.brut().getClass(), p.lire("containerId"), p.lire("stateId"), p.lire("slot"), n));
+            }
+            case "ClientboundContainerSetContentPacket" -> contenu(p, j);
+            case "ClientboundSetPlayerInventoryPacket" -> {
+                int s = (int) p.lire("slot");
+                Object o = p.lire("contents");
+                // numéros de l'inventaire : 0 à 8 barre, 36 pieds à 39 tête, 40 main gauche ; vers ceux du menu
+                int menu = s <= 8 ? 36 + s : s >= 36 && s <= 39 ? 8 - (s - 36) : s == 40 ? 45 : -1;
+                if (menu < 0) return;
+                Object n = caseMenu(j, menu, o);
+                if (n != o) p.ecrire("contents", n);
+            }
+            default -> { }
+        }
+    }
+
+    /** Objet d'une case du menu de l'inventaire (5 à 8 armure, 36 à 44 barre, 45 main gauche) tel que le joueur le voit. */
+    private Object caseMenu(Player j, int slot, Object o) throws ReflectiveOperationException {
+        boolean vid = (boolean) estVide.invoke(o);
+        if (cachesSoi.contains(j.getUniqueId())) {
+            if (vid) return o;
+            if (slot >= 5 && slot <= 8) return armure(o, PLACES_MENU[slot - 5]);
+            if ((slot >= 36 && slot <= 44) || slot == 45) return enMain(o);
+            return o;
+        }
+        if (slot == 45 && vid) {
+            Object paire = pairesSoi.get(j.getUniqueId());
+            if (paire != null) return paire;
+        }
+        return o;
+    }
+
+    private static final EquipmentSlot[] PLACES_MENU = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    private Object armure(Object o, EquipmentSlot place) throws ReflectiveOperationException {
+        return versJeu.invoke(null, sansModelePorte((ItemStack) versBukkit.invoke(null, o), place));
+    }
+
+    private Object enMain(Object o) throws ReflectiveOperationException {
+        return versJeu.invoke(null, avecDrapeau((ItemStack) versBukkit.invoke(null, o), CACHE_EN_MAIN));
+    }
+
+    private void contenu(Paquet p, Player j) throws ReflectiveOperationException {
+        if ((int) p.lire("containerId") != 0) return;
+        if (!cachesSoi.contains(j.getUniqueId()) && !pairesSoi.containsKey(j.getUniqueId())) return;
+        @SuppressWarnings("unchecked")
+        List<Object> objets = (List<Object>) p.lire("items");
+        List<Object> nouveaux = new ArrayList<>(objets);
+        boolean change = false;
+        for (int s = 0; s < nouveaux.size(); s++) {
+            Object n = caseMenu(j, s, nouveaux.get(s));
+            if (n != nouveaux.get(s)) {
+                nouveaux.set(s, n);
+                change = true;
+            }
+        }
+        if (!change) return;
+        try {
+            // paquet « record » (liste simple)
+            p.remplacer(nouveau(p.brut().getClass(), p.lire("containerId"), p.lire("stateId"), nouveaux, p.lire("carriedItem")));
+        } catch (NoSuchMethodException e) {
+            // classe qui veut une NonNullList et la recopie : on lui donne l'ancienne, puis on change sa copie
+            Object neuf = nouveau(p.brut().getClass(), p.lire("containerId"), p.lire("stateId"), objets, p.lire("carriedItem"));
+            @SuppressWarnings("unchecked")
+            List<Object> sienne = (List<Object>) champ(neuf, "items").get(neuf);
+            for (int s = 0; s < nouveaux.size() && s < sienne.size(); s++) sienne.set(s, nouveaux.get(s));
+            p.remplacer(neuf);
+        }
+    }
+
+    private void equipement(Paquet p, Player voit) throws ReflectiveOperationException {
+        int id = (int) p.lire("entity");
+        boolean soi = id == voit.getEntityId();
+        boolean cacheAutres = !soi && entitesCachees.contains(id);
+        boolean cacheSoi = soi && cachesSoi.contains(voit.getUniqueId());
+        Object paire = cacheAutres || cacheSoi ? null : pairesEntites.get(id);
+        if (!cacheAutres && !cacheSoi && paire == null) return;
+        @SuppressWarnings("unchecked")
+        List<Object> places = (List<Object>) p.lire("slots");
+        List<Object> nouvelles = new ArrayList<>();
+        boolean change = false;
+        for (Object pr : places) {
+            Object place = pr.getClass().getMethod("getFirst").invoke(pr);
+            Object objet = pr.getClass().getMethod("getSecond").invoke(pr);
+            String nom = ((Enum<?>) place).name();
+            Object n = objet;
+            if (cacheAutres) {
+                n = vide;
+            } else if (cacheSoi) {
+                if (!(boolean) estVide.invoke(objet)) {
+                    switch (nom) {
+                        case "HEAD" -> n = armure(objet, EquipmentSlot.HEAD);
+                        case "CHEST" -> n = armure(objet, EquipmentSlot.CHEST);
+                        case "LEGS" -> n = armure(objet, EquipmentSlot.LEGS);
+                        case "FEET" -> n = armure(objet, EquipmentSlot.FEET);
+                        case "MAINHAND", "OFFHAND" -> n = enMain(objet);
+                        default -> { }
+                    }
+                }
+            } else if (nom.equals("OFFHAND") && (boolean) estVide.invoke(objet)) {
+                n = paire;
+            }
+            if (n != objet) change = true;
+            nouvelles.add(n == objet ? pr : paire(pr, place, n));
+        }
+        if (change) p.remplacer(nouveau(p.brut().getClass(), id, nouvelles));
+    }
+
+    private Object paire(Object exemple, Object a, Object b) throws ReflectiveOperationException {
+        if (paireDe == null || classePaire != exemple.getClass()) {
+            classePaire = exemple.getClass();
+            paireDe = classePaire.getMethod("of", Object.class, Object.class);
+        }
+        return paireDe.invoke(null, a, b);
+    }
+
+    // ------------------------------------------------------------------ réflexion
+
+    private static final Map<Class<?>, Constructor<?>[]> CONSTRUCTEURS = new ConcurrentHashMap<>();
+
+    /** Nouveau paquet du même type, par le constructeur qui prend ces valeurs (types primitifs ou compatibles). */
+    private static Object nouveau(Class<?> c, Object... valeurs) throws ReflectiveOperationException {
+        for (Constructor<?> k : CONSTRUCTEURS.computeIfAbsent(c, Class::getDeclaredConstructors)) {
+            Class<?>[] t = k.getParameterTypes();
+            if (t.length != valeurs.length) continue;
+            boolean ok = true;
+            for (int i = 0; i < t.length && ok; i++) {
+                Object v = valeurs[i];
+                if (t[i].isPrimitive()) ok = v instanceof Integer && t[i] == int.class;
+                else ok = v == null || t[i].isInstance(v);
+            }
+            if (!ok) continue;
+            k.setAccessible(true);
+            return k.newInstance(valeurs);
+        }
+        throw new NoSuchMethodException("constructeur de " + c.getSimpleName() + " introuvable");
+    }
+
+    private static Field champ(Object o, String nom) throws NoSuchFieldException {
+        for (Class<?> c = o.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                Field f = c.getDeclaredField(nom);
+                f.setAccessible(true);
+                return f;
+            } catch (NoSuchFieldException ignore) {
+                // classe mère
+            }
+        }
+        throw new NoSuchFieldException(nom);
+    }
+}

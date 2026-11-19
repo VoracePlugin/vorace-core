@@ -1,5 +1,16 @@
 # Journal des changements
 
+## 1.4.3 (novembre 2026)
+
+- **Rien sur le corps invisible** : pendant une animation, le joueur ne voit plus son armure ni ses objets sur son
+  corps caché (F5), même quand son inventaire change (arme usée par un coup). Plus d'objets « invisibles » dans
+  l'inventaire : les icônes restent, seuls les modèles portés et tenus disparaissent. Vorace change les objets des
+  paquets envoyés (`ObjetsCaches` : armure sans modèle porté, objets en main avec le drapeau 0 de custom_model_data),
+  jamais l'inventaire du serveur, et le renvoie tel quel à la fin. Les autres reçoivent son équipement vide pendant
+  toute l'animation.
+- **Arme par paire** : la copie de la main gauche porte le drapeau 1 (« paire ») : vue en F5 et par les autres, pas à
+  la première personne ni dans la case de la main gauche. Renvoyée aussi quand un joueur en voit arriver un autre.
+
 ## 1.4.2 (novembre 2026)
 
 - **Taille du pantin** : le bas du torse ne remonte plus dans le haut ; le haut du torse descend d'un demi-pixel
