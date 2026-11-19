@@ -97,13 +97,13 @@ public final class Modeles {
     /**
      * Orientation d'un objet tenu dans le repère de l'avant-bras du modèle (Blockbench : y en haut, droite en +x, avant
      * en -z) : celle du jeu (ItemInHandLayer : rotation X -90°, puis Y 180°, dans le repère des modèles d'entité, y en
-     * bas et x inversé), ramenée dans ce repère par un demi-tour autour de z.
+     * bas et x inversé), suivie du passage de ce repère à celui de Blockbench (demi-tour autour de z).
      */
     static final Quaternionf TENUE;
     static {
         Quaternionf c = new Quaternionf().rotateZ((float) Math.PI);
         Quaternionf jeu = new Quaternionf().rotateX((float) (-Math.PI / 2)).rotateY((float) Math.PI);
-        TENUE = new Quaternionf(c).mul(jeu).mul(new Quaternionf(c).conjugate());
+        TENUE = new Quaternionf(c).mul(jeu);
     }
 
     /** Mode de jeu du joueur avant une caméra de cinéma (remis à sa connexion si le serveur s'est arrêté pendant). */
@@ -698,8 +698,7 @@ public final class Modeles {
                     d.setPersistent(false);
                     d.setItemStack(objet);
                     // objet tenu : le réglage « en main » de son modèle (épée, arme de poing…), comme le jeu le tient
-                    d.setItemDisplayTransform(main == 1 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND
-                        : main == 2 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND : ItemDisplay.ItemDisplayTransform.NONE);
+                    d.setItemDisplayTransform(tenue(main));
                     d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
                     d.setTeleportDuration(2);
                     d.setViewRange(vue);
@@ -719,12 +718,8 @@ public final class Modeles {
                 armuresSoi = new ItemDisplay[armures.length];
                 armuresEnvoyeesSoi = new Transformation[armures.length];
                 for (int a = 0; a < armures.length; a++) {
-                    // objets tenus : le joueur voit ceux de son jeu (première personne, F5), pas de copie
-                    if (main(a) != 0) {
-                        proprio.hideEntity(plugin, armures[a]);
-                        continue;
-                    }
                     armuresSoi[a] = afficher(l, armureObjets.get(a), vue, false, proprio);
+                    if (main(a) != 0) armuresSoi[a].setItemDisplayTransform(tenue(main(a)));
                     proprio.hideEntity(plugin, armures[a]);
                 }
             }
@@ -751,6 +746,11 @@ public final class Modeles {
 
         private int main(int a) {
             return a < armureMain.size() ? armureMain.get(a) : 0;
+        }
+
+        private static ItemDisplay.ItemDisplayTransform tenue(int main) {
+            return main == 1 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND
+                : main == 2 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND : ItemDisplay.ItemDisplayTransform.NONE;
         }
         private ItemDisplay[] armures = new ItemDisplay[0];
         private Transformation[] armuresEnvoyees = new Transformation[0];
@@ -1257,7 +1257,7 @@ public final class Modeles {
                 }
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
-                    envoyer(armuresSoi[a], new Transformation(new Vector3f(tr).add(recul), p.rotation(), ech, droite), armuresEnvoyeesSoi, a, intervalle);
+                    envoyer(armuresSoi[a], new Transformation(new Vector3f(tr).add(recul), rot, ech, droite), armuresEnvoyeesSoi, a, intervalle);
                 }
                 if (t.equals(armuresEnvoyees[a])) continue;
                 armuresEnvoyees[a] = t;
