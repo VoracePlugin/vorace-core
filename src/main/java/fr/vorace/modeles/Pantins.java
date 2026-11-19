@@ -433,7 +433,14 @@ public final class Pantins implements Listener {
     /** Après la couche paquets de Vorace : ce que le joueur voit sur lui pendant une animation, armes par paire. */
     public void brancherObjetsCaches() {
         ObjetsCaches c = new ObjetsCaches(plugin);
-        if (c.demarrer()) caches = c;
+        if (!c.demarrer()) return;
+        caches = c;
+        // filet : un joueur qui n'est plus caché par son pantin revoit tout ce qu'il porte
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (caches.cache(p) && !invisiblesAvant.containsKey(p.getUniqueId())) caches.montrer(p);
+            }
+        }, 20, 20);
     }
 
     private void montrer(Player p) {
@@ -444,7 +451,9 @@ public final class Pantins implements Listener {
             if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         }
-        for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        if (caches != null && caches.cache(p)) caches.montrer(p);
+        else for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        envoyerPaire(p);
     }
 
     // ------------------------------------------------------------------ événements

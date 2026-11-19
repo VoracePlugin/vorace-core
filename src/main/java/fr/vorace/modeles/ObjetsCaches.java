@@ -76,8 +76,28 @@ public final class ObjetsCaches {
         }
         plugin.paquets().ecouter(plugin, Sens.SORTANT, this::paquet, "ClientboundSetEquipmentPacket",
             "ClientboundContainerSetSlotPacket", "ClientboundContainerSetContentPacket", "ClientboundSetPlayerInventoryPacket");
+        // mode créatif : le client dit lui-même ce qu'il pose dans son inventaire ; une copie marquée (paire de la main
+        // gauche, objet caché) n'existe que chez lui et ne doit jamais devenir un vrai objet
+        plugin.paquets().ecouter(plugin, Sens.ENTRANT, this::creatif, "ServerboundSetCreativeModeSlotPacket");
         actif = true;
         return true;
+    }
+
+    private void creatif(Paquet p) throws ReflectiveOperationException {
+        Object o = p.lire("itemStack");
+        if (o == null || (boolean) estVide.invoke(o)) return;
+        if (!marque((ItemStack) versBukkit.invoke(null, o))) return;
+        p.annuler();
+        Player j = p.joueur();
+        if (j != null) Bukkit.getScheduler().runTask(plugin, j::updateInventory);
+    }
+
+    /** Copie marquée par Vorace (drapeau 0 ou 1 de custom_model_data). */
+    static boolean marque(ItemStack o) {
+        if (o == null || !o.hasItemMeta()) return false;
+        ItemMeta m = o.getItemMeta();
+        List<Boolean> f = m.getCustomModelDataComponent().getFlags();
+        return (f.size() > CACHE_EN_MAIN && Boolean.TRUE.equals(f.get(CACHE_EN_MAIN))) || (f.size() > PAIRE && Boolean.TRUE.equals(f.get(PAIRE)));
     }
 
     public boolean actif() {
