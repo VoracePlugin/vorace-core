@@ -91,6 +91,21 @@ public final class Modeles {
     private float pantinRecul = 4f;
     /** Caméra de cinéma pour les animations qui ont un os « camera » animé (ultimes). */
     private boolean cameraCinema = true;
+    /** Préfixes de nom d'os des objets tenus par le pantin (« main:poing_droit ») dans la liste des couches d'armure. */
+    public static final String MAIN = "main:", MAIN_G = "main_gauche:";
+
+    /**
+     * Orientation d'un objet tenu dans le repère de l'avant-bras du modèle (Blockbench : y en haut, droite en +x, avant
+     * en -z) : celle du jeu (ItemInHandLayer : rotation X -90°, puis Y 180°, dans le repère des modèles d'entité, y en
+     * bas et x inversé), ramenée dans ce repère par un demi-tour autour de z.
+     */
+    static final Quaternionf TENUE;
+    static {
+        Quaternionf c = new Quaternionf().rotateZ((float) Math.PI);
+        Quaternionf jeu = new Quaternionf().rotateX((float) (-Math.PI / 2)).rotateY((float) Math.PI);
+        TENUE = new Quaternionf(c).mul(jeu).mul(new Quaternionf(c).conjugate());
+    }
+
     /** Mode de jeu du joueur avant une caméra de cinéma (remis à sa connexion si le serveur s'est arrêté pendant). */
     public static final String CLE_CAMERA = "camera_mode";
     private volatile Map<String, ModeleBB> modeles = Map.of();
@@ -252,10 +267,15 @@ public final class Modeles {
             if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
         }
         for (Map.Entry<String, ItemStack> c : armure) {
+            String os = c.getKey();
+            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : 0;
+            if (main == 2) os = os.substring(MAIN_G.length());
+            else if (main == 1) os = os.substring(MAIN.length());
             for (int k = 0; k < m.parties().size(); k++) {
-                if (!c.getKey().equalsIgnoreCase(m.parties().get(k).nom())) continue;
+                if (!os.equalsIgnoreCase(m.parties().get(k).nom())) continue;
                 i.armureOs.add(k);
                 i.armureObjets.add(c.getValue());
+                i.armureMain.add(main);
                 break;
             }
         }
@@ -673,10 +693,13 @@ public final class Modeles {
             armuresEnvoyees = new Transformation[armures.length];
             for (int a = 0; a < armures.length; a++) {
                 ItemStack objet = armureObjets.get(a);
+                int main = main(a);
                 armures[a] = l.getWorld().spawn(l, ItemDisplay.class, d -> {
                     d.setPersistent(false);
                     d.setItemStack(objet);
-                    d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
+                    // objet tenu : le réglage « en main » de son modèle (épée, arme de poing…), comme le jeu le tient
+                    d.setItemDisplayTransform(main == 1 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND
+                        : main == 2 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND : ItemDisplay.ItemDisplayTransform.NONE);
                     d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
                     d.setTeleportDuration(2);
                     d.setViewRange(vue);
@@ -696,6 +719,11 @@ public final class Modeles {
                 armuresSoi = new ItemDisplay[armures.length];
                 armuresEnvoyeesSoi = new Transformation[armures.length];
                 for (int a = 0; a < armures.length; a++) {
+                    // objets tenus : le joueur voit ceux de son jeu (première personne, F5), pas de copie
+                    if (main(a) != 0) {
+                        proprio.hideEntity(plugin, armures[a]);
+                        continue;
+                    }
                     armuresSoi[a] = afficher(l, armureObjets.get(a), vue, false, proprio);
                     proprio.hideEntity(plugin, armures[a]);
                 }
@@ -718,6 +746,12 @@ public final class Modeles {
         /** Couches d'armure du pantin : os porteur et objet affiché ; leurs entités et dernières transformations. */
         final List<Integer> armureOs = new ArrayList<>();
         final List<ItemStack> armureObjets = new ArrayList<>();
+        /** 0 : couche d'armure ; 1 : objet tenu en main droite ; 2 : en main gauche. */
+        final List<Integer> armureMain = new ArrayList<>();
+
+        private int main(int a) {
+            return a < armureMain.size() ? armureMain.get(a) : 0;
+        }
         private ItemDisplay[] armures = new ItemDisplay[0];
         private Transformation[] armuresEnvoyees = new Transformation[0];
 
@@ -1215,7 +1249,13 @@ public final class Modeles {
                 Vector3f ech = new Vector3f(p.echelle()).div((float) Math.max(1e-6, modele.parties().get(k).echelle()));
                 Vector3f tr = new Vector3f(p.translation());
                 if (siege != 0f && base.equals(d.getVehicle())) tr.sub(0, siege, 0);
-                Transformation t = new Transformation(tr, p.rotation(), ech, droite);
+                Quaternionf rot = p.rotation();
+                if (main(a) != 0) {
+                    // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main
+                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 0, -2f / 16f).mul(ech)));
+                    rot = new Quaternionf(p.rotation()).mul(TENUE);
+                }
+                Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
                     envoyer(armuresSoi[a], new Transformation(new Vector3f(tr).add(recul), p.rotation(), ech, droite), armuresEnvoyeesSoi, a, intervalle);
                 }

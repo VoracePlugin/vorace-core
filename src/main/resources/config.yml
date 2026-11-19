@@ -116,6 +116,8 @@ pantin:
   # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
   # ces quelques secondes, comme les plugins de cinématiques ; seulement pour les animations qui ont un os « camera ».
   camera-ultimes: true
+  # Objets tenus (arme, bouclier, arme de poing par paire) dans les mains du pantin, placés comme le jeu les tient.
+  objets-en-main: true
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true

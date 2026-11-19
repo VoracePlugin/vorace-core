@@ -217,8 +217,10 @@ public final class Pantins implements Listener {
             preparer(p);
             pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
         }
+        java.util.List<Map.Entry<String, ItemStack>> porte = armure(p);
+        porte.addAll(mains(p));
         boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
-            armure(p), () -> montrer(p));
+            porte, () -> montrer(p));
         if (ok) cacher(p);
         return ok;
     }
@@ -242,6 +244,27 @@ public final class Pantins implements Listener {
             if (asset == null || !connus.contains(asset)) continue;
             for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset))) l.add(Map.entry(c.os(), objetArmure(c, porte)));
         }
+        return l;
+    }
+
+    /** Os où le pantin tient ses objets (squelette « joueur » : au bout des avant-bras). */
+    public static final String MAIN_DROITE = Modeles.MAIN + "poing_droit", MAIN_GAUCHE = Modeles.MAIN_G + "poing_gauche";
+
+    /** Clé posée par vorace-item sur une arme portée par paire (armes de poing) : montrée dans les deux mains. */
+    public static final org.bukkit.NamespacedKey PAIRE = new org.bukkit.NamespacedKey("voraceitem", "paire");
+
+    /**
+     * Objets tenus, à mettre dans les mains du pantin comme le jeu les tient (même placement qu'à la troisième
+     * personne) : main droite, main gauche ; une arme « par paire » sans rien dans l'autre main va dans les deux.
+     */
+    java.util.List<Map.Entry<String, ItemStack>> mains(Player p) {
+        java.util.List<Map.Entry<String, ItemStack>> l = new java.util.ArrayList<>();
+        if (!plugin.getConfig().getBoolean("pantin.objets-en-main", true)) return l;
+        ItemStack droite = p.getInventory().getItemInMainHand(), gauche = p.getInventory().getItemInOffHand();
+        boolean d = droite != null && !droite.getType().isAir(), g = gauche != null && !gauche.getType().isAir();
+        if (d) l.add(Map.entry(MAIN_DROITE, droite.clone()));
+        if (g) l.add(Map.entry(MAIN_GAUCHE, gauche.clone()));
+        else if (d && droite.hasItemMeta() && droite.getItemMeta().getPersistentDataContainer().has(PAIRE)) l.add(Map.entry(MAIN_GAUCHE, droite.clone()));
         return l;
     }
 

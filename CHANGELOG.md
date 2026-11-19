@@ -43,6 +43,10 @@
   le joueur passe en spectateur rattaché à une caméra invisible (entité d'affichage, mouvements adoucis), le pantin
   reste sur place, puis le joueur retrouve son mode de jeu, sa place et son regard à la fin (même après un arrêt du
   serveur, à sa connexion). `pantin.camera-ultimes`.
+- **Objets tenus sur le pantin** : l'arme (ou tout objet) en main droite et en main gauche est dans les mains du
+  pantin, placée et tournée comme le jeu la tient à la troisième personne (même réglage « en main » de son modèle) ;
+  une arme marquée « par paire » par vorace-item (`voraceitem:paire`, armes de poing) va dans les deux mains si la
+  main gauche est vide. Le joueur garde la vue de son jeu (première personne, F5). `pantin.objets-en-main`.
 - Fin d'une caméra de cinéma : le joueur ne reste plus invisible (son état d'avant était lu alors qu'il était déjà
   spectateur). `/vorace pantin visible [joueur]` rend visible un joueur resté invisible.
 - Maj pendant une caméra de cinéma ne la détache plus (plus d'à-coups).
