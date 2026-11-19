@@ -1,5 +1,167 @@
 # Journal des changements
 
+## 1.4.10 (novembre 2026)
+
+- Caméra de cinéma : de nouveau en mode spectateur rattaché à un affichage invisible (fluide, sans barre d'objets ni
+  interface). `pantin.camera-mode: monture` pour garder la barre d'objets (moins fluide).
+- Emojis du chat collés tels quels : gardés pour un joueur qui a leur permission (glyphes à raccourci, hors fonds de
+  menus, 16 pixels de haut au plus). Les autres caractères des polices (interface, espaces négatifs) restent retirés.
+
+## 1.4.9 (novembre 2026)
+
+- Caméra de cinéma : la monture est un support d'armure invisible (marqueur) au lieu d'un affichage d'objet ; le client
+  adoucit ses déplacements, le joueur monté dessus suit la caméra sans à-coups.
+- Arme par paire : de nouveau montrée au joueur lui-même dans sa main gauche (deux armes en F5) ; la case de la main
+  gauche à côté de la barre d'objets est transparente dans le pack (`pantin.cacher-case-main-gauche`), et la copie n'y
+  montre pas d'icône. `pantin.paires-soi` pour revenir à « les autres seulement ».
+
+## 1.4.8 (novembre 2026) : sécurité
+
+- Caractères des polices du pack (zone d'usage privé d'Unicode : images de l'interface, espaces négatifs) retirés de ce
+  qu'écrivent les joueurs : chat, commandes, panneaux, livres, renommage à l'enclume. Ils pouvaient couvrir l'écran des
+  autres ou imiter l'interface et les messages du serveur. Les emojis passent toujours par leurs raccourcis. Permission
+  `vorace.glyphes.bruts` (op) pour les écrire quand même.
+- Skins du pantin : téléchargés seulement depuis les serveurs de Mojang (un profil trafiqué ne fait plus télécharger
+  n'importe quelle adresse au serveur), 256 Ko au plus.
+- `/vorace pack` : une demande toutes les 10 secondes pour un joueur.
+
+## 1.4.7 (novembre 2026)
+
+- **Caméra de cinéma, interface gardée** : le jeu ne dessine la barre d'objets que si la caméra est le joueur lui-même ;
+  le joueur (invisible) monte donc sur l'entité caméra, son regard est tourné vers la cible à chaque tic
+  (ClientboundPlayerRotationPacket) ; Maj ne le fait pas descendre. Sans monture possible : mode spectateur.
+- **Arme par paire** : la copie de la main gauche n'est plus envoyée au joueur lui-même (la case de la main gauche
+  apparaissait à côté de sa barre d'objets) ; les autres le voient toujours avec une arme dans chaque main.
+- Couleurs du bras à la première personne appliquées aussi quand tout l'inventaire est renvoyé.
+
+## 1.4.6 (novembre 2026)
+
+- **Armure invisible, casque posé sur la tête** : en mode créatif, le client renvoie ses objets au serveur ; les copies
+  d'armure de l'animation devenaient de vrais objets. Elles sont maintenant marquées (drapeau 3) et refusées, et les
+  objets déjà abîmés sont réparés toutes les deux secondes (armure du jeu rendue à son équipement d'origine ; les objets
+  de vorace-item retrouvent le leur à la connexion suivante).
+- **Caméra de cinéma sans mode spectateur** : la caméra est posée par le paquet du jeu ; le joueur garde son mode de
+  jeu, sa barre d'objets et son interface, immobile (marche, saut et vol à zéro, ramené à sa place) et intouchable
+  jusqu'à la fin. Sans la couche paquets, mode spectateur comme avant.
+
+## 1.4.5 (novembre 2026)
+
+- **Bras à la première personne avec une arme de poing** : le jeu ne dessine plus le bras dès qu'un objet est en main ;
+  Vorace fournit un modèle du bras droit (un carré teinté par pixel, large et fin) posé exactement là où le jeu met le
+  bras à main vide (`PeauUV.PREMIERE_ROTATION` / `PREMIERE_TRANSLATION`), et envoie au joueur seulement ses armes par
+  paire avec les couleurs de son skin (custom_model_data, drapeau 2 « bras fin ») ; vorace-item 0.14.9 les assemble.
+  En créatif, ces couleurs sont retirées de ce que le client renvoie.
+- **Casque pendant une animation** : il apparaissait comme un objet posé sur la tête (pièce sans modèle porté) ; il
+  reçoit maintenant un équipement sans couche (`vorace:vide`).
+- **Manches sur le pantin** : avec une arme par paire, la manche d'armure des avant-bras n'est plus posée (elle ressortait
+  par endroits à travers l'arme pendant les coups).
+
+## 1.4.4 (novembre 2026)
+
+- Fin d'animation : l'armure et les objets du joueur ne revenaient pas chez lui (la fin ne rendait pas la main à
+  `ObjetsCaches`) ; filet en plus : chaque seconde, un joueur qui n'est plus caché par son pantin revoit tout.
+- Arme par paire : la copie de la main gauche (qui n'existe que chez le client) ne peut plus devenir un vrai objet en
+  mode créatif (paquet de case créative refusé, inventaire renvoyé). Revue toutes les demi-secondes (mode combat et
+  plugins qui changent l'inventaire sans événement), renvoyée seulement quand elle change.
+
+## 1.4.3 (novembre 2026)
+
+- **Rien sur le corps invisible** : pendant une animation, le joueur ne voit plus son armure ni ses objets sur son
+  corps caché (F5), même quand son inventaire change (arme usée par un coup). Plus d'objets « invisibles » dans
+  l'inventaire : les icônes restent, seuls les modèles portés et tenus disparaissent. Vorace change les objets des
+  paquets envoyés (`ObjetsCaches` : armure sans modèle porté, objets en main avec le drapeau 0 de custom_model_data),
+  jamais l'inventaire du serveur, et le renvoie tel quel à la fin. Les autres reçoivent son équipement vide pendant
+  toute l'animation.
+- **Arme par paire** : la copie de la main gauche porte le drapeau 1 (« paire ») : vue en F5 et par les autres, pas à
+  la première personne ni dans la case de la main gauche. Renvoyée aussi quand un joueur en voit arriver un autre.
+
+## 1.4.2 (novembre 2026)
+
+- **Taille du pantin** : le bas du torse ne remonte plus dans le haut ; le haut du torse descend d'un demi-pixel
+  par-dessus (un vingtième de pixel plus large), comme une veste sur une ceinture. Quand le buste tourne ou se penche, le
+  bas ne ressort plus sur les côtés. Le bas du torse a un dessus. `joueur.bbmodel` d'une version précédente remplacé
+  s'il n'a pas été retouché.
+- **Objets tenus, main gauche** : épée, outil ou objet à plat pris avec le réglage droit de leur modèle (c'est ce que le
+  jeu fait dans la main gauche) ; bouclier replacé comme le jeu le tient ; arme par paire avec son modèle de main gauche.
+- **Plus de double** : pendant l'animation, le jeu ne dessine plus les objets tenus du joueur chez lui (première
+  personne, F5), seulement ceux de sa copie du pantin. `pantin.cacher-objets-soi`.
+- **Armes par paire** (armes de poing) : sans rien dans la main gauche, l'arme y est aussi montrée hors animation, à
+  tous et au joueur (copie envoyée au client, inventaire inchangé). `pantin.paires`.
+
+## 1.4.1 (novembre 2026)
+
+- **Objets tenus sur le pantin** : l'arme (ou tout objet) en main droite et en main gauche est dans les mains du
+  pantin, placée et tournée comme le jeu la tient à la troisième personne (même réglage « en main » de son modèle) ;
+  une arme marquée « par paire » par vorace-item (`voraceitem:paire`, armes de poing) va dans les deux mains si la
+  main gauche est vide. La copie du pantin pour soi les tient aussi. `pantin.objets-en-main`.
+
+## 1.4.0 (novembre 2026) : pantin des joueurs et réactions des monstres
+
+### Pantin des joueurs (animations du corps entier avec le vrai skin, sans mod)
+- **Skin dessiné pixel par pixel** (même technique que BetterModel) : chaque morceau du pantin est un modèle du pack
+  fait d'un carré par pixel, coloré avec le skin du joueur par le composant custom_model_data (seconde couche
+  affichée selon un drapeau par pixel ; bras fins pour les skins « slim »). Plus de MineSkin ni de clé : le skin est lu
+  chez Mojang une fois puis gardé dans `peaux/`. Le jeu dessine ces modèles faces arrière élaguées : le joueur voit son
+  propre pantin depuis ses yeux, tête comprise, sans en voir l'intérieur, et se voit avec sa vraie tête en F5.
+- Copie du pantin pour le joueur lui-même, reculée de `pantin.recul-pour-soi` pixels (4, comme le mod « First Person
+  Model ») : à la première personne, il voit ses bras et ses poings partir devant lui sans les épaules dans la caméra.
+- `VoraceAPI.animerJoueur(joueur, modèle, animation)` : pendant l'animation, le joueur est caché (corps invisible,
+  équipement vide envoyé aux autres) et remplacé par un modèle animé dont chaque os « peau_... » porte le morceau de
+  skin correspondant. Le pantin disparaît à la fin.
+- Squelette `modeles-animes/joueur.bbmodel` (tête + tronc, bras et jambes en deux morceaux), remis s'il manque ; un
+  modèle de classe reprend ce squelette et ajoute ses animations. Animations d'essai : `essai`, `salut`, `croix`.
+- Skin préparé à la connexion ; pendant la préparation : habits par défaut du squelette.
+- Le pantin est monté sur le joueur (ses morceaux sont des passagers) : il le suit sans aucun retard, même à la
+  première personne, et regarde là où le joueur regarde. Pendant une animation, Paper refuse de téléporter un joueur
+  qui porte des passagers : appeler d'abord `VoraceAPI.arreterJoueur`. Le pantin s'arrête à la mort et au départ.
+  `pantin.monter-sur-le-joueur: false` rend l'ancien suivi.
+- Pantin mis à jour à chaque tic.
+- Armure sur le pantin : casque, plastron, jambières et bottes portés sont dessinés sur le pantin et suivent
+  l'animation (modèles générés pour chaque os avec les textures d'équipement du jeu, ajoutées à l'atlas des objets ;
+  cuir teint de sa couleur, éclat des pièces enchantées). `pantin.armure`, `pantin.armures-perso` pour les armures d'un
+  pack. Les ornements (trims) ne sont pas dessinés.
+- Coudes, genoux et taille fermés : la moitié basse de chaque membre et du tronc reprend deux lignes du skin au-dessus
+  de la jointure et remonte de deux pixels dans le morceau du dessus (un peu plus fine, sans scintillement).
+- `/vorace pantin preparer|etat [joueur]`, `jouer <joueur> <animation> [modèle]`, `essai [animation]`.
+- Réglages de secours `pantin.correction.rotation-y` et `decalage-y` si les têtes sont mal tournées en jeu.
+- Coups enchaînés : le même pantin joue l'animation suivante sans disparaître, et garde sa dernière pose 0,25 s.
+- `VoraceAPI.animerJoueurEnBoucle` et `arreterJoueur` (animation tenue, comme la Reprise de souffle).
+- Repères `poing_droit`, `poing_gauche`, `pied_droit`, `pied_gauche` dans le squelette (sans cube).
+
+### Clés d'effet plus riches (toutes les animations)
+- Particule : `nom[#RRGGBB[:taille]][*nombre][@os][~écart][^vitesse]`, par exemple `flame*30@poing_droit~0.3^0.05` ou
+  `dust#FF6A00:1.6*40~1.2` (particules colorées) ; placée sur l'os nommé, sinon au milieu du modèle.
+- Son : `nom[*volume][^hauteur]`, par exemple `entity.generic.explode*1.5^0.7`. L'ancienne écriture (nom seul) ne change pas.
+
+### Caméra de cinéma
+- Une animation du pantin dont l'os « camera » est animé (et « camera_cible », le point regardé) se voit comme un film :
+  le joueur passe en spectateur rattaché à une caméra invisible (entité d'affichage, mouvements adoucis), le pantin
+  reste sur place, puis le joueur retrouve son mode de jeu, sa place et son regard à la fin (même après un arrêt du
+  serveur, à sa connexion). `pantin.camera-ultimes`.
+- Fin d'une caméra de cinéma : le joueur ne reste plus invisible (son état d'avant était lu alors qu'il était déjà
+  spectateur). `/vorace pantin visible [joueur]` rend visible un joueur resté invisible.
+- Maj pendant une caméra de cinéma ne la détache plus (plus d'à-coups).
+- La caméra est redonnée au joueur quelques tics après son apparition : le client ignore une caméra qu'il ne connaît
+  pas encore, et le joueur restait dans ses propres yeux.
+
+### Apparitions (phénix, météorite, titan des ultimes)
+- `VoraceAPI.apparition(modèle, endroit, yaw, animation, taille)` : un modèle animé apparaît le temps d'une
+  animation puis disparaît (rien n'est gardé avec le monde ; base invisible côté joueurs).
+- Depuis une animation : clé de script (piste « Effets », timeline) `apparition <modèle> <animation> [taille]` ; le
+  modèle apparaît à l'endroit du modèle qui joue l'animation, tourné comme lui (le pantin d'un joueur : à ses pieds,
+  dans la direction où il regarde). On dessine donc l'apparition dans le même repère que l'animation qui l'appelle.
+- Os dont le nom commence par `lum_` : toujours éclairés à fond (feu, braise, yeux qui brillent la nuit).
+- `/vorace modele apparition <modèle> <animation> [taille]` (devant soi), avec l'auto-complétion.
+
+### Réactions des monstres
+- `VoraceAPI.reaction(entité, réaction)` : le modèle du monstre joue `saisi`, `plaque`, `souleve`, `projete`,
+  `repousse`, `etourdi` ou `resiste` s'il a cette animation (noms anglais acceptés : grabbed, slam, launched...).
+- Mannequin d'essai `mannequin_reactions.bbmodel` avec les sept réactions ; `/vorace modele reaction <réaction>`.
+
+### Divers
+- config.yml : les sections de premier niveau ajoutées par une nouvelle version sont écrites à la fin du fichier du
+  serveur, avec leurs commentaires.
+
 ## 1.3.1 (novembre 2026) : corrections
 
 - **Joueurs déconnectés par « Recursive update »** : la couche paquets nommait les paquets rangés dans un autre

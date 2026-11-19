@@ -38,6 +38,8 @@ public final class Commande implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
+    private final java.util.Map<java.util.UUID, Long> demandesPack = new java.util.concurrent.ConcurrentHashMap<>();
+
     @Override
     public boolean onCommand(CommandSender s, Command c, String label, String[] a) {
         if (c.getName().equalsIgnoreCase("emojis")) {
@@ -82,6 +84,14 @@ public final class Commande implements CommandExecutor, TabCompleter {
             }
             case "pack" -> {
                 if (!(s instanceof Player p)) { s.sendMessage(Messages.brut("<red>Commande réservée aux joueurs.")); return true; }
+                // une demande toutes les 10 s : renvoyer le pack en boucle chargerait le serveur et le réseau
+                long t = System.currentTimeMillis();
+                Long avant = demandesPack.get(p.getUniqueId());
+                if (avant != null && t - avant < 10_000 && !s.hasPermission("vorace.admin")) {
+                    s.sendMessage(Messages.brut("<red>Attends quelques secondes avant de redemander le pack."));
+                    return true;
+                }
+                demandesPack.put(p.getUniqueId(), t);
                 plugin.envoi().envoyer(p);
             }
             case "give", "donner" -> donner(s, a);
@@ -101,6 +111,7 @@ public final class Commande implements CommandExecutor, TabCompleter {
             case "bloc", "blocs" -> bloc(s, a);
             case "glyphe", "glyphes" -> glyphe(s, a);
             case "modele", "modeles", "modèle" -> modele(s, a);
+            case "pantin", "pantins" -> pantin(s, a);
             case "mob", "mobs" -> s.sendMessage(Messages.brut("<yellow>Les mobs sont dans le plugin vorace-mob : /vmob"));
             case "paquets", "paquet" -> paquets(s, a);
             case "convertir", "convert", "conversion" -> convertir(s, a);
@@ -353,7 +364,7 @@ public final class Commande implements CommandExecutor, TabCompleter {
         Player p = s instanceof Player j ? j : null;
         // depuis la console : autour du point d'apparition du monde principal (essais automatiques, serveurs sans joueur)
         org.bukkit.Location ici = p != null ? p.getLocation() : org.bukkit.Bukkit.getWorlds().get(0).getSpawnLocation();
-        if (p == null && List.of("sur", "invoquer").contains(act)) { s.sendMessage(Messages.brut("<red>Commande réservée aux joueurs.")); return; }
+        if (p == null && List.of("sur", "invoquer", "apparition").contains(act)) { s.sendMessage(Messages.brut("<red>Commande réservée aux joueurs.")); return; }
         switch (act) {
             case "poser" -> {
                 if (a.length < 3) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace modele poser <modèle> [animation]")); return; }
@@ -391,6 +402,22 @@ public final class Commande implements CommandExecutor, TabCompleter {
                     return;
                 }
                 s.sendMessage(Messages.brut("<green>Animation " + Messages.echapper(a[2]) + (dessus ? " par-dessus" : "") + (boucle ? " en boucle." : ".")));
+            }
+            case "apparition" -> {
+                if (a.length < 4) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace modele apparition <modèle> <animation> [taille]  (devant toi, puis disparaît)")); return; }
+                float t = 1f;
+                try { if (a.length > 4) t = Float.parseFloat(a[4]); } catch (NumberFormatException ex) { s.sendMessage(Messages.brut("<red>Taille illisible.")); return; }
+                org.bukkit.Location ou = p.getLocation();
+                Modeles.Instance i = m.apparition(a[2], ou, ou.getYaw(), a[3], t);
+                s.sendMessage(Messages.brut(i == null ? "<red>Modèle ou animation inconnu." : "<green>Apparition de " + Messages.echapper(a[2]) + " (" + Messages.echapper(a[3]) + ")."));
+            }
+            case "reaction", "réaction" -> {
+                if (a.length < 3) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace modele reaction <" + String.join("|", Modeles.REACTIONS) + ">  (sur le modèle le plus proche)")); return; }
+                Modeles.Instance i = m.plusProche(ici, 16);
+                if (i == null) { s.sendMessage(Messages.brut("<yellow>Aucun modèle à moins de 16 blocs.")); return; }
+                boolean ok = fr.vorace.api.VoraceAPI.reaction(i.base(), a[2]);
+                s.sendMessage(Messages.brut(ok ? "<green>Réaction " + Messages.echapper(a[2]) + " jouée."
+                    : "<yellow>" + Messages.echapper(i.modele().id()) + " n'a pas l'animation de la réaction " + Messages.echapper(a[2]) + "."));
             }
             case "info" -> {
                 s.sendMessage(Messages.brut("<gray>Animations : <white>" + (m.actif() ? "actives" : "ARRÊTÉES") + "</white>, tic " + m.tics() + ", "
@@ -536,12 +563,53 @@ public final class Commande implements CommandExecutor, TabCompleter {
         }
     }
 
+    /** /vorace pantin : pantin des joueurs (animations du corps entier avec le vrai skin). */
+    private void pantin(CommandSender s, String[] a) {
+        fr.vorace.modeles.Pantins pa = plugin.pantins();
+        if (pa == null || plugin.modeles() == null) { s.sendMessage(Messages.brut("<red>Les modèles animés n'ont pas pu démarrer (voir la console).")); return; }
+        String act = a.length > 1 ? a[1].toLowerCase(Locale.ROOT) : "aide";
+        Player soi = s instanceof Player j ? j : null;
+        switch (act) {
+            case "preparer", "préparer", "etat", "état" -> {
+                Player p = a.length > 2 ? Bukkit.getPlayerExact(a[2]) : soi;
+                if (p == null) { s.sendMessage(Messages.brut("<red>Joueur introuvable.")); return; }
+                if (act.startsWith("pr")) pa.preparer(p);
+                s.sendMessage(Messages.brut("<gray>Pantin de " + Messages.echapper(p.getName()) + " : <white>" + Messages.echapper(pa.etat(p))));
+            }
+            case "jouer" -> {
+                if (a.length < 4) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace pantin jouer <joueur> <animation> [modèle]")); return; }
+                Player p = Bukkit.getPlayerExact(a[2]);
+                if (p == null) { s.sendMessage(Messages.brut("<red>Joueur introuvable.")); return; }
+                String modele = a.length > 4 ? a[4] : fr.vorace.modeles.Pantins.SQUELETTE;
+                boolean ok = pa.jouer(p, modele, a[3]);
+                ModeleBB def = plugin.modeles().modele(modele);
+                s.sendMessage(Messages.brut(ok ? "<green>" + Messages.echapper(p.getName()) + " joue " + Messages.echapper(a[3]) + "."
+                    : "<red>Impossible." + (def == null ? " Modèle inconnu : " + Messages.echapper(modele)
+                        : " Animations de " + Messages.echapper(def.id()) + " : <white>" + Messages.echapper(String.join(", ", def.animations().keySet())))));
+            }
+            case "visible" -> {
+                Player p = a.length > 2 ? Bukkit.getPlayerExact(a[2]) : soi;
+                if (p == null) { s.sendMessage(Messages.brut("<red>Joueur introuvable.")); return; }
+                pa.rendreVisible(p);
+                s.sendMessage(Messages.brut("<green>" + Messages.echapper(p.getName()) + " est de nouveau visible."));
+            }
+            case "essai" -> {
+                if (soi == null) { s.sendMessage(Messages.brut("<red>Commande réservée aux joueurs.")); return; }
+                String anim = a.length > 2 ? a[2] : "essai";
+                s.sendMessage(Messages.brut(pa.jouer(soi, fr.vorace.modeles.Pantins.SQUELETTE, anim)
+                    ? "<green>Ton pantin joue " + Messages.echapper(anim) + ". <gray>(" + Messages.echapper(pa.etat(soi)) + ")"
+                    : "<red>Animation inconnue dans joueur.bbmodel : " + Messages.echapper(anim)));
+            }
+            default -> s.sendMessage(Messages.brut("<gray>/vorace pantin <white>preparer|etat [joueur]</white>, <white>jouer <joueur> <animation> [modèle]</white>, <white>essai [animation]</white>, <white>visible [joueur]"));
+        }
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender s, Command c, String label, String[] a) {
         List<String> r = new ArrayList<>();
         if (c.getName().equalsIgnoreCase("emojis")) return r;
         if (a.length == 1) {
-            for (String o : s.hasPermission("vorace.admin") ? List.of("menu", "aide", "reload", "give", "objets", "meuble", "bloc", "glyphe", "modele", "paquets", "convertir", "emojis", "envoyer", "maj", "info", "sources", "pack") : List.of("pack", "emojis")) {
+            for (String o : s.hasPermission("vorace.admin") ? List.of("menu", "aide", "reload", "give", "objets", "meuble", "bloc", "glyphe", "modele", "pantin", "paquets", "convertir", "emojis", "envoyer", "maj", "info", "sources", "pack") : List.of("pack", "emojis")) {
                 if (o.startsWith(a[0].toLowerCase(Locale.ROOT))) r.add(o);
             }
         } else if (a.length == 2 && a[0].equalsIgnoreCase("convertir") && s.hasPermission("vorace.admin")) {
@@ -564,8 +632,8 @@ public final class Commande implements CommandExecutor, TabCompleter {
         } else if (a.length == 3 && a[0].equalsIgnoreCase("glyphe") && a[1].equalsIgnoreCase("menu") && s.hasPermission("vorace.admin")) {
             for (Glyphes.Glyphe g : plugin.glyphes().tous()) if (g.def().menu() && g.def().id().startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(g.def().id());
         } else if (a.length == 2 && a[0].equalsIgnoreCase("modele") && s.hasPermission("vorace.admin")) {
-            for (String o : List.of("liste", "poser", "anim", "stop", "taille", "info", "prive", "public", "sur", "invoquer", "retirer")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
-        } else if (a.length == 3 && a[0].equalsIgnoreCase("modele") && List.of("poser", "sur", "invoquer").contains(a[1].toLowerCase(Locale.ROOT))
+            for (String o : List.of("liste", "poser", "anim", "reaction", "stop", "taille", "info", "prive", "public", "sur", "invoquer", "apparition", "retirer")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("modele") && List.of("poser", "sur", "invoquer", "apparition").contains(a[1].toLowerCase(Locale.ROOT))
             && s.hasPermission("vorace.admin") && plugin.modeles() != null) {
             for (ModeleBB def : plugin.modeles().tous()) if (def.id().startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(def.id());
         } else if (a.length == 3 && a[0].equalsIgnoreCase("modele") && a[1].equalsIgnoreCase("anim") && s.hasPermission("vorace.admin")
@@ -574,6 +642,24 @@ public final class Commande implements CommandExecutor, TabCompleter {
             if (i != null) for (String n : i.modele().animations().keySet()) if (n.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(n);
         } else if (a.length >= 4 && a[0].equalsIgnoreCase("modele") && a[1].equalsIgnoreCase("anim") && s.hasPermission("vorace.admin")) {
             for (String o : List.of("boucle", "dessus")) if (o.startsWith(a[a.length - 1].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 4 && a[0].equalsIgnoreCase("modele") && a[1].equalsIgnoreCase("apparition") && s.hasPermission("vorace.admin")
+            && plugin.modeles() != null) {
+            ModeleBB def = plugin.modeles().modele(a[2]);
+            if (def != null) for (String n : def.animations().keySet()) if (n.startsWith(a[3].toLowerCase(Locale.ROOT))) r.add(n);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("modele") && a[1].equalsIgnoreCase("reaction") && s.hasPermission("vorace.admin")) {
+            for (String o : Modeles.REACTIONS) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 2 && a[0].equalsIgnoreCase("pantin") && s.hasPermission("vorace.admin")) {
+            for (String o : List.of("preparer", "etat", "jouer", "essai", "visible")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && List.of("preparer", "etat", "jouer", "visible").contains(a[1].toLowerCase(Locale.ROOT))
+            && s.hasPermission("vorace.admin")) {
+            Bukkit.getOnlinePlayers().forEach(p -> r.add(p.getName()));
+            r.removeIf(x -> !x.toLowerCase(Locale.ROOT).startsWith(a[2].toLowerCase(Locale.ROOT)));
+        } else if (((a.length == 3 && a[1].equalsIgnoreCase("essai")) || (a.length == 4 && a[1].equalsIgnoreCase("jouer")))
+            && a[0].equalsIgnoreCase("pantin") && s.hasPermission("vorace.admin") && plugin.modeles() != null) {
+            ModeleBB def = plugin.modeles().modele(fr.vorace.modeles.Pantins.SQUELETTE);
+            if (def != null) for (String n : def.animations().keySet()) if (n.startsWith(a[a.length - 1].toLowerCase(Locale.ROOT))) r.add(n);
+        } else if (a.length == 5 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("jouer") && s.hasPermission("vorace.admin") && plugin.modeles() != null) {
+            for (ModeleBB def : plugin.modeles().tous()) if (def.id().startsWith(a[4].toLowerCase(Locale.ROOT))) r.add(def.id());
         } else if (a.length == 2 && a[0].equalsIgnoreCase("paquets") && s.hasPermission("vorace.admin")) {
             for (String o : List.of("stats", "journal", "ecoutes")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
         } else if (a.length == 3 && a[0].equalsIgnoreCase("paquets") && s.hasPermission("vorace.admin")) {

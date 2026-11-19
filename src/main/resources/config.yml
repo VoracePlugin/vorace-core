@@ -95,6 +95,51 @@ modeles:
   # Sons et particules des clés « Effets » des animations de Blockbench.
   effets: true
 
+pantin:
+  # Pantin des joueurs : pendant une animation de compétence ou une emote, le joueur est caché et remplacé par un
+  # modèle animé (modeles-animes/joueur.bbmodel) qui porte son vrai skin, sans mod.
+  actif: true
+  # Le skin est lu sur les serveurs de Mojang (gardé ensuite dans peaux/) et dessiné pixel par pixel par des modèles du
+  # pack : plus besoin de MineSkin. Les anciennes clés mineskin-cle, mineskin-adresse et delai-ms ne servent plus.
+  preparer-a-la-connexion: true
+  # Le vrai joueur disparaît pour les autres pendant l'animation (corps invisible, équipement caché).
+  cacher-joueur: true
+  # Les morceaux du pantin sont des passagers du joueur : le corps suit le joueur sans aucun retard (y compris pour
+  # lui-même à la première personne). Pendant une animation, Paper refuse de téléporter un joueur qui a des passagers :
+  # un plugin qui téléporte doit d'abord appeler VoraceAPI.arreterJoueur (Matsuri le fait). false : ancien suivi.
+  monter-sur-le-joueur: true
+  # Le joueur voit son propre pantin depuis ses yeux, tête comprise (le jeu n'en dessine pas l'intérieur). Sa copie est
+  # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
+  # lui sans avoir les épaules dans la caméra. Les autres voient le pantin à sa vraie place. 0 : pas de recul.
+  recul-pour-soi: 4
+  # Ultimes : le joueur voit la scène comme un film (caméra qui tourne autour de lui, recule pour montrer le phénix, le
+  # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
+  # ces quelques secondes, comme les plugins de cinématiques ; seulement pour les animations qui ont un os « camera ».
+  camera-ultimes: true
+  # « spectateur » : caméra fluide, sans barre d'objets ni interface (cinématique). « monture » : le joueur monte sur
+  # un support invisible et garde sa barre d'objets, mais la caméra est moins fluide.
+  camera-mode: spectateur
+  # Objets tenus (arme, bouclier, arme de poing par paire) dans les mains du pantin, placés comme le jeu les tient.
+  objets-en-main: true
+  # Pendant l'animation, chez le joueur lui-même : plus d'armure sur son corps invisible (F5) ni d'objets en main (ils
+  # sont dans les mains de sa copie du pantin). Les icônes de l'inventaire restent ; l'inventaire du serveur n'est
+  # jamais touché (copies changées dans les paquets, couche paquets de Vorace). Objets de vorace-item seulement pour
+  # les mains (drapeau 0 de custom_model_data).
+  cacher-objets-soi: true
+  # Arme par paire (armes de poing de vorace-item) sans rien dans l'autre main : montrée aussi dans la main gauche, à la
+  # troisième personne (F5, autres joueurs) ; à la première personne, comme le jeu.
+  paires: true
+  # Au joueur lui-même aussi (deux armes en F5). La case de la main gauche à côté de la barre d'objets devient alors
+  # transparente dans le pack (cacher-case-main-gauche) ; un objet vraiment tenu en main gauche garde son icône.
+  paires-soi: true
+  cacher-case-main-gauche: true
+  # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
+  # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
+  armure: true
+  # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
+  # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
+  armures-perso: []
+
 surveillance:
   # Reconstruit le pack tout seul quand un pack source ou un objet change (par exemple après /meg reload).
   actif: true

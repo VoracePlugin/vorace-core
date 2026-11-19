@@ -51,6 +51,7 @@ public final class Vorace extends JavaPlugin {
     private Blocs blocs;
     private Glyphes glyphes;
     private Modeles modeles;
+    private fr.vorace.modeles.Pantins pantins;
     private fr.vorace.interfaces.Menus menus;
     private fr.vorace.paquets.Paquets paquets;
     private volatile String testHebergement;
@@ -65,14 +66,40 @@ public final class Vorace extends JavaPlugin {
     public Blocs blocs() { return blocs; }
     public Glyphes glyphes() { return glyphes; }
     public Modeles modeles() { return modeles; }
+    public fr.vorace.modeles.Pantins pantins() { return pantins; }
     public fr.vorace.interfaces.Menus menus() { return menus; }
     /** Couche paquets, ou null si désactivée (config « paquets.actif »). */
     public fr.vorace.paquets.Paquets paquets() { return paquets; }
     public String testHebergement() { return testHebergement; }
 
+    /**
+     * Ajoute à la fin de config.yml les sections de premier niveau qui manquent (nouvelle version du plugin), avec
+     * leurs commentaires, sans toucher au reste du fichier.
+     */
+    private void completerConfig() {
+        try (java.io.InputStream in = getResource("config.yml")) {
+            if (in == null) return;
+            String defaut = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Path fichier = getDataFolder().toPath().resolve("config.yml");
+            String actuel = java.nio.file.Files.readString(fichier, java.nio.charset.StandardCharsets.UTF_8);
+            StringBuilder ajout = new StringBuilder();
+            for (String bloc : ConfigBlocs.blocs(defaut)) {
+                String cle = ConfigBlocs.cle(bloc);
+                if (cle != null && !getConfig().contains(cle, true)) ajout.append("\n").append(bloc.stripTrailing()).append("\n");
+            }
+            if (ajout.length() == 0) return;
+            java.nio.file.Files.writeString(fichier, actuel.stripTrailing() + "\n" + ajout, java.nio.charset.StandardCharsets.UTF_8);
+            reloadConfig();
+            getLogger().info("config.yml complété avec les nouvelles sections");
+        } catch (Exception e) {
+            getLogger().warning("config.yml non complété : " + e.getMessage());
+        }
+    }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        completerConfig();
         preparerDossiers();
         reglages = Reglages.lire(getConfig());
         Messages.charger(getConfig());
@@ -130,6 +157,9 @@ public final class Vorace extends JavaPlugin {
             try {
                 Bukkit.getPluginManager().registerEvents(new EcouteurModeles(this), this);
                 modeles.demarrer();
+                pantins = new fr.vorace.modeles.Pantins(this);
+                pantins.charger();
+                Bukkit.getPluginManager().registerEvents(pantins, this);
             } catch (Throwable t) {
                 getLogger().log(java.util.logging.Level.SEVERE, "Impossible d'activer les modèles animés", t);
             }
@@ -142,6 +172,13 @@ public final class Vorace extends JavaPlugin {
             } catch (Throwable t) {
                 paquets = null;
                 getLogger().log(java.util.logging.Level.SEVERE, "Impossible d'activer la couche paquets", t);
+            }
+        }
+        if (pantins != null) {
+            try {
+                pantins.brancherObjetsCaches();
+            } catch (Throwable t) {
+                getLogger().log(java.util.logging.Level.WARNING, "Objets cachés du pantin indisponibles", t);
             }
         }
         try {
@@ -188,6 +225,9 @@ public final class Vorace extends JavaPlugin {
         if (surveillance != null) surveillance.arreter();
         if (paquets != null) {
             try { paquets.arreter(); } catch (Throwable t) { getLogger().warning("Arrêt de la couche paquets : " + t); }
+        }
+        if (pantins != null) {
+            try { pantins.arreter(); } catch (Throwable t) { getLogger().warning("Arrêt des pantins : " + t); }
         }
         if (modeles != null) {
             try { modeles.arreter(); } catch (Throwable t) { getLogger().warning("Arrêt des modèles animés : " + t); }
