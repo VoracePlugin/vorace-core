@@ -126,6 +126,10 @@ pantin:
   # Arme par paire (armes de poing de vorace-item) sans rien dans l'autre main : montrée aussi dans la main gauche, à la
   # troisième personne (F5, autres joueurs) ; à la première personne, comme le jeu.
   paires: true
+  # Au joueur lui-même aussi (deux armes en F5). La case de la main gauche à côté de la barre d'objets devient alors
+  # transparente dans le pack (cacher-case-main-gauche) ; un objet vraiment tenu en main gauche garde son icône.
+  paires-soi: true
+  cacher-case-main-gauche: true
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true

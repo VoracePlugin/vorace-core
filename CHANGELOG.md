@@ -1,5 +1,13 @@
 # Journal des changements
 
+## 1.4.9 (novembre 2026)
+
+- Caméra de cinéma : la monture est un support d'armure invisible (marqueur) au lieu d'un affichage d'objet ; le client
+  adoucit ses déplacements, le joueur monté dessus suit la caméra sans à-coups.
+- Arme par paire : de nouveau montrée au joueur lui-même dans sa main gauche (deux armes en F5) ; la case de la main
+  gauche à côté de la barre d'objets est transparente dans le pack (`pantin.cacher-case-main-gauche`), et la copie n'y
+  montre pas d'icône. `pantin.paires-soi` pour revenir à « les autres seulement ».
+
 ## 1.4.8 (novembre 2026) : sécurité
 
 - Caractères des polices du pack (zone d'usage privé d'Unicode : images de l'interface, espaces négatifs) retirés de ce

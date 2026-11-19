@@ -175,7 +175,24 @@ public final class Modeles {
         for (ModeleBB m : modeles.values()) f.putAll(GenerateurModeles.generer(m));
         f.putAll(ArmuresPantin.generer(modele(Pantins.SQUELETTE), armuresPantin()));
         f.putAll(PeauUV.generer(modele(Pantins.SQUELETTE)));
+        // case de la main gauche à côté de la barre d'objets : transparente (arme par paire montrée en F5 sans case)
+        if (plugin.getConfig().getBoolean("pantin.cacher-case-main-gauche", true)) {
+            for (String c : List.of("hotbar_offhand_left", "hotbar_offhand_right")) {
+                f.put("assets/minecraft/textures/gui/sprites/hud/" + c + ".png", imageVide(29, 24));
+            }
+        }
         return f;
+    }
+
+    private static byte[] imageVide(int l, int h) {
+        try {
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(l, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", o);
+            return o.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Armures que le pantin sait porter : celles du jeu et celles de pantin.armures-perso (« babel:mythril »). */
@@ -873,7 +890,8 @@ public final class Modeles {
 
         /** Pendant une caméra de cinéma : le pantin reste là où le joueur était (le joueur, spectateur, suit la caméra). */
         private Location ancre;
-        private ItemDisplay camera;
+        /** Monture de la caméra : support d'armure invisible (le client adoucit ses déplacements, contrairement à un affichage). */
+        private org.bukkit.entity.ArmorStand camera;
         private org.bukkit.GameMode modeAvant;
         /** Tics depuis le début de la caméra : le client ne connaît l'entité caméra qu'au tic suivant son apparition. */
         private int ticsCamera;
@@ -905,9 +923,14 @@ public final class Modeles {
             for (ItemDisplay d : partiesSoi) if (d != null) p.hideEntity(plugin, d);
             for (ItemDisplay d : armuresSoi) if (d != null) p.hideEntity(plugin, d);
             Location depart = p.getEyeLocation();
-            camera = depart.getWorld().spawn(depart, ItemDisplay.class, d -> {
+            camera = depart.getWorld().spawn(depart, org.bukkit.entity.ArmorStand.class, d -> {
                 d.setPersistent(false);
-                d.setTeleportDuration(2);
+                d.setMarker(true);
+                d.setInvisible(true);
+                d.setGravity(false);
+                d.setSilent(true);
+                d.setInvulnerable(true);
+                d.setBasePlate(false);
                 d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
             });
             p.getPersistentDataContainer().set(new NamespacedKey(plugin, CLE_CAMERA), PersistentDataType.STRING, modeAvant.name());

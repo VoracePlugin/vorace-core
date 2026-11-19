@@ -150,9 +150,10 @@ public final class ObjetsCaches {
             return;
         }
         try {
-            // aux autres seulement : chez le joueur, une copie dans sa main gauche ferait apparaître la case de la main
-            // gauche à côté de la barre d'objets (retour d'Antoine, 19 nov.)
+            // au joueur aussi (deux poings en F5) : la case de la main gauche à côté de la barre d'objets est rendue
+            // invisible par le pack (pantin.cacher-case-main-gauche) et la copie n'y montre pas d'icône (drapeau 1)
             Object jeu = versJeu.invoke(null, copie);
+            if (plugin.getConfig().getBoolean("pantin.paires-soi", true)) pairesSoi.put(p.getUniqueId(), jeu);
             pairesEntites.put(p.getEntityId(), jeu);
         } catch (ReflectiveOperationException e) {
             plugin.getLogger().warning("Paire : " + e);
@@ -369,7 +370,7 @@ public final class ObjetsCaches {
         boolean soi = id == voit.getEntityId();
         boolean cacheAutres = !soi && entitesCachees.contains(id);
         boolean cacheSoi = soi && cachesSoi.contains(voit.getUniqueId());
-        Object paire = cacheAutres || cacheSoi || soi ? null : pairesEntites.get(id);
+        Object paire = cacheAutres || cacheSoi ? null : soi ? pairesSoi.get(voit.getUniqueId()) : pairesEntites.get(id);
         if (!cacheAutres && !cacheSoi && paire == null) return;
         @SuppressWarnings("unchecked")
         List<Object> places = (List<Object>) p.lire("slots");

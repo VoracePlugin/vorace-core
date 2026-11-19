@@ -255,7 +255,8 @@ public final class Pantins implements Listener {
         if (copie != null) pairesMontrees.add(p.getUniqueId());
         ItemStack montre = copie != null ? copie : p.getInventory().getItemInOffHand();
         for (Player autre : p.getWorld().getPlayers()) {
-            if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
+            if (autre == p && !plugin.getConfig().getBoolean("pantin.paires-soi", true)) continue;
+            if (autre != p && autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             autre.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, montre);
         }
     }
