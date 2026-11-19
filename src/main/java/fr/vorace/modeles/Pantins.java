@@ -201,6 +201,90 @@ public final class Pantins implements Listener {
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         }
         for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        if (mainsCachees.remove(p.getUniqueId())) p.updateInventory();
+        envoyerPaire(p);
+    }
+
+    // ------------------------------------------------------------------ armes par paire
+
+    /** Joueurs à qui l'on montre une arme par paire dans la main gauche (copie, l'inventaire n'est pas touché). */
+    private final java.util.Set<UUID> pairesMontrees = new java.util.HashSet<>();
+
+    /** L'arme par paire à montrer dans la main gauche de ce joueur (main gauche vide), ou null. */
+    private ItemStack paire(Player p) {
+        if (!plugin.getConfig().getBoolean("pantin.paires", true) || invisiblesAvant.containsKey(p.getUniqueId())) return null;
+        ItemStack d = p.getInventory().getItemInMainHand(), g = p.getInventory().getItemInOffHand();
+        if (d == null || d.getType().isAir() || !d.hasItemMeta() || !d.getItemMeta().getPersistentDataContainer().has(PAIRE)) return null;
+        return g == null || g.getType().isAir() ? d.clone() : null;
+    }
+
+    /**
+     * Arme portée par paire (armes de poing) sans rien dans l'autre main : le jeu la montre aussi dans la main gauche,
+     * à tous et au joueur (une copie envoyée au client ; l'inventaire du serveur ne change pas).
+     */
+    public void envoyerPaire(Player p) {
+        if (!p.isOnline()) return;
+        ItemStack copie = paire(p);
+        if (copie == null && !pairesMontrees.remove(p.getUniqueId())) return;
+        if (copie != null) pairesMontrees.add(p.getUniqueId());
+        ItemStack montre = copie != null ? copie : p.getInventory().getItemInOffHand();
+        for (Player autre : p.getWorld().getPlayers()) {
+            if (autre != p && autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
+            autre.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, montre);
+        }
+    }
+
+    private void plusTard(Player p) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> envoyerPaire(p), 1);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireMain(org.bukkit.event.player.PlayerItemHeldEvent e) { plusTard(e.getPlayer()); }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireEchange(org.bukkit.event.player.PlayerSwapHandItemsEvent e) { plusTard(e.getPlayer()); }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireInventaire(org.bukkit.event.inventory.InventoryClickEvent e) {
+        if (e.getWhoClicked() instanceof Player p) plusTard(p);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireGlisser(org.bukkit.event.inventory.InventoryDragEvent e) {
+        if (e.getWhoClicked() instanceof Player p) plusTard(p);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireJete(org.bukkit.event.player.PlayerDropItemEvent e) { plusTard(e.getPlayer()); }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireRamassee(org.bukkit.event.entity.EntityPickupItemEvent e) {
+        if (e.getEntity() instanceof Player p) plusTard(p);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireRetour(org.bukkit.event.player.PlayerRespawnEvent e) {
+        Player p = e.getPlayer();
+        pairesMontrees.remove(p.getUniqueId());
+        Bukkit.getScheduler().runTaskLater(plugin, () -> envoyerPaire(p), 5);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireMonde(org.bukkit.event.player.PlayerChangedWorldEvent e) {
+        Player p = e.getPlayer();
+        pairesMontrees.remove(p.getUniqueId());
+        Bukkit.getScheduler().runTaskLater(plugin, () -> envoyerPaire(p), 5);
+    }
+
+    /** Un joueur en voit un autre arriver : le jeu lui envoie la main gauche vide, on lui renvoie la paire. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void paireVue(io.papermc.paper.event.player.PlayerTrackEntityEvent e) {
+        if (!(e.getEntity() instanceof Player p) || !pairesMontrees.contains(p.getUniqueId())) return;
+        Player vu = p, voit = e.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            ItemStack copie = paire(vu);
+            if (copie != null && voit.isOnline()) voit.sendEquipmentChange(vu, EquipmentSlot.OFF_HAND, copie);
+        }, 2);
     }
 
     /** Arrête le pantin du joueur (fin d'une animation en boucle). */
@@ -335,7 +419,17 @@ public final class Pantins implements Listener {
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, vide);
         }
         for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
+        // ses objets tenus sont dans les mains de son pantin : le jeu ne les dessine plus en plus (première personne,
+        // F5) ; l'inventaire du jeu est renvoyé à la fin de l'animation
+        if (plugin.getConfig().getBoolean("pantin.objets-en-main", true) && plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)
+            && !mains(p).isEmpty()) {
+            p.sendEquipmentChange(p, EquipmentSlot.HAND, vide);
+            p.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, vide);
+            mainsCachees.add(p.getUniqueId());
+        }
     }
+
+    private final java.util.Set<UUID> mainsCachees = new java.util.HashSet<>();
 
     private void montrer(Player p) {
         Boolean avant = invisiblesAvant.remove(p.getUniqueId());
@@ -391,6 +485,8 @@ public final class Pantins implements Listener {
 
     @EventHandler
     public void depart(PlayerQuitEvent e) {
+        pairesMontrees.remove(e.getPlayer().getUniqueId());
+        mainsCachees.remove(e.getPlayer().getUniqueId());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getPlayer());
         montrer(e.getPlayer());
         invisiblesAvant.remove(e.getPlayer().getUniqueId());

@@ -168,8 +168,8 @@ public final class ArmuresPantin {
         // lignes de la zone : tête entière, moitié haute (0 à 5) ou basse avec le recouvrement (4 à 11), comme Peau
         boolean tete = morceau.startsWith("tete");
         boolean bas = morceau.endsWith("_bas");
-        int r0 = tete ? 0 : bas ? h / 2 - Peau.RECOUVREMENT : 0;
-        int rh = tete ? h : bas ? h / 2 + Peau.RECOUVREMENT : h / 2;
+        int r0 = tete ? 0 : bas ? h / 2 - Peau.recouvrement(morceau) : 0;
+        int rh = tete ? h : bas ? h / 2 + Peau.recouvrement(morceau) : h / 2;
         double haut = v + d + r0, fond = haut + rh;
         boolean gauche = morceau.contains("gauche");   // le jeu dessine bras et jambe gauches en miroir des droits
         Map<String, double[]> uv = new LinkedHashMap<>();
@@ -188,7 +188,7 @@ public final class ArmuresPantin {
         JsonObject faces = new JsonObject();
         for (Map.Entry<String, double[]> f : uv.entrySet()) {
             // la face de jointure (dessous d'une moitié haute, dessus d'une moitié basse) reste vide
-            if (!tete && ((!bas && f.getKey().equals("down")) || (bas && f.getKey().equals("up")))) continue;
+            if (!tete && ((!bas && f.getKey().equals("down")) || (bas && f.getKey().equals("up") && !morceau.startsWith("corps_bas")))) continue;
             JsonObject o = new JsonObject();
             JsonArray t = new JsonArray();
             double[] w = f.getValue();

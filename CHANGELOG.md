@@ -1,5 +1,18 @@
 # Journal des changements
 
+## 1.4.2 (novembre 2026)
+
+- **Taille du pantin** : le bas du torse ne remonte plus dans le haut ; le haut du torse descend d'un demi-pixel
+  par-dessus (un vingtième de pixel plus large), comme une veste sur une ceinture. Quand le buste tourne ou se penche, le
+  bas ne ressort plus sur les côtés. Le bas du torse a un dessus. `joueur.bbmodel` d'une version précédente remplacé
+  s'il n'a pas été retouché.
+- **Objets tenus, main gauche** : épée, outil ou objet à plat pris avec le réglage droit de leur modèle (c'est ce que le
+  jeu fait dans la main gauche) ; bouclier replacé comme le jeu le tient ; arme par paire avec son modèle de main gauche.
+- **Plus de double** : pendant l'animation, le jeu ne dessine plus les objets tenus du joueur chez lui (première
+  personne, F5), seulement ceux de sa copie du pantin. `pantin.cacher-objets-soi`.
+- **Armes par paire** (armes de poing) : sans rien dans la main gauche, l'arme y est aussi montrée hors animation, à
+  tous et au joueur (copie envoyée au client, inventaire inchangé). `pantin.paires`.
+
 ## 1.4.1 (novembre 2026)
 
 - **Objets tenus sur le pantin** : l'arme (ou tout objet) en main droite et en main gauche est dans les mains du

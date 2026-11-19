@@ -442,16 +442,8 @@
    "locked": false,
    "render_order": "default",
    "allow_mirror_modeling": true,
-   "from": [
-    -4,
-    18,
-    -2
-   ],
-   "to": [
-    4,
-    24,
-    2
-   ],
+   "from": [-4.05, 17.5, -2.05],
+   "to": [4.05, 24, 2.05],
    "autouv": 0,
    "color": 0,
    "origin": [
@@ -525,16 +517,8 @@
    "locked": false,
    "render_order": "default",
    "allow_mirror_modeling": true,
-   "from": [
-    -3.85,
-    12,
-    -1.85
-   ],
-   "to": [
-    3.85,
-    20,
-    1.85
-   ],
+   "from": [-4, 12, -2],
+   "to": [4, 18, 2],
    "autouv": 0,
    "color": 0,
    "origin": [

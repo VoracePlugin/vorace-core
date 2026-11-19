@@ -693,12 +693,12 @@ public final class Modeles {
             armuresEnvoyees = new Transformation[armures.length];
             for (int a = 0; a < armures.length; a++) {
                 ItemStack objet = armureObjets.get(a);
-                int main = main(a);
+                final ItemDisplay.ItemDisplayTransform reglage = tenue(a);
                 armures[a] = l.getWorld().spawn(l, ItemDisplay.class, d -> {
                     d.setPersistent(false);
                     d.setItemStack(objet);
                     // objet tenu : le réglage « en main » de son modèle (épée, arme de poing…), comme le jeu le tient
-                    d.setItemDisplayTransform(tenue(main));
+                    d.setItemDisplayTransform(reglage);
                     d.getPersistentDataContainer().set(clePartie, PersistentDataType.BYTE, (byte) 1);
                     d.setTeleportDuration(2);
                     d.setViewRange(vue);
@@ -719,7 +719,7 @@ public final class Modeles {
                 armuresEnvoyeesSoi = new Transformation[armures.length];
                 for (int a = 0; a < armures.length; a++) {
                     armuresSoi[a] = afficher(l, armureObjets.get(a), vue, false, proprio);
-                    if (main(a) != 0) armuresSoi[a].setItemDisplayTransform(tenue(main(a)));
+                    if (main(a) != 0) armuresSoi[a].setItemDisplayTransform(tenue(a));
                     proprio.hideEntity(plugin, armures[a]);
                 }
             }
@@ -748,9 +748,25 @@ public final class Modeles {
             return a < armureMain.size() ? armureMain.get(a) : 0;
         }
 
-        private static ItemDisplay.ItemDisplayTransform tenue(int main) {
-            return main == 1 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND
-                : main == 2 ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND : ItemDisplay.ItemDisplayTransform.NONE;
+        /**
+         * Réglage « en main » d'un objet tenu. Le jeu dessine la main gauche avec le réglage gauche du modèle retourné
+         * (translation x, rotations y et z de signe opposé) ; un affichage d'objet ne le retourne pas. Les modèles du
+         * jeu (épée, outil, objet à plat) ont un réglage gauche déjà retourné dans leur fichier : leur réglage droit,
+         * tel quel, est donc exactement ce que le jeu fait dans la main gauche. Une arme par paire de vorace-item a son
+         * propre modèle de main gauche (réglage neutre) : réglage gauche. Le bouclier : réglage gauche, corrigé à part.
+         */
+        private ItemDisplay.ItemDisplayTransform tenue(int a) {
+            int main = main(a);
+            if (main == 1) return ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
+            if (main == 0) return ItemDisplay.ItemDisplayTransform.NONE;
+            ItemStack o = armureObjets.get(a);
+            boolean paire = o.hasItemMeta() && o.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE);
+            return paire || o.getType() == org.bukkit.Material.SHIELD ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND
+                : ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
+        }
+
+        private boolean bouclierGauche(int a) {
+            return main(a) == 2 && armureObjets.get(a).getType() == org.bukkit.Material.SHIELD;
         }
         private ItemDisplay[] armures = new ItemDisplay[0];
         private Transformation[] armuresEnvoyees = new Transformation[0];
@@ -1254,6 +1270,12 @@ public final class Modeles {
                     // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main
                     tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 0, -2f / 16f).mul(ech)));
                     rot = new Quaternionf(p.rotation()).mul(TENUE);
+                    if (bouclierGauche(a)) {
+                        // bouclier (réglage gauche identique au droit : rotation y 90°, translation (10, 6, -4)) : le jeu
+                        // le retourne en (-10, 6, -4), y -90° ; un demi-tour autour de y et 8 pixels en arrière y mènent
+                        tr.add(new Quaternionf(rot).transform(new Vector3f(0, 0, -0.5f).mul(ech)));
+                        rot.rotateY((float) Math.PI);
+                    }
                 }
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
@@ -1441,6 +1463,19 @@ public final class Modeles {
 
     // ------------------------------------------------------------------ exemple
 
+    /** Empreintes SHA-256 des joueur.bbmodel livrés avant le 19 nov. 2026 (bas du torse qui remontait de 2 pixels). */
+    private static final java.util.Set<String> SQUELETTES_ANCIENS = java.util.Set.of(
+        "53dc0e84042526bc011b2c5d7315b6e511fd3ef39ffd1159916d85d7d80f19eb",
+        "d41ee45f17054bf74ac955343158f24f6223d6e79c2037b7ebcd036bec5590c8");
+
+    static String empreinte(byte[] octets) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(octets));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return "";
+        }
+    }
+
     private void installerExemple() {
         try {
             Files.createDirectories(dossier());
@@ -1449,6 +1484,8 @@ public final class Modeles {
             // squelette du pantin des joueurs et mannequin des réactions : toujours remis s'ils manquent
             for (String f : List.of("joueur.bbmodel", "mannequin_reactions.bbmodel")) {
                 Path c = dossier().resolve(f);
+                // squelette livré par une version précédente et pas retouché : remplacé par celui-ci
+                if (Files.isRegularFile(c) && SQUELETTES_ANCIENS.contains(empreinte(Files.readAllBytes(c)))) Files.delete(c);
                 if (Files.exists(c)) continue;
                 try (InputStream in = plugin.getClass().getClassLoader().getResourceAsStream("exemples/modeles/" + f)) {
                     if (in != null) Files.copy(in, c);

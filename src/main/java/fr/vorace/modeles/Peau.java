@@ -36,6 +36,15 @@ public final class Peau {
     /** Lignes du skin (et pixels du cube) que la moitié basse reprend au-dessus de la jointure. */
     public static final int RECOUVREMENT = 2;
 
+    /**
+     * Recouvrement d'un morceau du pantin : aucun pour le bas du torse. Son haut (le torse, plus large que lui d'un
+     * vingtième de pixel) descend d'un demi-pixel par-dessus, comme une veste sur une ceinture : quand le buste tourne
+     * ou se penche, le bas du torse ne ressort plus sur les côtés (retour d'Antoine, 19 nov.). Bras et jambes : 2.
+     */
+    public static int recouvrement(String morceau) {
+        return morceau.startsWith("corps_bas") ? 0 : RECOUVREMENT;
+    }
+
     /** Les dix morceaux, par nom d'os du pantin sans le préfixe « peau_ ». */
     public static final List<String> MORCEAUX = List.of("corps_haut", "corps_bas", "bras_droit_haut", "bras_droit_bas",
         "bras_gauche_haut", "bras_gauche_bas", "jambe_droite_haut", "jambe_droite_bas", "jambe_gauche_haut", "jambe_gauche_bas");

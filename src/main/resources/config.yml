@@ -118,6 +118,11 @@ pantin:
   camera-ultimes: true
   # Objets tenus (arme, bouclier, arme de poing par paire) dans les mains du pantin, placés comme le jeu les tient.
   objets-en-main: true
+  # Pendant l'animation, le jeu ne dessine plus ses objets tenus chez le joueur lui-même (ils sont dans les mains de sa
+  # copie du pantin) ; sa barre d'objets les montre vides le temps du coup.
+  cacher-objets-soi: true
+  # Arme par paire (armes de poing de vorace-item) sans rien dans l'autre main : montrée aussi dans la main gauche.
+  paires: true
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true

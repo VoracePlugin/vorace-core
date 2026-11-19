@@ -73,9 +73,10 @@ public final class PeauUV {
             int[] zb = zoneBase(nom, fin), zc = zoneCouche(nom, fin);
             boolean tete = nom.equals("tete"), bas = nom.endsWith("_bas");
             int h = tete ? 8 : 12;
-            int r0 = tete ? 0 : bas ? h / 2 - Peau.RECOUVREMENT : 0;
-            int rh = tete ? 8 : bas ? h / 2 + Peau.RECOUVREMENT : h / 2;
-            boolean dessus = tete || !bas, dessous = tete || bas;
+            int r0 = tete ? 0 : bas ? h / 2 - Peau.recouvrement(nom) : 0;
+            int rh = tete ? 8 : bas ? h / 2 + Peau.recouvrement(nom) : h / 2;
+            // le bas du torse a un dessus : si le buste se penche, on voit le haut d'un torse, pas le vide
+            boolean dessus = tete || !bas || nom.equals("corps_bas"), dessous = tete || bas;
             l.add(new Morceau(nom + (fin ? "_fin" : ""), p.nom(), de, a,
                 faces(zb[0], zb[1], zb[2], zb[3], r0, rh, dessus, dessous),
                 faces(zc[0], zc[1], zc[2], zc[3], r0, rh, dessus, dessous), tete ? CHAPEAU : VESTE));
