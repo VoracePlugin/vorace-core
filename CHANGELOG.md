@@ -1,5 +1,17 @@
 # Journal des changements
 
+## 1.5.0 (novembre 2026) : apparitions visées
+
+- **Une apparition peut viser un point** : `VoraceAPI.viser(joueur, point)` donne aux apparitions que lance le pantin de ce joueur
+  (clé « apparition <modèle> <animation> ») un point à atteindre pendant deux secondes. Un sort dessiné pour une cible à deux blocs
+  devant le lanceur vole alors jusqu'à la vraie cible, à n'importe quelle distance et hauteur : l'apparition se tourne vers elle,
+  et les places de ses pièces sont étirées entre la main (11/16 de bloc devant) et la cible dessinée (2 blocs devant, à 21/16 de
+  bloc de haut). Le dessin des pièces ne change pas ; une pièce et ses filles bougent ensemble.
+- **Pièces tendues** : une pièce dont le nom finit par `_tendu` (éclair, rayon tiré d'un point vers un autre, le long de son -z)
+  est en plus retournée et allongée pour rejoindre le point suivant.
+- `VoraceAPI.viser(joueur, null)` efface le point (compétence sans cible, ultime). Sans appel, rien ne change.
+- Tests : `TestVisee` (cible dessinée sur la vraie cible, mi-course, lacet, trait tendu, taille).
+
 ## 1.4.10 (novembre 2026)
 
 - Caméra de cinéma : de nouveau en mode spectateur rattaché à un affichage invisible (fluide, sans barre d'objets ni

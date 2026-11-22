@@ -245,6 +245,15 @@ public final class VoraceAPI {
         return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation, true);
     }
 
+    /**
+     * Le point que vise ce joueur (le torse de sa cible) : les apparitions lancées par son pantin dans les deux secondes
+     * volent jusque-là au lieu de s'arrêter à deux blocs devant lui, et les pièces nommées « ..._tendu » (éclair, rayon)
+     * s'allongent d'autant. {@code null} l'efface. À appeler juste avant {@link #animerJoueur(Player, String, String)}.
+     */
+    public static void viser(Player joueur, org.bukkit.Location cible) {
+        if (plugin != null && plugin.modeles() != null) plugin.modeles().viser(joueur, cible);
+    }
+
     /** Arrête l'animation du pantin du joueur (il redevient visible). */
     public static void arreterJoueur(Player joueur) {
         if (plugin != null && plugin.pantins() != null) plugin.pantins().arreter(joueur);

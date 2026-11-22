@@ -112,6 +112,8 @@ public final class Modeles {
     public static final String CLE_CAMERA = "camera_mode";
     private volatile Map<String, ModeleBB> modeles = Map.of();
     private final Map<UUID, Instance> instances = new LinkedHashMap<>();
+    /** Ce que vise chaque joueur (point du monde, heure limite) : ses prochaines apparitions volent jusque-là. */
+    private final Map<UUID, Object[]> visees = new HashMap<>();
     private BukkitTask tache;
     private long tic;
     /** Dernière erreur du calcul des animations (affichée par /vorace modele info). */
@@ -329,6 +331,29 @@ public final class Modeles {
         return i;
     }
 
+    /**
+     * Donne aux prochaines apparitions du pantin de ce joueur un point à atteindre (le torse de sa cible) : un sort dessiné
+     * pour une cible à deux blocs vole alors jusqu'à ce point, à n'importe quelle distance et hauteur (voir {@link Visee}).
+     * Vaut deux secondes ; {@code null} l'efface (une compétence sans cible, un ultime).
+     */
+    public void viser(Player joueur, Location cible) {
+        if (joueur == null) return;
+        if (cible == null || cible.getWorld() == null) visees.remove(joueur.getUniqueId());
+        else visees.put(joueur.getUniqueId(), new Object[] {cible.clone(), System.currentTimeMillis() + 2000});
+    }
+
+    /** Le point visé par ce joueur s'il est encore valable et dans ce monde, sinon null. */
+    private Location visee(UUID joueur, org.bukkit.World monde) {
+        Object[] v = joueur == null ? null : visees.get(joueur);
+        if (v == null) return null;
+        if ((Long) v[1] < System.currentTimeMillis()) {
+            visees.remove(joueur);
+            return null;
+        }
+        Location l = (Location) v[0];
+        return l.getWorld() == monde ? l : null;
+    }
+
     /** Le joueur a un pantin en train de jouer. */
     public boolean pantinActif(Player joueur) {
         Instance i = instances.get(joueur.getUniqueId());
@@ -537,6 +562,8 @@ public final class Modeles {
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
         UUID proprietaire;
+        /** Apparition visée : ses pièces volent jusqu'à une vraie cible (null : jouée telle qu'elle est dessinée). */
+        Visee visee;
         Runnable fin;
         final Map<Integer, ItemStack> peaux = new HashMap<>();
 
@@ -1336,6 +1363,7 @@ public final class Modeles {
             if (da != null) tEffetDessus = effets(da, tEffetDessus, (tic - debutForcee) / 20.0, forceeBoucle);
 
             Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
+            if (visee != null) poses = visee.appliquer(modele, poses);
             dernieresPoses = poses;
             teteProprietaire(poses);
             majCamera();
@@ -1475,7 +1503,19 @@ public final class Modeles {
                     float t = 1f;
                     try { if (p.length > 3) t = Float.parseFloat(p[3]); } catch (NumberFormatException ignore) { }
                     Location ici = position();
-                    Instance inv = apparition(p[1], ici, yaw, p[2], t * taille);
+                    // le joueur vise un point : l'apparition se tourne vers lui et vole jusqu'à lui
+                    float lacet = yaw;
+                    Visee vers = null;
+                    Location cible = visee(proprietaire, ici.getWorld());
+                    if (cible != null) {
+                        double dx = cible.getX() - ici.getX(), dz = cible.getZ() - ici.getZ(), d = Math.hypot(dx, dz);
+                        if (d >= 0.8) {
+                            lacet = Visee.yawVers(dx, dz);
+                            vers = new Visee(lacet, (float) d, (float) (cible.getY() - ici.getY()), t * taille);
+                        }
+                    }
+                    Instance inv = apparition(p[1], ici, lacet, p[2], t * taille);
+                    if (inv != null) inv.visee = vers;
                     if (inv != null && spectateurs != null) {
                         List<Player> vus = new ArrayList<>();
                         for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) vus.add(j); }
