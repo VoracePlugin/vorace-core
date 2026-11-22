@@ -26,6 +26,7 @@ public final class Visee {
     private final float distance;        // la vraie cible : distance au sol depuis le lanceur
     private final float monte;           // ce qu'il faut monter (ou descendre) pour être à sa hauteur
     private final float k;               // facteur d'allongement entre la main et la cible
+    private final float taille;
 
     /**
      * @param yaw      l'orientation donnée à l'apparition (voir {@link #yawVers})
@@ -37,6 +38,7 @@ public final class Visee {
         Vector3f avant = new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw))).transform(new Vector3f(0, 0, -1));
         this.ax = avant.x;
         this.az = avant.z;
+        this.taille = taille;
         this.s0 = MAIN * taille;
         this.sc = CIBLE * taille;
         this.distance = Math.max(sc * 0.75f, distance);
@@ -59,21 +61,23 @@ public final class Visee {
     }
 
     /**
-     * Une pièce tendue : sa rotation est corrigée (sur place) pour qu'elle pointe vers son nouveau point d'arrivée.
+     * Une pièce tendue d'un point vers un autre : ses deux bouts sont déplacés, et sa rotation est corrigée (sur place) pour
+     * qu'elle aille de l'un à l'autre.
      *
+     * @param t        la place de son départ (son pivot)
+     * @param longueur sa longueur dessinée, en blocs
      * @return de combien elle doit s'allonger (son échelle le long de son axe)
      */
-    public float tendre(Vector3f t, Quaternionf rotation) {
-        float s = t.x * ax + t.z * az;
-        if (s < s0 - 1e-4f || s >= sc) return 1f;      // derrière la main ou au-delà de la cible : rien ne s'étire
+    public float tendre(Vector3f t, Quaternionf rotation, float longueur) {
+        if (longueur <= 1e-4f) return 1f;
         Vector3f u = rotation.transform(new Vector3f(0, 0, -1));
-        float uf = u.x * ax + u.z * az;
-        Vector3f v = new Vector3f(u.x + ax * uf * (k - 1), u.y + monte / (sc - s0) * uf, u.z + az * uf * (k - 1));
+        Vector3f bout = new Vector3f(u).mul(longueur).add(t);
+        Vector3f v = deplacer(bout).sub(deplacer(t));
         float l = v.length();
         if (l < 1e-5f) return 1f;
         v.div(l);
         new Quaternionf().rotationTo(u, v).mul(rotation, rotation);
-        return l;
+        return l / longueur;
     }
 
     /** Les poses d'un modèle, visées : chaque pièce suit le déplacement de la pièce de tête dont elle descend. */
@@ -89,13 +93,20 @@ public final class Visee {
             String nom = m.parties().get(i).nom();
             if (nom != null && nom.endsWith(TENDU)) {
                 Quaternionf q = new Quaternionf(p.rotation());
-                float l = tendre(p.translation(), q);
+                float l = tendre(p.translation(), q, longueur(m.parties().get(i)) * taille);
                 r[i] = new Pose(t, q, new Vector3f(p.echelle()).mul(1, 1, l));
             } else {
                 r[i] = new Pose(t, p.rotation(), p.echelle());
             }
         }
         return r;
+    }
+
+    /** Longueur dessinée d'une pièce tendue, en blocs à la taille 1 : de son pivot au bout de ses pavés, le long de son -z. */
+    static float longueur(ModeleBB.Partie p) {
+        double bout = p.pivot()[2];
+        for (ModeleBB.Cube c : p.cubes()) bout = Math.min(bout, Math.min(c.de()[2], c.a()[2]));
+        return (float) ((p.pivot()[2] - bout) / 16.0);
     }
 
     /** La pièce de tête d'une pièce : son ancêtre posé juste sous la racine du modèle (elle-même si elle n'en a pas). */

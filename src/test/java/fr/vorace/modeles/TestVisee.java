@@ -26,11 +26,18 @@ public final class TestVisee {
         verifier(pres(e.deplacer(new Vector3f(Visee.CIBLE, Visee.HAUTEUR, 0)), 8f, Visee.HAUTEUR, 0), "l'avant du modèle suit le lacet");
         // une pièce tendue de la main à la cible : elle s'allonge jusqu'à la vraie cible et pointe vers elle
         Quaternionf q = new Quaternionf().rotateY((float) Math.PI);       // son axe (-z du modèle) regarde vers +z du monde
-        float l = v.tendre(new Vector3f(0, Visee.HAUTEUR, Visee.MAIN), q);
+        float l = v.tendre(new Vector3f(0, Visee.HAUTEUR, Visee.MAIN), q, Visee.CIBLE - Visee.MAIN);
         Vector3f bout = q.transform(new Vector3f(0, 0, -1)).mul((Visee.CIBLE - Visee.MAIN) * l).add(0, Visee.HAUTEUR, Visee.MAIN);
         verifier(pres(bout, 0, 3f, 10f), "un trait tendu de la main à la cible arrive sur la vraie cible");
         Quaternionf q2 = new Quaternionf().rotateY((float) Math.PI);
-        verifier(Math.abs(v.tendre(new Vector3f(0, 1f, Visee.CIBLE + 0.5f), q2) - 1f) < 1e-4, "un trait au-delà de la cible ne s'étire pas");
+        verifier(Math.abs(v.tendre(new Vector3f(0, 1f, Visee.CIBLE + 0.5f), q2, 0.5f) - 1f) < 1e-4, "un trait au-delà de la cible ne s'étire pas");
+        // un trait qui part d'au-dessus du lanceur (derrière la main) et descend sur la cible dessinée
+        Vector3f depart = new Vector3f(0.4f, 2.9f, 0.3f), fin = new Vector3f(0, Visee.HAUTEUR, Visee.CIBLE);
+        Vector3f dir = new Vector3f(fin).sub(depart);
+        float lg = dir.length();
+        Quaternionf q3 = new Quaternionf().rotationTo(new Vector3f(0, 0, -1), dir.normalize());
+        float l3 = v.tendre(depart, q3, lg);
+        verifier(pres(q3.transform(new Vector3f(0, 0, -1)).mul(lg * l3).add(depart), 0, 3f, 10f), "un trait parti d'au-dessus du lanceur arrive aussi sur la vraie cible");
         // une cible plus proche que le dessin : le sort raccourcit, sans se retourner
         Visee p = new Visee(yaw, 0.5f, Visee.HAUTEUR, 1f);
         verifier(p.deplacer(new Vector3f(0, Visee.HAUTEUR, Visee.CIBLE)).z >= Visee.MAIN, "une cible collée au lanceur ne renvoie pas le sort en arrière");
