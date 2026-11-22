@@ -1,5 +1,12 @@
 # Journal des changements
 
+## 1.5.1 (novembre 2026) : tenue retournée
+
+- **Objets tenus retournés** : un modèle de pantin qui porte un os sans cube nommé `tenue_retournee` tient ses objets à l'envers
+  dans la main, la lame du côté du petit doigt (dagues de l'Assassin). L'objet fait un demi-tour autour de l'avant-bras : il part
+  de 2 pixels derrière le bout de l'avant-bras au lieu de 2 pixels devant. Les boucliers ne sont pas retournés. Sans cet os, rien
+  ne change.
+
 ## 1.5.0 (novembre 2026) : apparitions visées
 
 - **Une apparition peut viser un point** : `VoraceAPI.viser(joueur, point)` donne aux apparitions que lance le pantin de ce joueur

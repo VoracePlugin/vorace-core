@@ -101,6 +101,8 @@ public final class Modeles {
      * en -z) : celle du jeu (ItemInHandLayer : rotation X -90°, puis Y 180°, dans le repère des modèles d'entité, y en
      * bas et x inversé), suivie du passage de ce repère à celui de Blockbench (demi-tour autour de z).
      */
+    /** Os sans cube qui demande la tenue retournée des objets en main (voir Instance.tenueRetournee). */
+    public static final String TENUE_RETOURNEE = "tenue_retournee";
     static final Quaternionf TENUE;
     static {
         Quaternionf c = new Quaternionf().rotateZ((float) Math.PI);
@@ -522,6 +524,8 @@ public final class Modeles {
     /** Un modèle en jeu. */
     public final class Instance {
         final ModeleBB modele;
+        /** Le modèle porte un os nommé « tenue_retournee » : ses objets tenus sont retournés dans la main (lame du côté du petit doigt). */
+        final boolean tenueRetournee;
         final Entity base;
         final boolean mob;
         float yaw;
@@ -579,6 +583,7 @@ public final class Modeles {
 
         Instance(ModeleBB modele, Entity base, boolean mob, float yaw) {
             this.modele = modele;
+            this.tenueRetournee = modele.parties().stream().anyMatch(q -> TENUE_RETOURNEE.equals(q.nom()));
             this.base = base;
             this.mob = mob;
             this.yaw = yaw;
@@ -1406,8 +1411,12 @@ public final class Modeles {
                 Quaternionf rot = p.rotation();
                 if (main(a) != 0) {
                     // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main
-                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 0, -2f / 16f).mul(ech)));
-                    rot = new Quaternionf(p.rotation()).mul(TENUE);
+                    // tenue retournée (dagues de l'Assassin) : un demi-tour autour de l'avant-bras, la lame part du côté du petit doigt
+                    boolean retournee = tenueRetournee && !bouclierGauche(a);
+                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 0, (retournee ? 2f : -2f) / 16f).mul(ech)));
+                    rot = new Quaternionf(p.rotation());
+                    if (retournee) rot.rotateY((float) Math.PI);
+                    rot.mul(TENUE);
                     if (bouclierGauche(a)) {
                         // bouclier (réglage gauche identique au droit : rotation y 90°, translation (10, 6, -4)) : le jeu
                         // le retourne en (-10, 6, -4), y -90° ; un demi-tour autour de y et 8 pixels en arrière y mènent
