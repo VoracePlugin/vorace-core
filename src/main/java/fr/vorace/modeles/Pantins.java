@@ -207,12 +207,11 @@ public final class Pantins implements Listener {
         arreter(p);
         invisiblesAvant.remove(p.getUniqueId());
         p.setInvisible(false);
-        for (Player autre : p.getWorld().getPlayers()) {
-            if (autre == p) continue;
-            for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
-        }
-        if (caches != null && caches.cache(p)) caches.montrer(p);
-        else for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        // d'abord ne plus cacher le joueur dans les paquets, ensuite renvoyer son équipement (voir montrer)
+        boolean etaitCache = caches != null && caches.cache(p);
+        if (etaitCache) caches.montrer(p);
+        renvoyerEquipement(p, false);
+        if (!etaitCache) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         envoyerPaire(p);
     }
 
@@ -487,7 +486,10 @@ public final class Pantins implements Listener {
         // filet : un joueur qui n'est plus caché par son pantin revoit tout ce qu'il porte
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : Bukkit.getOnlinePlayers()) {
-                if (caches.cache(p) && !invisiblesAvant.containsKey(p.getUniqueId())) caches.montrer(p);
+                if (caches.cache(p) && !invisiblesAvant.containsKey(p.getUniqueId())) {
+                    caches.montrer(p);
+                    renvoyerEquipement(p, true);
+                }
                 // l'inventaire change aussi sans événement (mode combat, plugins) : la paire suit
                 envoyerPaire(p, false);
             }
@@ -516,13 +518,32 @@ public final class Pantins implements Listener {
         Boolean avant = invisiblesAvant.remove(p.getUniqueId());
         if (avant == null || !p.isOnline()) return;
         p.setInvisible(avant);
+        // D'abord retirer le joueur des entités cachées : les paquets d'équipement partent sur le fil réseau, où
+        // l'écoute d'ObjetsCaches vide tout ce qui concerne une entité encore cachée. Renvoyés avant, le premier
+        // (la main droite) arrivait souvent vide chez les autres et l'arme restait invisible jusqu'au changement suivant.
+        boolean etaitCache = caches != null && caches.cache(p);
+        if (etaitCache) caches.montrer(p);
+        renvoyerEquipement(p, true);
+        if (!etaitCache) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        envoyerPaire(p);
+        // filet : les deux mains encore une fois au tick suivant, si aucune animation n'a repris entre-temps
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!p.isOnline() || invisiblesAvant.containsKey(p.getUniqueId())) return;
+            for (Player autre : p.getWorld().getPlayers()) {
+                if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
+                autre.sendEquipmentChange(p, EquipmentSlot.HAND, p.getEquipment().getItem(EquipmentSlot.HAND));
+                autre.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, p.getEquipment().getItem(EquipmentSlot.OFF_HAND));
+            }
+            envoyerPaire(p);
+        }, 1L);
+    }
+
+    /** L'équipement réel du joueur, renvoyé aux autres joueurs (à 128 blocs si {@code proches}). */
+    private void renvoyerEquipement(Player p, boolean proches) {
         for (Player autre : p.getWorld().getPlayers()) {
-            if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
+            if (autre == p || proches && autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         }
-        if (caches != null && caches.cache(p)) caches.montrer(p);
-        else for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
-        envoyerPaire(p);
     }
 
     // ------------------------------------------------------------------ événements

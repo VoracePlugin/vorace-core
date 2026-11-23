@@ -4,6 +4,11 @@
 
 (La 1.5.1, branche `tenue-retournee`, est abandonnée.)
 
+- **L'arme de la main droite ne disparaît plus chez les autres joueurs après une animation** : à la fin du pantin,
+  l'équipement réel était renvoyé aux autres avant que le joueur ne soit retiré des entités cachées ; l'écoute des paquets
+  (fil réseau) vidait encore le premier envoyé, la main droite, et l'arme restait invisible pour les autres jusqu'au
+  changement suivant. Le joueur est maintenant retiré d'abord, les deux mains sont renvoyées encore une fois au tick
+  suivant, et le filet qui rattrape un joueur resté caché renvoie aussi son équipement aux autres.
 - **Pendant une animation du pantin, plus d'arme en double** : un objet à l'apparence du jeu (épée de netherite, épée de fer,
   bâton de blaze, bouclier...) n'a pas de définition de vorace-item qui lise le drapeau « caché en main » ; le joueur le voyait
   encore dans sa main (première personne et F5) en plus de celui du pantin. Sa copie prend maintenant la définition
