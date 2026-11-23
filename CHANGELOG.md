@@ -21,6 +21,8 @@
   étirée entre la main et la cible : tout le modèle, dessiné centré à `centre` blocs devant le lanceur (2 par défaut), est
   déplacé d'un bloc jusqu'à la vraie cible et à sa hauteur (`Visee.posee`). Pour ce qui se pose au sol (sceau, zone, pluie
   d'éclairs) : étiré, un cercle s'allongeait et se décalait de la cible.
+- **Double d'un joueur** : `VoraceAPI.attacherDouble(mob, joueur, modèle, animation)` habille un mob du skin, de l'armure et des
+  objets en main d'un joueur, sur un modèle au squelette du pantin (Clone d'ombre de l'Assassin : avant, un zombie coiffé de sa tête).
 
 ## 1.5.0 (novembre 2026) : apparitions visées
 

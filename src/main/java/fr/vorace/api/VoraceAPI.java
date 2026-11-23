@@ -117,6 +117,14 @@ public final class VoraceAPI {
         return plugin != null && plugin.modeles() != null && plugin.modeles().attacher(mob, id) != null;
     }
 
+    /**
+     * Un mob devient le double d'un joueur (Clone d'ombre) : son skin, son armure et ce qu'il tient, sur le modèle {@code modele} au
+     * squelette du pantin (null : celui de Vorace). Le mob devient invisible ; {@code animation} (ou null) est jouée en boucle.
+     */
+    public static boolean attacherDouble(org.bukkit.entity.LivingEntity mob, org.bukkit.entity.Player joueur, String modele, String animation) {
+        return plugin != null && plugin.pantins() != null && plugin.pantins().double_(mob, joueur, modele, animation);
+    }
+
     /** Joue une animation sur le modèle de cette entité (base posée ou mob). Faux si pas de modèle ou animation inconnue. */
     public static boolean jouerAnimation(Entity base, String animation, boolean boucle) {
         if (plugin == null || plugin.modeles() == null) return false;

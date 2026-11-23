@@ -314,6 +314,23 @@ public final class Pantins implements Listener {
         }, 2);
     }
 
+    /**
+     * Un mob devient le double de ce joueur : son skin, son armure et ce qu'il tient, sur le modèle {@code modele} (squelette du
+     * pantin ; null : celui de Vorace). Faux si le modèle manque.
+     */
+    public boolean double_(org.bukkit.entity.LivingEntity mob, Player p, String modele, String animation) {
+        Modeles m = plugin.modeles();
+        if (m == null || mob == null) return false;
+        Map<String, ItemStack> pretes = peaux.get(p.getUniqueId());
+        if (pretes == null) {
+            preparer(p);
+            pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
+        }
+        java.util.List<Map.Entry<String, ItemStack>> porte = armure(p);
+        porte.addAll(mains(p));
+        return m.attacherDouble(mob, modele == null || modele.isBlank() ? SQUELETTE : modele, new LinkedHashMap<>(pretes), porte, animation) != null;
+    }
+
     /** Arrête le pantin du joueur (fin d'une animation en boucle). */
     public void arreter(Player p) {
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);

@@ -305,6 +305,33 @@ public final class Modeles {
         i.pantin = true;
         i.proprietaire = joueur.getUniqueId();
         i.fin = fin;
+        habiller(i, m, peaux, armure);
+        instances.put(joueur.getUniqueId(), i);
+        i.demarrer(animation, boucle, false);
+        i.debutCinema(animation);
+        return true;
+    }
+
+    /**
+     * Un mob prend l'apparence d'un joueur (son skin, son armure, ses objets en main) sur un modèle au squelette du pantin : un double
+     * (Clone d'ombre). Le mob devient invisible ; le double reste immobile dans sa pose de repos, ou joue {@code animation}.
+     */
+    public Instance attacherDouble(LivingEntity mob, String id, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure, String animation) {
+        ModeleBB m = modele(id);
+        if (m == null) return null;
+        Instance ancien = instances.get(mob.getUniqueId());
+        if (ancien != null) ancien.supprimerParties();
+        mob.setInvisible(true);
+        Instance i = new Instance(m, mob, true, mob.getLocation().getYaw());
+        habiller(i, m, peaux, armure);
+        instances.put(mob.getUniqueId(), i);
+        i.reconstruire();
+        if (animation != null && i.trouver(animation) != null) i.jouer(animation, true);
+        return i;
+    }
+
+    /** Pose les morceaux de skin (os « peau_… ») et les couches d'armure ou objets tenus d'un pantin. */
+    private static void habiller(Instance i, ModeleBB m, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure) {
         for (int k = 0; k < m.parties().size(); k++) {
             String n = m.parties().get(k).nom() == null ? "" : m.parties().get(k).nom().toLowerCase(Locale.ROOT);
             if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
@@ -323,10 +350,6 @@ public final class Modeles {
                 break;
             }
         }
-        instances.put(joueur.getUniqueId(), i);
-        i.demarrer(animation, boucle, false);
-        i.debutCinema(animation);
-        return true;
     }
 
     /**
