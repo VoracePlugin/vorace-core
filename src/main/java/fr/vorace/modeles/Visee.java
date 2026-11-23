@@ -24,9 +24,13 @@ public final class Visee {
     private final float ax, az;          // l'avant du modèle dans le monde (horizontal, de longueur 1)
     private final float s0, sc;          // la main et la cible dessinée, à la taille du modèle
     private final float distance;        // la vraie cible : distance au sol depuis le lanceur
+    private final float distanceVraie;   // la même, sans minimum (mode posé)
     private final float monte;           // ce qu'il faut monter (ou descendre) pour être à sa hauteur
     private final float k;               // facteur d'allongement entre la main et la cible
     private final float taille;
+    /** Sort posé sur la cible (sceau au sol, zone, pluie d'éclairs) : tout le modèle se déplace d'un bloc, sans s'étirer. */
+    private boolean pose;
+    private float centrePose;
 
     /**
      * @param yaw      l'orientation donnée à l'apparition (voir {@link #yawVers})
@@ -42,8 +46,20 @@ public final class Visee {
         this.s0 = MAIN * taille;
         this.sc = CIBLE * taille;
         this.distance = Math.max(sc * 0.75f, distance);
+        this.distanceVraie = distance;
         this.monte = hauteur - HAUTEUR * taille;
         this.k = (this.distance - s0) / (sc - s0);
+    }
+
+    /**
+     * Mode « posé sur la cible » : le modèle, dessiné centré à {@code centre} blocs devant le lanceur (2 par défaut, la cible
+     * dessinée), est déplacé d'un seul bloc jusqu'à la vraie cible. Rien n'est étiré : un cercle au sol reste un cercle, centré
+     * sur la cible (une zone étirée entre la main et la cible s'allongeait et se décalait).
+     */
+    public Visee posee(float centre) {
+        this.pose = true;
+        this.centrePose = centre * taille;
+        return this;
     }
 
     /** L'orientation (lacet du jeu) qui tourne l'avant d'un modèle vers un point situé à (dx, dz) de lui. */
@@ -53,6 +69,10 @@ public final class Visee {
 
     /** La nouvelle place d'un point du modèle (repère du monde, autour de la base de l'apparition). */
     public Vector3f deplacer(Vector3f t) {
+        if (pose) {
+            float dd = distanceVraie - centrePose;
+            return new Vector3f(t.x + ax * dd, t.y + monte, t.z + az * dd);
+        }
         float s = t.x * ax + t.z * az;
         if (s <= s0) return new Vector3f(t);
         float s2 = s <= sc ? s0 + (s - s0) * k : distance + (s - sc);

@@ -1533,11 +1533,21 @@ public final class Modeles {
                     else for (UUID u : spectateurs) { Player j = Bukkit.getPlayer(u); if (j != null) j.spawnParticle(p, l, sp.nombre(), r, r, r, sp.vitesse(), donnees, true); }
                 }
                 case "timeline" -> {
-                    // « apparition <modèle> <animation> [taille] » : un modèle éphémère au même endroit, tourné pareil
+                    // « apparition <modèle> <animation> [taille] [posee[=centre]] » : un modèle éphémère au même endroit, tourné
+                    // pareil ; « posee » : visé, il est déplacé d'un bloc sur la cible au lieu d'être étiré jusqu'à elle (Visee.posee)
                     String[] p = e.valeur().trim().split("\\s+");
                     if (p.length < 3 || !p[0].equalsIgnoreCase("apparition")) return;
                     float t = 1f;
-                    try { if (p.length > 3) t = Float.parseFloat(p[3]); } catch (NumberFormatException ignore) { }
+                    Float centre = null;
+                    for (int k = 3; k < p.length; k++) {
+                        String x = p[k].toLowerCase(Locale.ROOT);
+                        if (x.startsWith("posee")) {
+                            centre = Visee.CIBLE;
+                            try { if (x.contains("=")) centre = Float.parseFloat(x.substring(x.indexOf('=') + 1)); } catch (NumberFormatException ignore) { }
+                        } else {
+                            try { t = Float.parseFloat(x); } catch (NumberFormatException ignore) { }
+                        }
+                    }
                     Location ici = position();
                     // le joueur vise un point : l'apparition se tourne vers lui et vole jusqu'à lui
                     float lacet = yaw;
@@ -1548,6 +1558,7 @@ public final class Modeles {
                         if (d >= 0.8) {
                             lacet = Visee.yawVers(dx, dz);
                             vers = new Visee(lacet, (float) d, (float) (cible.getY() - ici.getY()), t * taille);
+                            if (centre != null) vers.posee(centre);
                         }
                     }
                     Instance inv = apparition(p[1], ici, lacet, p[2], t * taille);

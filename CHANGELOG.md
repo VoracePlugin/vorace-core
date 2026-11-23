@@ -17,6 +17,10 @@
   l'os du poing (milieu du bas du cube de l'avant-bras), et non plus du pivot lui-même. Un pantin dont le pivot du poing est
   posé sur la poignée de l'arme (matsuri-classes 0.39.0) plie le poignet sans que la poignée sorte du poing ; un pantin au
   pivot classique (bout de l'avant-bras) ne change pas.
+- **Apparition posée sur la cible** : clé « apparition <modèle> <animation> [taille] posee[=centre] ». Visée, elle n'est plus
+  étirée entre la main et la cible : tout le modèle, dessiné centré à `centre` blocs devant le lanceur (2 par défaut), est
+  déplacé d'un bloc jusqu'à la vraie cible et à sa hauteur (`Visee.posee`). Pour ce qui se pose au sol (sceau, zone, pluie
+  d'éclairs) : étiré, un cercle s'allongeait et se décalait de la cible.
 
 ## 1.5.0 (novembre 2026) : apparitions visées
 
