@@ -222,6 +222,11 @@ public final class ObjetsCaches {
             cmd.setFlags(f);
             m.setCustomModelDataComponent(cmd);
         }
+        if (m.hasItemModel() && m.getItemModel() != null && fr.vorace.objets.GenerateurPack.NS.equals(m.getItemModel().getNamespace())
+                && m.getItemModel().getKey().startsWith(CACHE_DU_JEU)) {
+            m.setItemModel(null);   // copie « cachée en main » d'un objet du jeu revenue du client en mode créatif
+            change = true;
+        }
         if (m.hasEquippable()) {
             org.bukkit.NamespacedKey modele = m.getEquippable().getModel();
             String n = o.getType().name();
@@ -289,10 +294,58 @@ public final class ObjetsCaches {
             change = true;
         }
         if (cache) {
-            b = avecDrapeau(b, CACHE_EN_MAIN);
+            b = sansModeleDuJeu(avecDrapeau(b, CACHE_EN_MAIN));
             change = true;
         }
         return change ? versJeu.invoke(null, b) : o;
+    }
+
+    /** Dossier des définitions « caché en main » des objets du jeu (assets/vorace/items/cache_en_main/). */
+    public static final String CACHE_DU_JEU = "cache_en_main/";
+
+    /**
+     * Objet à l'apparence du jeu (épée de netherite, bouclier...) : il n'a pas de définition de vorace-item qui lise le drapeau
+     * « caché en main », le jeu le dessinerait encore dans la main du joueur pendant l'animation, en plus de celui du pantin.
+     * Sa copie prend la définition « caché en main » de Vorace (rien en main, l'icône du jeu dans l'inventaire).
+     */
+    static ItemStack sansModeleDuJeu(ItemStack o) {
+        ItemMeta m = o.getItemMeta();
+        if (m == null) return o;
+        org.bukkit.NamespacedKey modele = m.hasItemModel() ? m.getItemModel() : o.getType().getKey();
+        if (modele == null || !"minecraft".equals(modele.getNamespace())) return o;
+        org.bukkit.Material type = org.bukkit.Registry.MATERIAL.get(modele);
+        if (type == null || !objetDuJeu(type)) type = o.getType();
+        if (!objetDuJeu(type)) return o;
+        ItemStack c = o.clone();
+        ItemMeta cm = c.getItemMeta();
+        cm.setItemModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, CACHE_DU_JEU + type.getKey().getKey()));
+        c.setItemMeta(cm);
+        return c;
+    }
+
+    /** Objets du jeu qui ont leur définition « caché en main » dans le pack de Vorace (pas les blocs : leur icône est un bloc). */
+    @SuppressWarnings("deprecation")
+    public static boolean objetDuJeu(org.bukkit.Material t) {
+        return !t.isLegacy() && t.isItem() && !t.isBlock() && !t.isAir();
+    }
+
+    /** Définition « caché en main » d'un objet du jeu : son dessin dans l'inventaire, au sol, dans un cadre ; rien en main. */
+    public static byte[] definitionCachee(org.bukkit.Material t) {
+        String id = t.getKey().getKey();
+        String icone = switch (id) {
+            case "shield" -> "{\"type\":\"minecraft:special\",\"base\":\"minecraft:item/shield\",\"model\":{\"type\":\"minecraft:shield\"}}";
+            case "compass" -> modeleJeu("compass_16");
+            case "recovery_compass" -> modeleJeu("recovery_compass_16");
+            case "clock" -> modeleJeu("clock_00");
+            default -> modeleJeu(id);
+        };
+        String json = "{\"model\":{\"type\":\"minecraft:select\",\"property\":\"minecraft:display_context\",\"cases\":[{\"when\":"
+            + "[\"gui\",\"ground\",\"fixed\",\"head\"],\"model\":" + icone + "}],\"fallback\":{\"type\":\"minecraft:empty\"}}}";
+        return json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String modeleJeu(String id) {
+        return "{\"type\":\"minecraft:model\",\"model\":\"minecraft:item/" + id + "\"}";
     }
 
     /** Couleurs du bras droit du joueur (son skin) et bras fin ou non. */

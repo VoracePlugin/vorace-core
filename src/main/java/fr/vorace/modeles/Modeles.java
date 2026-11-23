@@ -179,6 +179,13 @@ public final class Modeles {
         for (ModeleBB m : modeles.values()) f.putAll(GenerateurModeles.generer(m));
         f.putAll(ArmuresPantin.generer(modele(Pantins.SQUELETTE), armuresPantin()));
         f.putAll(PeauUV.generer(modele(Pantins.SQUELETTE)));
+        // objets du jeu tenus pendant une animation du pantin : rien en main, leur icône dans l'inventaire (ObjetsCaches)
+        for (org.bukkit.Material t : org.bukkit.Material.values()) {
+            if (ObjetsCaches.objetDuJeu(t)) {
+                f.put("assets/" + fr.vorace.objets.GenerateurPack.NS + "/items/" + ObjetsCaches.CACHE_DU_JEU + t.getKey().getKey() + ".json",
+                    ObjetsCaches.definitionCachee(t));
+            }
+        }
         // case de la main gauche à côté de la barre d'objets : transparente (arme par paire montrée en F5 sans case)
         if (plugin.getConfig().getBoolean("pantin.cacher-case-main-gauche", true)) {
             for (String c : List.of("hotbar_offhand_left", "hotbar_offhand_right")) {
@@ -808,8 +815,8 @@ public final class Modeles {
             if (main == 0) return ItemDisplay.ItemDisplayTransform.NONE;
             ItemStack o = armureObjets.get(a);
             boolean paire = o.hasItemMeta() && o.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE);
-            return paire || o.getType() == org.bukkit.Material.SHIELD ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND
-                : ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
+            if (o.getType() == org.bukkit.Material.SHIELD) return ItemDisplay.ItemDisplayTransform.NONE;   // placé à la main (ECU)
+            return paire ? ItemDisplay.ItemDisplayTransform.THIRDPERSON_LEFTHAND : ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
         }
 
         private boolean bouclierGauche(int a) {
@@ -1404,16 +1411,21 @@ public final class Modeles {
                 Vector3f tr = new Vector3f(p.translation());
                 if (siege != 0f && base.equals(d.getVehicle())) tr.sub(0, siege, 0);
                 Quaternionf rot = p.rotation();
-                if (main(a) != 0) {
+                if (bouclierGauche(a)) {
+                    // bouclier sanglé à l'avant-bras gauche (comme l'écu des animations, epee.py) : la plaque à l'extérieur du
+                    // bras, son haut vers le coude, son centre 4,5 pixels à l'extérieur et 4 au-dessus du poing. Dessiné sans
+                    // réglage « en main » (NONE) : le jeu pose le modèle spécial du bouclier en (-0,5, -0,5, -0,5), retourné en
+                    // y et z ; la rotation Ry(-90°) amène sa face dehors (-x de l'os) et son haut vers le coude (+y).
+                    // (Avant la 1.5.2, le réglage gauche du bouclier était pris égal au droit ; il vaut (10, 6, 12) et non
+                    // (10, 6, -4) : la plaque flottait à 28 pixels du poing, près de 2 blocs.)
+                    float e = ech.x;
+                    rot = new Quaternionf(p.rotation()).rotateY((float) (-Math.PI / 2));
+                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(-3f / 16f, 4f / 16f, 0).mul(e)));
+                    tr.add(new Quaternionf(rot).transform(new Vector3f(0.5f, 0.5f, 0.5f).mul(e)));
+                } else if (main(a) != 0) {
                     // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main
                     tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 0, -2f / 16f).mul(ech)));
                     rot = new Quaternionf(p.rotation()).mul(TENUE);
-                    if (bouclierGauche(a)) {
-                        // bouclier (réglage gauche identique au droit : rotation y 90°, translation (10, 6, -4)) : le jeu
-                        // le retourne en (-10, 6, -4), y -90° ; un demi-tour autour de y et 8 pixels en arrière y mènent
-                        tr.add(new Quaternionf(rot).transform(new Vector3f(0, 0, -0.5f).mul(ech)));
-                        rot.rotateY((float) Math.PI);
-                    }
                 }
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {

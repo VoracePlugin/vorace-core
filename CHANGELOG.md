@@ -1,5 +1,19 @@
 # Journal des changements
 
+## 1.5.2 (novembre 2026) : objets du jeu cachés en main, bouclier sanglé
+
+(La 1.5.1, branche `tenue-retournee`, est abandonnée.)
+
+- **Pendant une animation du pantin, plus d'arme en double** : un objet à l'apparence du jeu (épée de netherite, épée de fer,
+  bâton de blaze, bouclier...) n'a pas de définition de vorace-item qui lise le drapeau « caché en main » ; le joueur le voyait
+  encore dans sa main (première personne et F5) en plus de celui du pantin. Sa copie prend maintenant la définition
+  `vorace:cache_en_main/<objet>` du pack de Vorace : rien en main, l'icône du jeu dans l'inventaire, au sol et dans un cadre.
+  Une copie revenue du client en mode créatif est réparée (modèle retiré).
+- **Bouclier dans la main gauche du pantin** : il est sanglé à l'avant-bras (plaque à l'extérieur du bras, haut vers le
+  coude, centre 4 pixels au-dessus du poing), comme l'écu des animations. Avant, le réglage « main gauche » du bouclier du jeu
+  était pris égal au réglage droit (translation (10, 6, -4)) alors qu'il vaut (10, 6, 12) : la plaque flottait à 28 pixels du
+  poing, près de 2 blocs.
+
 ## 1.5.0 (novembre 2026) : apparitions visées
 
 - **Une apparition peut viser un point** : `VoraceAPI.viser(joueur, point)` donne aux apparitions que lance le pantin de ce joueur
