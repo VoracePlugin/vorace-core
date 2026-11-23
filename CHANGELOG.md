@@ -13,6 +13,10 @@
   coude, centre 4 pixels au-dessus du poing), comme l'écu des animations. Avant, le réglage « main gauche » du bouclier du jeu
   était pris égal au réglage droit (translation (10, 6, -4)) alors qu'il vaut (10, 6, 12) : la plaque flottait à 28 pixels du
   poing, près de 2 blocs.
+- **Poignet qui tourne autour de la poignée** : l'objet tenu part maintenant du bout de l'avant-bras calculé depuis le pivot de
+  l'os du poing (milieu du bas du cube de l'avant-bras), et non plus du pivot lui-même. Un pantin dont le pivot du poing est
+  posé sur la poignée de l'arme (matsuri-classes 0.39.0) plie le poignet sans que la poignée sorte du poing ; un pantin au
+  pivot classique (bout de l'avant-bras) ne change pas.
 
 ## 1.5.0 (novembre 2026) : apparitions visées
 

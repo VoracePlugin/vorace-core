@@ -174,6 +174,21 @@ public final class Modeles {
         return ids;
     }
 
+    /**
+     * Bout de l'avant-bras (milieu du bas du cube de l'os parent) vu depuis le pivot de l'os k, en pixels du modèle. Pour un
+     * poing au pivot classique (bout de l'avant-bras), zéro ; pour un poing au pivot sur la poignée de l'arme (pantins de
+     * matsuri-classes depuis la 0.39.0), le chemin de la poignée au bout du bras.
+     */
+    static Vector3f bout(ModeleBB m, int k) {
+        ModeleBB.Partie o = m.parties().get(k);
+        if (o.parent() < 0 || o.parent() >= m.parties().size()) return new Vector3f();
+        ModeleBB.Partie pa = m.parties().get(o.parent());
+        if (pa.cubes().isEmpty() || o.pivot() == null) return new Vector3f();
+        ModeleBB.Cube c = pa.cubes().get(0);
+        double x = (c.de()[0] + c.a()[0]) / 2, y = Math.min(c.de()[1], c.a()[1]), z = (c.de()[2] + c.a()[2]) / 2;
+        return new Vector3f((float) (x - o.pivot()[0]), (float) (y - o.pivot()[1]), (float) (z - o.pivot()[2]));
+    }
+
     public Map<String, byte[]> fichiersPack() {
         Map<String, byte[]> f = new java.util.TreeMap<>();
         for (ModeleBB m : modeles.values()) f.putAll(GenerateurModeles.generer(m));
@@ -304,6 +319,7 @@ public final class Modeles {
                 i.armureOs.add(k);
                 i.armureObjets.add(c.getValue());
                 i.armureMain.add(main);
+                i.armureBout.add(bout(m, k));
                 break;
             }
         }
@@ -797,6 +813,12 @@ public final class Modeles {
         final List<ItemStack> armureObjets = new ArrayList<>();
         /** 0 : couche d'armure ; 1 : objet tenu en main droite ; 2 : en main gauche. */
         final List<Integer> armureMain = new ArrayList<>();
+        /** Bout de l'avant-bras vu depuis le pivot de l'os qui tient l'objet (pixels, repère de repos ; voir Modeles.bout). */
+        final List<Vector3f> armureBout = new ArrayList<>();
+
+        private Vector3f bout(int a) {
+            return a < armureBout.size() ? new Vector3f(armureBout.get(a)) : new Vector3f();
+        }
 
         private int main(int a) {
             return a < armureMain.size() ? armureMain.get(a) : 0;
@@ -1420,11 +1442,13 @@ public final class Modeles {
                     // (10, 6, -4) : la plaque flottait à 28 pixels du poing, près de 2 blocs.)
                     float e = ech.x;
                     rot = new Quaternionf(p.rotation()).rotateY((float) (-Math.PI / 2));
-                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(-3f / 16f, 4f / 16f, 0).mul(e)));
+                    tr.add(new Quaternionf(p.rotation()).transform(bout(a).add(-3f, 4f, 0).div(16f).mul(e)));
                     tr.add(new Quaternionf(rot).transform(new Vector3f(0.5f, 0.5f, 0.5f).mul(e)));
                 } else if (main(a) != 0) {
-                    // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main
-                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 0, -2f / 16f).mul(ech)));
+                    // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main. Le
+                    // pivot du poing peut être ailleurs que le bout de l'avant-bras (sur la poignée : le poignet tourne alors autour
+                    // de la poignée, qui reste dans le poing) : le décalage part du pivot (Modeles.bout).
+                    tr.add(new Quaternionf(p.rotation()).transform(bout(a).add(0, 0, -2f).div(16f).mul(ech)));
                     rot = new Quaternionf(p.rotation()).mul(TENUE);
                 }
                 Transformation t = new Transformation(tr, rot, ech, droite);
