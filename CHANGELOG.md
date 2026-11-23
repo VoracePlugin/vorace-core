@@ -1,5 +1,12 @@
 # Journal des changements
 
+## 1.5.3 (novembre 2026) : icônes « cachées en main » voulues
+
+- **Une icône peut garder sa définition « caché en main »** : un objet du serveur marqué `vorace:cache_en_main_voulu` (donnée
+  persistante) n'est plus « réparé » par Vorace. Matsuri Cœur 0.42.1 s'en sert pour les icônes de compétences de la barre
+  (dessinées dans la barre, rien dans la main quand on passe sur leur case) ; sans la marque, la réparation des copies du mode
+  créatif leur retirait leur modèle toutes les 2 secondes et la barre ne montrait plus que des papiers.
+
 ## 1.5.2 (novembre 2026) : objets du jeu cachés en main, bouclier sanglé
 
 (La 1.5.1, branche `tenue-retournee`, est abandonnée.)

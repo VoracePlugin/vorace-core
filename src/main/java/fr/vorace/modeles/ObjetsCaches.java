@@ -223,7 +223,7 @@ public final class ObjetsCaches {
             m.setCustomModelDataComponent(cmd);
         }
         if (m.hasItemModel() && m.getItemModel() != null && fr.vorace.objets.GenerateurPack.NS.equals(m.getItemModel().getNamespace())
-                && m.getItemModel().getKey().startsWith(CACHE_DU_JEU)) {
+                && m.getItemModel().getKey().startsWith(CACHE_DU_JEU) && !m.getPersistentDataContainer().has(CACHE_VOULU)) {
             m.setItemModel(null);   // copie « cachée en main » d'un objet du jeu revenue du client en mode créatif
             change = true;
         }
@@ -299,6 +299,13 @@ public final class ObjetsCaches {
         }
         return change ? versJeu.invoke(null, b) : o;
     }
+
+    /**
+     * Marque d'un objet du serveur qui porte volontairement une définition « caché en main » (icônes de compétences de Matsuri
+     * Cœur : dessinées dans la barre, rien en main) : la réparation la lui laisse. Sans elle, l'objet redevenait son objet de base
+     * toutes les 2 secondes (des papiers dans la barre).
+     */
+    public static final org.bukkit.NamespacedKey CACHE_VOULU = new org.bukkit.NamespacedKey("vorace", "cache_en_main_voulu");
 
     /** Dossier des définitions « caché en main » des objets du jeu (assets/vorace/items/cache_en_main/). */
     public static final String CACHE_DU_JEU = "cache_en_main/";
