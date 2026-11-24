@@ -1,5 +1,13 @@
 # Journal des changements
 
+## 1.5.4 (novembre 2026) : ranger les modèles animés dans des dossiers
+
+- **Un modèle animé s'appelle par le nom de son fichier, quel que soit son dossier** : on peut ranger
+  `plugins/Vorace/modeles-animes/` en sous-dossiers (par exemple `classes/mage/mage.bbmodel`), le modèle s'appelle toujours
+  `mage`. Avant, il s'appelait `classes/mage/mage` et les plugins qui le demandaient par son nom ne le trouvaient plus.
+- L'ancien nom par chemin marche toujours (`modelengine/…`, mobs déjà posés).
+- Si deux fichiers portent le même nom dans deux dossiers, chacun garde son chemin comme nom et la console le signale.
+
 ## 1.5.3 (novembre 2026) : icônes « cachées en main » voulues
 
 - **Une icône peut garder sa définition « caché en main »** : un objet du serveur marqué `vorace:cache_en_main_voulu` (donnée

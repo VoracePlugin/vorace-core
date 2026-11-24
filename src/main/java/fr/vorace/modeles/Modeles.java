@@ -111,6 +111,8 @@ public final class Modeles {
     /** Mode de jeu du joueur avant une caméra de cinéma (remis à sa connexion si le serveur s'est arrêté pendant). */
     public static final String CLE_CAMERA = "camera_mode";
     private volatile Map<String, ModeleBB> modeles = Map.of();
+    /** Ancien identifiant (chemin dans le dossier, « classes/mage/mage ») → identifiant (nom du fichier, « mage »). */
+    private volatile Map<String, String> alias = Map.of();
     private final Map<UUID, Instance> instances = new LinkedHashMap<>();
     /** Ce que vise chaque joueur (point du monde, heure limite) : ses prochaines apparitions volent jusque-là. */
     private final Map<UUID, Object[]> visees = new HashMap<>();
@@ -129,8 +131,21 @@ public final class Modeles {
     }
 
     public Path dossier() { return plugin.getDataFolder().toPath().resolve("modeles-animes"); }
+
+    /** Nom d'un modèle d'après son seul nom de fichier (sans dossier ni extension). */
+    private static String nomCourt(Path p) {
+        String f = p.getFileName().toString();
+        return f.substring(0, f.length() - ".bbmodel".length()).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
+    }
     public Collection<ModeleBB> tous() { return modeles.values(); }
-    public ModeleBB modele(String id) { return id == null ? null : modeles.get(id.toLowerCase(Locale.ROOT)); }
+    public ModeleBB modele(String id) {
+        if (id == null) return null;
+        String k = id.toLowerCase(Locale.ROOT);
+        ModeleBB m = modeles.get(k);
+        if (m != null) return m;
+        String a = alias.get(k);
+        return a == null ? null : modeles.get(a);
+    }
     public Collection<Instance> instances() { return instances.values(); }
     public long tics() { return tic; }
     public boolean actif() { return tache != null && !tache.isCancelled(); }
@@ -149,16 +164,27 @@ public final class Modeles {
         } catch (IOException e) {
             fichiers = List.of();
         }
+        // Les sous-dossiers servent à ranger : un modèle s'appelle par le nom de son fichier, quel que soit son dossier
+        // (modeles-animes/classes/mage/mage.bbmodel s'appelle « mage »). Si deux fichiers portent le même nom, chacun garde son
+        // chemin comme nom (« classes/mage/mage ») et la console le signale. L'ancien nom par chemin marche toujours.
+        Map<String, Integer> parNom = new HashMap<>();
+        for (Path p : fichiers) parNom.merge(nomCourt(p), 1, Integer::sum);
+        Map<String, String> nouveauxAlias = new HashMap<>();
         for (Path p : fichiers) {
             String nom = dossier().relativize(p).toString().replace('\\', '/');
-            String id = nom.substring(0, nom.length() - ".bbmodel".length()).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_");
+            String chemin = nom.substring(0, nom.length() - ".bbmodel".length()).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_");
+            String court = nomCourt(p);
+            String id = parNom.getOrDefault(court, 0) == 1 ? court : chemin;
+            if (!id.equals(court) && chemin.contains("/")) problemes.add(nom + " : un autre modèle s'appelle aussi « " + court + " », celui-ci s'appelle « " + chemin + " »");
             try {
                 ModeleBB m = LecteurBBModel.lire(id, Files.readString(p, StandardCharsets.UTF_8), problemes);
                 lus.put(id, m);
+                if (!id.equals(chemin)) nouveauxAlias.put(chemin, id);
             } catch (Exception e) {
                 problemes.add(nom + " : fichier illisible (" + e.getMessage() + ")");
             }
         }
+        alias = nouveauxAlias;
         modeles = lus;
         problemes.forEach(m -> plugin.getLogger().warning("Modèles animés : " + m));
         plugin.getLogger().info(lus.size() + " modèle(s) animé(s) chargé(s)");

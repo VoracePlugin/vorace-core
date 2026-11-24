@@ -165,6 +165,8 @@ Mets tes projets Blockbench (`.bbmodel`, format « Modèle générique », l'ava
 dans `plugins/Vorace/modeles-animes/`. Rien d'autre à faire : Vorace lit les os, les cubes, les textures
 intégrées et les animations, et fabrique le pack tout seul. Exemple créé au premier démarrage : `golem_rubis`
 (animations repos, marche, attaque, salut, degat, mort).
+Tu peux ranger ce dossier en sous-dossiers (`classes/mage/…`, `mobs/…`) : un modèle s'appelle toujours par le nom de son
+fichier, sans le dossier. Deux fichiers du même nom dans deux dossiers gardent chacun leur chemin comme nom.
 
 - **Modèles posés** : `/vorace modele poser golem_rubis [animation]`, sauvegardés avec le monde, avec une hitbox
   à la taille du modèle. Clic droit dessus : animation `clic` (ou `interact`) si elle existe.
