@@ -268,6 +268,15 @@ public final class VoraceAPI {
     }
 
     /**
+     * Comme {@link #arreterJoueur(Player)}, en douceur : le pantin revient d'abord à la pose du vrai joueur (corps tourné
+     * comme le sien, bras comme le jeu les met), puis disparaît sans saut. Pour la fin d'une animation en boucle ; avant
+     * une téléportation, utiliser {@link #arreterJoueur(Player)} (le pantin reste encore quelques tics).
+     */
+    public static void relacherJoueur(Player joueur) {
+        if (plugin != null && plugin.pantins() != null) plugin.pantins().relacher(joueur);
+    }
+
+    /**
      * Réaction d'un monstre à une compétence (« saisi », « plaque », « souleve », « projete », « repousse »,
      * « etourdi », « resiste ») : son modèle animé la joue s'il l'a. Faux si l'entité n'a pas de modèle ou pas cette
      * animation (le plugin appelant garde alors son effet générique).

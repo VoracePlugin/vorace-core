@@ -335,6 +335,11 @@ public final class Pantins implements Listener {
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
     }
 
+    /** Arrête le pantin du joueur en douceur : retour à la pose du vrai joueur, puis échange sans saut. */
+    public void relacher(Player p) {
+        if (plugin.modeles() != null) plugin.modeles().relacherJoueur(p);
+    }
+
     /** @param boucle animation répétée jusqu'à {@link #arreter(Player)} (Reprise de souffle) */
     public boolean jouer(Player p, String modele, String animation, boolean boucle) {
         Modeles m = plugin.modeles();

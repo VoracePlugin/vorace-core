@@ -119,6 +119,11 @@ pantin:
   # « spectateur » : caméra fluide, sans barre d'objets ni interface (cinématique). « monture » : le joueur monte sur
   # un support invisible et garde sa barre d'objets, mais la caméra est moins fluide.
   camera-mode: spectateur
+  # Fin d'une animation : le pantin garde sa dernière pose ce temps-là (le coup suivant d'un combo reprend le même
+  # pantin), puis revient en douceur à la pose que le jeu donne au vrai joueur (corps tourné comme le sien, bras le long
+  # du corps ou levé s'il tient un objet) avant l'échange : plus de saut vers le skin de base. 0 : échange immédiat.
+  pause-fin-secondes: 0.1
+  retour-secondes: 0.25
   # Objets tenus (arme, bouclier, arme de poing par paire) dans les mains du pantin, placés comme le jeu les tient.
   objets-en-main: true
   # Pendant l'animation, chez le joueur lui-même : plus d'armure sur son corps invisible (F5) ni d'objets en main (ils

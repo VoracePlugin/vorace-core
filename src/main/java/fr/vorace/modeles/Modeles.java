@@ -69,6 +69,8 @@ public final class Modeles {
     private final NamespacedKey clePose, cleMob, clePartie, cleTaille;
     /** Réglages (config.yml, section modeles). */
     private int intervalle = 2, distance = 48, fonduTics = 4;
+    /** Pantin d'un joueur : dernière pose gardée, puis retour à la pose du joueur du jeu avant l'échange (tics). */
+    private int pauseFinTics = 2, sortieTics = 5;
     private boolean teinteDegats = true, suiviTete = true, effetsActifs = true;
     /** Pantin des joueurs : rotation (degrés) et décalage vertical (blocs) des têtes de joueur qui portent le skin. */
     private float peauRotationY = 0f, peauDecalageY = 0.25f;
@@ -290,6 +292,17 @@ public final class Modeles {
      */
     public boolean animerJoueur(Player joueur, String id, String animation, Map<String, ItemStack> peaux, Runnable fin) {
         return animerJoueur(joueur, id, animation, false, peaux, fin);
+    }
+
+    /**
+     * Comme {@link #arreterJoueur}, mais en douceur : le pantin revient d'abord à la pose du joueur du jeu (corps tourné
+     * comme le sien, bras le long du corps ou objet tenu), puis l'échange se fait sans saut. Pas avant une téléportation :
+     * le pantin reste encore quelques tics.
+     */
+    public void relacherJoueur(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin) return;
+        if (!i.commencerRetour()) arreterJoueur(joueur);
     }
 
     /** Arrête l'animation du pantin du joueur (animation en boucle : Reprise de souffle) ; il disparaît. */
@@ -546,6 +559,8 @@ public final class Modeles {
             peauRotationY = (float) plugin.getConfig().getDouble("pantin.correction.rotation-y", 0);
             peauDecalageY = (float) plugin.getConfig().getDouble("pantin.correction.decalage-y", 0.25);
             pantinMonte = plugin.getConfig().getBoolean("pantin.monter-sur-le-joueur", true);
+            pauseFinTics = (int) Math.round(Math.max(0, Math.min(1, plugin.getConfig().getDouble("pantin.pause-fin-secondes", 0.1))) * 20);
+            sortieTics = (int) Math.round(Math.max(0, Math.min(1, plugin.getConfig().getDouble("pantin.retour-secondes", 0.25))) * 20);
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
             cameraCinema = plugin.getConfig().getBoolean("pantin.camera-ultimes", true);
@@ -631,6 +646,13 @@ public final class Modeles {
         private Pose[] dernieresPoses;
         /** Regard imposé par l'API (degrés, par rapport au corps) ; NaN = celui du mob. */
         private float regardYaw = Float.NaN, regardPitch = Float.NaN;
+        /**
+         * Pantin d'un joueur, après sa dernière animation : retour en fondu vers la pose que le jeu donne au vrai joueur
+         * (tic de début ; -1 = aucun), depuis la pose où l'animation s'est arrêtée.
+         */
+        private long debutRetour = -1;
+        private Animation retourAnim;
+        private double retourTemps;
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
         UUID proprietaire;
@@ -1237,6 +1259,7 @@ public final class Modeles {
             forceeBoucle = boucle;
             forceePartielle = dessus;
             debutForcee = tic;
+            debutRetour = -1;  // coup suivant d'un combo pendant le retour : il reprend, en fondu
             if (!mob) memoriser();
             return true;
         }
@@ -1246,6 +1269,48 @@ public final class Modeles {
             forcee = null;
             forceePartielle = false;
             if (!mob) memoriser();
+        }
+
+        /**
+         * Pantin d'un joueur : son animation s'arrête là où elle en est et le retour vers la pose du vrai joueur commence
+         * (pas pendant une caméra de cinéma, qui rend déjà le joueur à sa place). Faux s'il n'y a pas de retour : le
+         * pantin disparaîtra directement.
+         */
+        boolean commencerRetour() {
+            if (debutRetour >= 0) return true;
+            Animation a = forcee == null ? null : modele.animations().get(forcee);
+            boolean possible = a != null && pantin && base instanceof Player && ancre == null && sortieTics > 0 && !forceePartielle;
+            if (possible) {
+                retourAnim = a;
+                retourTemps = forceeBoucle ? tempsPiste(a, debutForcee, true) : Math.min(a.duree(), (tic - debutForcee) / 20.0);
+                debutRetour = tic;
+            }
+            forcee = null;
+            return possible;
+        }
+
+        /**
+         * Pose que le jeu donne au vrai joueur debout, pour que l'échange pantin → joueur ne se voie pas : bras le long du
+         * corps, et levé de 18° vers l'avant quand sa main tient un objet (comme le jeu ; main gauche des gauchers comprise).
+         */
+        private Animation poseDuJeu() {
+            Map<String, ModeleBB.Canaux> os = new HashMap<>();
+            if (base instanceof Player p) {
+                boolean droitier = p.getMainHand() == org.bukkit.inventory.MainHand.RIGHT;
+                ItemStack principale = p.getInventory().getItemInMainHand(), seconde = p.getInventory().getItemInOffHand();
+                ItemStack droite = droitier ? principale : seconde, gauche = droitier ? seconde : principale;
+                if (droite != null && !droite.getType().isAir()) leverBras(os, "peau_bras_droit_haut");
+                if (gauche != null && !gauche.getType().isAir()) leverBras(os, "peau_bras_gauche_haut");
+            }
+            return new Animation("vorace:pose_du_jeu", 0, "once", os);
+        }
+
+        private void leverBras(Map<String, ModeleBB.Canaux> os, String nom) {
+            for (ModeleBB.Partie pa : modele.parties()) {
+                if (!nom.equals(pa.nom()) || pa.uuid() == null) continue;
+                // conventions de Blockbench : x négatif lève le bras vers l'avant (le jeu : -π/10)
+                os.put(pa.uuid(), new ModeleBB.Canaux(List.of(), List.of(new ModeleBB.Cle(0, -18, 0, 0, "linear")), List.of()));
+            }
         }
 
         /** Joue une animation automatique (dégâts, attaque...) si le modèle l'a. */
@@ -1386,12 +1451,29 @@ public final class Modeles {
                     forcee = null;
                 } else if (!forceeBoucle && !fa.boucle().equals("loop") && tf >= fa.duree()) {
                     if (mort) return false;
-                    // pantin : garde la dernière pose 0,25 s (le coup suivant d'un combo reprend le même pantin)
-                    if (pantin && tf < fa.duree() + 0.25) { /* attend */ }
-                    else if (!fa.boucle().equals("hold") || forceePartielle || pantin) forcee = null;
+                    // pantin : garde un instant la dernière pose (le coup suivant d'un combo reprend le même pantin),
+                    // puis revient à la pose du vrai joueur avant de disparaître
+                    if (pantin && tf < fa.duree() + pauseFinTics / 20.0) { /* attend */ }
+                    else if (pantin) commencerRetour();
+                    else if (!fa.boucle().equals("hold") || forceePartielle) forcee = null;
                 }
             }
-            if (pantin && forcee == null) return false;  // fin de l'animation du joueur : le pantin disparaît
+            boolean retour = pantin && forcee == null && debutRetour >= 0;
+            // fin de l'animation du joueur : le pantin disparaît (après le retour à la pose du jeu)
+            if (pantin && forcee == null && (!retour || tic - debutRetour >= sortieTics + intervalle)) return false;
+            if (retour) {
+                // le corps du pantin tourne vers celui du vrai joueur (le jeu le fait tourner en retard sur le regard),
+                // la tête continue de regarder où regarde le joueur
+                float w = lisse(Math.min(1f, (tic - debutRetour + 1) / (float) Math.max(1, sortieTics)));
+                float regard = l.getYaw();
+                yaw = regard + enDegres(corps((LivingEntity) base) - regard) * w;
+                if (suiviTete && Float.isNaN(regardYaw)) teteYaw = limiter(enDegres(regard - yaw), 75);
+                List<Animateur.Couche> couches = List.of(new Animateur.Couche(retourAnim, retourTemps, 1f, false),
+                    new Animateur.Couche(poseDuJeu(), 0, w, false));
+                Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
+                dessiner(poses, intervalle);
+                return true;
+            }
 
             // animation complète (demandée ou automatique), avec fondu depuis la précédente
             String pNom = forcee != null && !forceePartielle ? forcee : auto;
@@ -1414,9 +1496,16 @@ public final class Modeles {
             double tp = tempsPiste(pa, debutPleine, pleineBoucle);
             float poids = 1f;
             if (tic - debutFondu < fonduTics) {
-                Animation aa = avant == null ? null : modele.animations().get(avant);
+                // pantin d'un joueur qui apparaît : il part de la pose que le jeu donnait au vrai joueur
+                Animation aa = avant == null ? (pantin && base instanceof Player ? poseDuJeu() : null) : modele.animations().get(avant);
                 couches.add(new Animateur.Couche(aa, tempsPiste(aa, debutAvant, avantBoucle), 1f, false));
                 poids = (tic - debutFondu) / (float) fonduTics;
+                if (avant == null && pantin && base instanceof Player && ancre == null) {
+                    // le corps part de l'orientation du vrai joueur (en retard sur son regard) et tourne vers le regard
+                    float regard = l.getYaw(), c = corps((LivingEntity) base);
+                    yaw = c + enDegres(regard - c) * lisse(poids);
+                    if (suiviTete && Float.isNaN(regardYaw)) teteYaw = limiter(enDegres(regard - yaw), 75);
+                }
             }
             couches.add(new Animateur.Couche(pa, tp, poids, false));
 
@@ -1442,6 +1531,12 @@ public final class Modeles {
 
             Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
             if (visee != null) poses = visee.appliquer(modele, poses);
+            dessiner(poses, intervalle);
+            return true;
+        }
+
+        /** Envoie une image du modèle : parties, couches d'armure et objets tenus, étiquettes. */
+        private void dessiner(Pose[] poses, int intervalle) {
             dernieresPoses = poses;
             teteProprietaire(poses);
             majCamera();
@@ -1510,8 +1605,7 @@ public final class Modeles {
                 d.setInterpolationDuration(intervalle);
                 d.setTransformation(t);
             }
-            if (aEtiquettes) etiquettes(poses, l, intervalle);
-            return true;
+            if (aEtiquettes) etiquettes(poses, position(), intervalle);
         }
 
         /**
@@ -1665,6 +1759,12 @@ public final class Modeles {
 
     private static float limiter(float v, float max) {
         return Math.max(-max, Math.min(max, v));
+    }
+
+    /** Courbe douce de 0 à 1 (départ et arrivée sans à-coup). */
+    static float lisse(float x) {
+        x = Math.max(0f, Math.min(1f, x));
+        return x * x * (3 - 2 * x);
     }
 
     /** Angle ramené entre -180 et 180. */

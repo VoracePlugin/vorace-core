@@ -1,5 +1,20 @@
 # Journal des changements
 
+## 1.5.5 (novembre 2026) : fin d'animation sans saut vers le joueur
+
+- **Le pantin revient à la pose du vrai joueur avant l'échange** : après sa dernière pose (gardée 0,1 s pour enchaîner un
+  combo), il glisse en 0,25 s vers la pose que le jeu donne au joueur, puis l'échange se fait. Plus de « retour au skin de
+  base » d'un coup à la fin d'une animation.
+- **Le corps tourne comme celui du jeu** : le jeu fait tourner le corps du joueur en retard sur son regard ; le pantin part de
+  cette orientation au début de l'animation et y revient à la fin, la tête continuant de regarder où regarde le joueur. Le
+  torse ne pivote plus au moment de l'échange.
+- **Bras comme le jeu les met** : le bras qui tient un objet est levé de 18° vers l'avant, comme sur le vrai joueur (main
+  gauche des gauchers comprise), au départ comme au retour.
+- Le coup suivant d'un combo lancé pendant le retour reprend le même pantin, en fondu.
+- Nouveaux réglages `pantin.pause-fin-secondes` (0,1) et `pantin.retour-secondes` (0,25 ; 0 = échange immédiat comme avant).
+- API : `VoraceAPI.relacherJoueur(joueur)` arrête une animation en boucle en douceur (`arreterJoueur` reste immédiat, à
+  garder avant une téléportation).
+
 ## 1.5.4 (novembre 2026) : ranger les modèles animés dans des dossiers
 
 - **Un modèle animé s'appelle par le nom de son fichier, quel que soit son dossier** : on peut ranger
