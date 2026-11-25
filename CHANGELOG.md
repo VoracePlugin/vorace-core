@@ -1,5 +1,35 @@
 # Journal des changements
 
+## 1.6.0 (novembre 2026) : pantin permanent, corps fantôme, armures en volume
+
+- **Pantin permanent** (`pantin.permanent.actif`, ou `/vorace pantin permanent on`) : le joueur est remplacé tout le temps
+  par son pantin. Il joue de lui-même le repos, la marche, la course, le recul, les pas de côté, l'accroupi, le saut, la
+  chute, la nage, l'échelle, assis et couché ; par-dessus, les gestes du bras (frapper, poser, miner), manger, viser à l'arc
+  ou à l'arbalète, le bouclier, le trident, la longue-vue, et un sursaut aux coups reçus. Les compétences se jouent sur le
+  même pantin, qui revient ensuite à ses mouvements. Entre deux compétences, son corps tourne comme celui du jeu (en retard
+  sur le regard, la tête suit). Retiré en spectateur, sous une vraie potion d'invisibilité et à la mort, remis tout seul.
+- **Modèle des mouvements** `modeles-animes/pantin_mouvements.bbmodel` (installé s'il manque, généré par
+  `outils/mouvements-pantin.py`) : ses animations sont prêtées à tout modèle au squelette du joueur (les modèles des
+  classes) par le nom des os ; un modèle qui a sa propre « marche » garde la sienne. Postures : « marche_combat »,
+  « repos_blesse »... sont prises à la place de « marche », « repos » quand la posture est donnée (API, commande).
+- **Corps fantôme** : le vrai joueur n'est plus invisible pour le serveur (les monstres de vorace-mob ignoraient un joueur
+  invisible) mais seulement dans les paquets. Chez lui, une équipe qui ne contient que lui le fait dessiner en fantôme ; le
+  shader du pack le rend opaque dans les menus (il se voit dans son inventaire, armure comprise) et l'efface dans le monde.
+  Les dessins d'armure portée du pack sont marqués (opacité 253) pour n'être dessinés sur le vrai joueur que dans les menus.
+  Avec un pack de shaders Iris ou OptiFine, le fantôme reste semi-transparent (`pantin.fantome.equipe-soi: false` le coupe).
+- **Montures par paquets** (`pantin.monter-par-paquets`) : les morceaux du pantin ne sont passagers du joueur que chez les
+  clients ; les téléportations des plugins ne sont plus bloquées et les déplacements des morceaux ne sont plus envoyés.
+- **Réseau** : au-delà de `pantin.permanent.distance` (48), un joueur ne reçoit plus les morceaux du pantin et voit le joueur
+  du jeu (corps et équipement rendus chez lui seul) ; quand personne n'est tout près, les morceaux sont mis à jour moins
+  souvent (la copie pour soi reste à chaque tic).
+- **Armures** : objets portés sur la tête (casque 3D de vorace-item, citrouille, tête) posés sur la tête du pantin comme le
+  jeu le fait ; armures en volume tirées d'un .bbmodel (`pantin.armures-3d`, groupes « casque », « plastron »,
+  « jambieres », « bottes »).
+- Essai : `pantin.soi-tourne-avec-la-camera` (copie pour soi en billboard, plus de retard en tournant à la 1re personne).
+- Commandes : `/vorace pantin permanent on|off`, `posture <posture|aucune> [joueur]`, `modele <modèle> [joueur]`.
+- API : `pantinPermanentActif`, `pantinPermanent`, `modelePantin`, `posturePantin`, `autoriserPantin`. `arreterJoueur` et
+  `relacherJoueur` n'arrêtent que l'animation d'un pantin permanent.
+
 ## 1.5.5 (novembre 2026) : fin d'animation sans saut vers le joueur
 
 - **Le pantin revient à la pose du vrai joueur avant l'échange** : après sa dernière pose (gardée 0,1 s pour enchaîner un
