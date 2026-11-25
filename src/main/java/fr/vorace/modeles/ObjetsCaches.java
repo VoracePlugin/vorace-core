@@ -123,6 +123,12 @@ public final class ObjetsCaches {
     }
 
     private volatile boolean garderArmureSoi;
+    /** Pantin permanent : (entité, joueur qui regarde) → ce joueur est trop loin et voit le joueur du jeu, équipement compris. */
+    private volatile java.util.function.BiPredicate<Integer, Player> lointain = (e, j) -> false;
+
+    public void lointain(java.util.function.BiPredicate<Integer, Player> l) {
+        lointain = l == null ? (e, j) -> false : l;
+    }
 
     /** Corps fantôme : l'armure reste envoyée telle quelle au joueur pendant une animation (visible dans son inventaire). */
     public void garderArmureSoi(boolean oui) {
@@ -454,7 +460,7 @@ public final class ObjetsCaches {
     private void equipement(Paquet p, Player voit) throws ReflectiveOperationException {
         int id = (int) p.lire("entity");
         boolean soi = id == voit.getEntityId();
-        boolean cacheAutres = !soi && entitesCachees.contains(id);
+        boolean cacheAutres = !soi && entitesCachees.contains(id) && !lointain.test(id, voit);
         boolean cacheSoi = soi && cachesSoi.contains(voit.getUniqueId());
         Object paire = cacheAutres || cacheSoi ? null : soi ? pairesSoi.get(voit.getUniqueId()) : pairesEntites.get(id);
         if (!cacheAutres && !cacheSoi && paire == null) return;

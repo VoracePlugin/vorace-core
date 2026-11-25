@@ -366,6 +366,8 @@ public final class Pantins implements Listener {
             pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
         }
         java.util.List<Map.Entry<String, ItemStack>> porte = tenue(p);
+        // pantin permanent : il garde le modèle de la dernière compétence (sa classe), sans revenir au squelette entre deux
+        if (permanent(p) && modele != null && !modele.isBlank()) modelesPermanents.put(p.getUniqueId(), modele);
         boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
             porte, () -> montrer(p));
         if (ok) cacher(p);
@@ -466,6 +468,7 @@ public final class Pantins implements Listener {
     /** Retire le pantin permanent du joueur : il redevient le joueur du jeu. */
     public void lacher(Player p) {
         if (!permanents.remove(p.getUniqueId())) return;
+        lointains.remove(p.getEntityId());
         gestes.remove(p.getUniqueId());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
         montrerTout(p);
@@ -514,6 +517,26 @@ public final class Pantins implements Listener {
         if (actuel != null) m.finGesteJoueur(p, actuel);
         if (voulu != null && m.gesteJoueur(p, voulu, true)) gestes.put(p.getUniqueId(), voulu);
         else gestes.remove(p.getUniqueId());
+    }
+
+    /** Pantin permanent : numéro d'entité du joueur → joueurs trop loin, qui voient le joueur du jeu (sans ses morceaux). */
+    private final Map<Integer, java.util.Set<UUID>> lointains = new ConcurrentHashMap<>();
+
+    /** Ce joueur ({@code voit}) voit-il le joueur du jeu à la place du pantin de l'entité {@code entite} ? (fil réseau) */
+    public boolean lointain(int entite, Player voit) {
+        java.util.Set<UUID> l = voit == null ? null : lointains.get(entite);
+        return l != null && l.contains(voit.getUniqueId());
+    }
+
+    /** Appelé par le pantin quand {@code voit} passe au-delà (ou revient en deçà) de pantin.permanent.distance. */
+    void lointain(Player p, Player voit, boolean loin) {
+        java.util.Set<UUID> l = lointains.computeIfAbsent(p.getEntityId(), k -> ConcurrentHashMap.newKeySet());
+        if (loin) l.add(voit.getUniqueId());
+        else l.remove(voit.getUniqueId());
+        // chez lui seulement : le joueur du jeu (visible, son équipement) ou rien (le pantin)
+        if (fantomes != null && fantomes.actif()) fantomes.envoyerDrapeaux(p, voit);
+        ItemStack vide = new ItemStack(Material.AIR);
+        for (EquipmentSlot e : EMPLACEMENTS) voit.sendEquipmentChange(p, e, loin ? p.getEquipment().getItem(e) : vide);
     }
 
     /** Coup de bras (frapper, poser, miner) : le geste par-dessus les mouvements. */
@@ -697,6 +720,7 @@ public final class Pantins implements Listener {
     public void brancherObjetsCaches() {
         if (plugin.getConfig().getBoolean("pantin.fantome.actif", true)) {
             Fantomes f = new Fantomes(plugin);
+            f.lointain(this::lointain);
             if (f.demarrer()) fantomes = f;
         }
         if (plugin.getConfig().getBoolean("pantin.monter-par-paquets", true)) {
@@ -707,6 +731,7 @@ public final class Pantins implements Listener {
         ObjetsCaches c = new ObjetsCaches(plugin);
         if (!c.demarrer()) return;
         c.garderArmureSoi(armureInventaire());
+        c.lointain(this::lointain);
         caches = c;
         // filet : un joueur qui n'est plus caché par son pantin revoit tout ce qu'il porte
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {

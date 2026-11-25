@@ -65,6 +65,13 @@ public final class Fantomes implements Listener {
         this.plugin = plugin;
     }
 
+    /** Pantin permanent : (entité, joueur qui regarde) → ce joueur est trop loin et voit le joueur du jeu. */
+    private volatile java.util.function.BiPredicate<Integer, Player> lointain = (e, j) -> false;
+
+    public void lointain(java.util.function.BiPredicate<Integer, Player> l) {
+        lointain = l == null ? (e, j) -> false : l;
+    }
+
     /** Branche les écoutes ; faux si la couche paquets manque ou si les classes du jeu ne sont pas celles attendues. */
     public boolean demarrer() {
         if (plugin.paquets() == null) return false;
@@ -151,7 +158,7 @@ public final class Fantomes implements Listener {
     void envoyerDrapeaux(Player p, Player a) {
         try {
             byte d = drapeaux(p);
-            if (caches.containsKey(p.getEntityId())) d |= INVISIBLE;
+            if (caches.containsKey(p.getEntityId()) && (a == p || !lointain.test(p.getEntityId(), a))) d |= INVISIBLE;
             Object valeur = creerValeur.invoke(null, accesseurDrapeaux, d);
             plugin.paquets().envoyer(a, paquetDonnees.newInstance(p.getEntityId(), List.of(valeur)), false);
         } catch (ReflectiveOperationException | RuntimeException e) {
@@ -231,6 +238,9 @@ public final class Fantomes implements Listener {
         Object id = p.lire("id");
         Player cache = id instanceof Integer n ? caches.get(n) : null;
         if (cache == null) return;
+        // pantin permanent trop loin de ce joueur : il voit le joueur du jeu
+        Player voit = p.joueur();
+        if (voit != null && voit != cache && lointain.test(cache.getEntityId(), voit)) return;
         List<?> valeurs = (List<?>) p.lire("packedItems");
         if (valeurs == null) return;
         List<Object> nouvelles = null;

@@ -713,7 +713,10 @@ public final class Modeles {
         Map<World, List<Player>> joueurs = new HashMap<>();
         for (Instance i : new ArrayList<>(instances.values())) {
             try {
-                if (verifier || i.distanceJoueur < 0) i.verifierDistance(joueurs);
+                if (verifier || i.distanceJoueur < 0) {
+                    i.verifierDistance(joueurs);
+                    if (i.permanent) i.distancesPantin(false);
+                }
                 if (i.endormi) {
                     // personne ne regarde : aucune entité d'affichage, aucun calcul ; seulement la fin du modèle
                     if (i.fixe != null || !i.base.isValid() || i.base.isDead() || (i.pantin && !i.permanent && i.forcee == null)) {
@@ -796,6 +799,60 @@ public final class Modeles {
         Runnable apresAnimation;
         /** Pantin permanent : posture qui choisit les variantes des mouvements (« marche_combat »...). */
         String posture;
+        /**
+         * Pantin permanent : tics entre deux images de ses morceaux vus par les autres (1 : quelqu'un tout près ; plus loin,
+         * moins souvent, le jeu adoucit entre deux images). Sa copie pour lui-même reste à chaque tic.
+         */
+        int ivAutres = 1;
+        private boolean imageAutres = true;
+        /** Pantin permanent : joueurs trop loin, qui voient le joueur du jeu à la place de ses morceaux. */
+        private final java.util.Set<UUID> loinDe = new java.util.HashSet<>();
+
+        private int ivAutres(int intervalle) {
+            return permanent ? Math.max(intervalle, ivAutres) : intervalle;
+        }
+
+        /** Morceaux vus par les autres (pas la copie pour soi). */
+        private List<Display> morceauxAutres() {
+            List<Display> l = new ArrayList<>(parties.length + armures.length);
+            for (ItemDisplay d : parties) if (d != null && d.isValid()) l.add(d);
+            for (ItemDisplay d : armures) if (d != null && d.isValid()) l.add(d);
+            return l;
+        }
+
+        /**
+         * Pantin permanent, toutes les demi-secondes : au-delà de pantin.permanent.distance, un joueur ne reçoit plus les
+         * morceaux du pantin et voit le joueur du jeu (son équipement et lui rendus chez ce seul joueur : Pantins.lointain) ;
+         * le rythme des images suit la distance du plus proche des autres.
+         */
+        void distancesPantin(boolean refait) {
+            if (!permanent || proprietaire == null || endormi) return;
+            Player soi = Bukkit.getPlayer(proprietaire);
+            if (soi == null) return;
+            if (refait) loinDe.clear();   // morceaux refaits : visibles de tous par défaut
+            Location l = position();
+            double seuil = plugin.getConfig().getDouble("pantin.permanent.distance", 48);
+            double plusPres = Double.MAX_VALUE;
+            List<Display> morceaux = null;
+            Pantins pa = plugin.pantins();
+            for (Player j : l.getWorld().getPlayers()) {
+                if (j.getUniqueId().equals(proprietaire)) continue;
+                double d = j.getLocation().distance(l);
+                plusPres = Math.min(plusPres, d);
+                boolean loin = seuil > 0 && d > seuil + (loinDe.contains(j.getUniqueId()) ? -4 : 0);
+                if (loin == loinDe.contains(j.getUniqueId())) continue;
+                if (morceaux == null) morceaux = morceauxAutres();
+                if (loin) {
+                    loinDe.add(j.getUniqueId());
+                    for (Display x : morceaux) j.hideEntity(plugin, x);
+                } else {
+                    loinDe.remove(j.getUniqueId());
+                    for (Display x : morceaux) j.showEntity(plugin, x);
+                }
+                if (pa != null) pa.lointain(soi, j, loin);
+            }
+            ivAutres = plusPres < 16 ? 1 : plusPres < 32 ? 2 : 3;
+        }
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
         UUID proprietaire;
@@ -1019,6 +1076,7 @@ public final class Modeles {
             }
             // pantin monté : chaque morceau est passager du joueur ; son jeu le place lui-même à chaque image, sans retard
             if (monte()) monter();
+            if (permanent) distancesPantin(true);
             mettreAJour(1);
         }
 
@@ -1444,7 +1502,7 @@ public final class Modeles {
          */
         boolean commencerRetour() {
             if (debutRetour >= 0) return true;
-            Animation a = forcee == null ? null : modele.animations().get(forcee);
+            Animation a = forcee == null ? null : trouver(forcee);
             boolean possible = a != null && pantin && base instanceof Player && ancre == null && sortieTics > 0 && !forceePartielle;
             if (possible) {
                 retourAnim = a;
@@ -1719,7 +1777,7 @@ public final class Modeles {
 
             // fin d'une animation demandée
             if (forcee != null) {
-                Animation fa = modele.animations().get(forcee);
+                Animation fa = trouver(forcee);
                 double tf = (tic - debutForcee) / 20.0;
                 if (fa == null) {
                     forcee = null;
@@ -1767,12 +1825,12 @@ public final class Modeles {
                 tEffetPleine = -1e-9;
             }
             List<Animateur.Couche> couches = new ArrayList<>(3);
-            Animation pa = pleine == null ? null : modele.animations().get(pleine);
+            Animation pa = pleine == null ? null : trouver(pleine);
             double tp = tempsPiste(pa, debutPleine, pleineBoucle);
             float poids = 1f;
             if (tic - debutFondu < fonduTics) {
                 // pantin d'un joueur qui apparaît : il part de la pose que le jeu donnait au vrai joueur
-                Animation aa = avant == null ? (pantin && base instanceof Player ? poseDuJeu() : null) : modele.animations().get(avant);
+                Animation aa = avant == null ? (pantin && base instanceof Player ? poseDuJeu() : null) : trouver(avant);
                 couches.add(new Animateur.Couche(aa, tempsPiste(aa, debutAvant, avantBoucle), 1f, false));
                 poids = (tic - debutFondu) / (float) fonduTics;
                 if (avant == null && pantin && base instanceof Player && ancre == null) {
@@ -1788,7 +1846,7 @@ public final class Modeles {
             Animation da = null;
             double td = 0;
             if (forcee != null && forceePartielle) {
-                da = modele.animations().get(forcee);
+                da = trouver(forcee);
                 td = tempsPiste(da, debutForcee, forceeBoucle);
                 float w = 1f;
                 if (fonduTics > 0 && da != null) {
@@ -1812,6 +1870,8 @@ public final class Modeles {
 
         /** Envoie une image du modèle : parties, couches d'armure et objets tenus, étiquettes. */
         private void dessiner(Pose[] poses, int intervalle) {
+            // pantin permanent sans personne d'autre tout près : ses morceaux (pas la copie pour soi) moins souvent
+            imageAutres = !permanent || ivAutres <= 1 || tic % ivAutres == 0;
             dernieresPoses = poses;
             teteProprietaire(poses);
             majCamera();
@@ -1836,10 +1896,10 @@ public final class Modeles {
                     envoyer(partiesSoi[k], new Transformation(new Vector3f(tr.getTranslation()).add(recul), tr.getLeftRotation(), tr.getScale(),
                         tr.getRightRotation()), envoyeesSoi, k, intervalle);
                 }
-                if (tr.equals(envoyees[k])) continue;
+                if (!imageAutres || tr.equals(envoyees[k])) continue;
                 envoyees[k] = tr;
                 d.setInterpolationDelay(0);
-                d.setInterpolationDuration(intervalle);
+                d.setInterpolationDuration(ivAutres(intervalle));
                 d.setTransformation(tr);
             }
             // couches d'armure : même pose que l'os qui les porte (modèle généré à l'échelle 1, pivot en 8, 8, 8)
@@ -1874,10 +1934,10 @@ public final class Modeles {
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
                     envoyer(armuresSoi[a], new Transformation(new Vector3f(tr).add(recul), rot, ech, droite), armuresEnvoyeesSoi, a, intervalle);
                 }
-                if (t.equals(armuresEnvoyees[a])) continue;
+                if (!imageAutres || t.equals(armuresEnvoyees[a])) continue;
                 armuresEnvoyees[a] = t;
                 d.setInterpolationDelay(0);
-                d.setInterpolationDuration(intervalle);
+                d.setInterpolationDuration(ivAutres(intervalle));
                 d.setTransformation(t);
             }
             if (aEtiquettes) etiquettes(poses, position(), intervalle);
