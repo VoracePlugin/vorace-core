@@ -105,8 +105,9 @@ pantin:
   # Le vrai joueur disparaît pour les autres pendant l'animation (corps invisible, équipement caché).
   cacher-joueur: true
   # Les morceaux du pantin sont des passagers du joueur : le corps suit le joueur sans aucun retard (y compris pour
-  # lui-même à la première personne). Pendant une animation, Paper refuse de téléporter un joueur qui a des passagers :
-  # un plugin qui téléporte doit d'abord appeler VoraceAPI.arreterJoueur (Matsuri le fait). false : ancien suivi.
+  # lui-même à la première personne). Avec monter-par-paquets (défaut), ils ne sont passagers que chez les clients et les
+  # téléportations marchent ; sinon, un plugin qui téléporte doit d'abord appeler VoraceAPI.arreterJoueur. false : ancien
+  # suivi (le corps suit avec un léger retard).
   monter-sur-le-joueur: true
   # Le joueur voit son propre pantin depuis ses yeux, tête comprise (le jeu n'en dessine pas l'intérieur). Sa copie est
   # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
@@ -133,6 +134,21 @@ pantin:
     shader: true
     # l'armure reste envoyée au joueur pendant une animation (visible dans son inventaire, effacée en F5 par le shader)
     armure-inventaire: true
+  # Morceaux du pantin montés sur le joueur seulement chez les clients (le serveur ne voit aucun passager) : le corps suit
+  # le joueur sans retard ET les téléportations des plugins marchent (Paper refuse de téléporter un joueur qui porte de
+  # vrais passagers). false : vrais passagers (il faut alors arrêter le pantin avant de téléporter le joueur).
+  monter-par-paquets: true
+  # Pantin permanent : le joueur est remplacé tout le temps par son pantin (pas seulement pendant une compétence). Le
+  # pantin joue de lui-même le repos, la marche, la course, le recul, les pas de côté, l'accroupi, le saut, la chute, la
+  # nage, l'échelle, assis, couché ; les gestes par-dessus (coup de bras, manger, viser à l'arc, bouclier...) et un
+  # sursaut aux coups reçus. Ces mouvements viennent de modeles-animes/pantin_mouvements.bbmodel (à retoucher dans
+  # Blockbench) et sont prêtés à tout modèle au même squelette (les modèles des classes) par le nom des os ; un modèle qui
+  # a sa propre « marche » garde la sienne. Les compétences se jouent sur le même pantin, qui revient ensuite à ses
+  # mouvements. Retiré en spectateur, sous une vraie potion d'invisibilité et à la mort ; remis tout seul ensuite.
+  permanent:
+    actif: false
+    # modèle des mouvements prêtés
+    mouvements: pantin_mouvements
   # Fin d'une animation : le pantin garde sa dernière pose ce temps-là (le coup suivant d'un combo reprend le même
   # pantin), puis revient en douceur à la pose que le jeu donne au vrai joueur (corps tourné comme le sien, bras le long
   # du corps ou levé s'il tient un objet) avant l'échange : plus de saut vers le skin de base. 0 : échange immédiat.

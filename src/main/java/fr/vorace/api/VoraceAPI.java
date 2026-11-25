@@ -276,6 +276,39 @@ public final class VoraceAPI {
         if (plugin != null && plugin.pantins() != null) plugin.pantins().relacher(joueur);
     }
 
+    // ------------------------------------------------------------------ pantin permanent (1.6.0)
+
+    /** Le pantin permanent est-il activé sur le serveur (pantin.permanent.actif) ? */
+    public static boolean pantinPermanentActif() {
+        return plugin != null && plugin.pantins() != null && plugin.pantins().permanentActif();
+    }
+
+    /** Ce joueur est-il remplacé en ce moment par son pantin permanent ? */
+    public static boolean pantinPermanent(Player joueur) {
+        return plugin != null && plugin.pantins() != null && plugin.pantins().permanent(joueur);
+    }
+
+    /**
+     * Modèle du pantin permanent de ce joueur (sa classe : « guerrier »...), au même squelette que « joueur ». Ses
+     * mouvements (marche, course...) sont empruntés au modèle des mouvements s'il ne les a pas. {@code null} : « joueur ».
+     */
+    public static void modelePantin(Player joueur, String modele) {
+        if (plugin != null && plugin.pantins() != null) plugin.pantins().modelePermanent(joueur, modele);
+    }
+
+    /**
+     * Posture du pantin permanent (« combat », « blesse »...) : pour chaque mouvement, la variante « marche_combat » est
+     * jouée si le modèle (ou celui des mouvements) l'a, sinon « marche ». {@code null} : aucune.
+     */
+    public static void posturePantin(Player joueur, String posture) {
+        if (plugin != null && plugin.modeles() != null) plugin.modeles().postureJoueur(joueur, posture);
+    }
+
+    /** Coupe (false) ou rend (true) le pantin permanent à ce joueur, par exemple pendant une cinématique d'un autre plugin. */
+    public static void autoriserPantin(Player joueur, boolean oui) {
+        if (plugin != null && plugin.pantins() != null) plugin.pantins().autoriserPermanent(joueur, oui);
+    }
+
     /**
      * Réaction d'un monstre à une compétence (« saisi », « plaque », « souleve », « projete », « repousse »,
      * « etourdi », « resiste ») : son modèle animé la joue s'il l'a. Faux si l'entité n'a pas de modèle ou pas cette

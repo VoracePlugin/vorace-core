@@ -138,6 +138,25 @@ public final class ObjetsCaches {
         p.updateInventory();
     }
 
+    /** Pantin permanent : les autres ne reçoivent plus rien de ce qu'il porte ; lui voit toujours tout. */
+    public void cacherAutres(Player p) {
+        entitesCachees.add(p.getEntityId());
+    }
+
+    public void montrerAutres(Player p) {
+        entitesCachees.remove(p.getEntityId());
+    }
+
+    /** Début d'une animation : il ne voit plus ses objets en main (ils sont dans les mains de son pantin). */
+    public void cacherSoi(Player p) {
+        if (cachesSoi.add(p.getUniqueId())) p.updateInventory();
+    }
+
+    /** Fin d'une animation du pantin permanent : il revoit ses objets en main. */
+    public void montrerSoi(Player p) {
+        if (cachesSoi.remove(p.getUniqueId()) && p.isOnline()) p.updateInventory();
+    }
+
     /** Fin de l'animation : l'inventaire du serveur est renvoyé tel quel. */
     public void montrer(Player p) {
         boolean etait = cachesSoi.remove(p.getUniqueId());

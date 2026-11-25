@@ -315,6 +315,115 @@ public final class Modeles {
         if (!i.commencerRetour()) arreterJoueur(joueur);
     }
 
+    // ------------------------------------------------------------------ pantin permanent
+
+    /** Modèle des mouvements du pantin (repos, marche, course...), prêtés à tous les modèles au squelette du joueur. */
+    public static final String MOUVEMENTS = "pantin_mouvements";
+    private final Map<String, java.util.Optional<Animation>> empruntees = new java.util.concurrent.ConcurrentHashMap<>();
+    private ModeleBB derniereBibliotheque;
+
+    /**
+     * Animation {@code nom} du modèle des mouvements, rattachée aux os de même nom du modèle {@code cible} : un modèle de
+     * classe (« guerrier ») n'a pas besoin de contenir la marche ou la course, il les emprunte. Null si elle n'existe pas.
+     */
+    Animation emprunter(ModeleBB cible, String nom) {
+        ModeleBB lib = modele(plugin.getConfig().getString("pantin.permanent.mouvements", MOUVEMENTS));
+        if (lib == null || lib == cible || cible == null) return null;
+        if (lib != derniereBibliotheque) {
+            empruntees.clear();
+            derniereBibliotheque = lib;
+        }
+        String cle = System.identityHashCode(cible) + "|" + nom;
+        return empruntees.computeIfAbsent(cle, k -> java.util.Optional.ofNullable(rattacher(lib, cible, lib.animations().get(nom)))).orElse(null);
+    }
+
+    /** L'animation de {@code de}, ses pistes rattachées aux os de même nom de {@code vers} (null si aucun os commun). */
+    static Animation rattacher(ModeleBB de, ModeleBB vers, Animation a) {
+        if (a == null) return null;
+        Map<String, String> nomDe = new HashMap<>();
+        for (ModeleBB.Partie p : de.parties()) if (p.uuid() != null && p.nom() != null) nomDe.put(p.uuid(), p.nom().toLowerCase(Locale.ROOT));
+        Map<String, String> uuidVers = new HashMap<>();
+        for (ModeleBB.Partie p : vers.parties()) if (p.uuid() != null && p.nom() != null) uuidVers.putIfAbsent(p.nom().toLowerCase(Locale.ROOT), p.uuid());
+        Map<String, ModeleBB.Canaux> os = new LinkedHashMap<>();
+        for (Map.Entry<String, ModeleBB.Canaux> e : a.os().entrySet()) {
+            String n = nomDe.get(e.getKey());
+            String u = n == null ? null : uuidVers.get(n);
+            if (u != null) os.put(u, e.getValue());
+        }
+        return os.isEmpty() ? null : new Animation(a.nom(), a.duree(), a.boucle(), os, a.evenements());
+    }
+
+    /**
+     * Pantin permanent du joueur : il le remplace tout le temps et joue de lui-même le repos, la marche, la course, le saut,
+     * l'accroupi... (animations du modèle, ou empruntées au modèle des mouvements). Les animations demandées ensuite
+     * ({@link #animerJoueur}) se jouent dessus, puis il revient à ses mouvements au lieu de disparaître. Si le pantin
+     * permanent existe déjà sur ce modèle, il change seulement de skin, d'armure ou d'objets tenus.
+     */
+    public Instance porterJoueur(Player joueur, String id, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure) {
+        ModeleBB m = modele(id);
+        if (m == null) return null;
+        Instance ancien = instances.get(joueur.getUniqueId());
+        if (ancien != null && ancien.pantin && ancien.permanent && ancien.modele == m) {
+            ancien.rhabiller(peaux, armure);
+            return ancien;
+        }
+        Runnable apres = null;
+        if (ancien != null) {
+            // une animation en cours sur un autre modèle : elle s'arrête, le pantin permanent prend la place
+            apres = ancien.apresAnimation;
+            ancien.fin = null;
+            ancien.supprimerParties();
+            instances.remove(joueur.getUniqueId());
+            ancien.finir();
+        }
+        Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
+        i.pantin = true;
+        i.permanent = true;
+        i.proprietaire = joueur.getUniqueId();
+        habiller(i, m, peaux, armure);
+        instances.put(joueur.getUniqueId(), i);
+        if (apres != null) apres.run();
+        return i;
+    }
+
+    /** Le joueur a-t-il un pantin permanent ? */
+    public boolean permanent(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        return i != null && i.pantin && i.permanent;
+    }
+
+    /** Pantin permanent : arrête l'animation demandée en cours, il revient à ses mouvements (il ne disparaît pas). */
+    public void arreterAnimationJoueur(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i != null && i.pantin && i.permanent) i.finAnimationPermanente();
+    }
+
+    /**
+     * Pantin permanent : geste par-dessus ses mouvements (bras qui frappe, mange, vise...), seulement s'il ne joue pas déjà
+     * une animation demandée. Faux si le modèle (ou celui des mouvements) n'a pas ce geste.
+     */
+    public boolean gesteJoueur(Player joueur, String geste, boolean boucle) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin || !i.permanent || i.animationDemandee()) return false;
+        if (geste.equals(i.forcee) && i.forceePartielle && boucle) return true;
+        return i.demarrer(geste, boucle, true);
+    }
+
+    /** Pantin permanent : arrête le geste en cours (s'il en joue un). */
+    public void finGesteJoueur(Player joueur, String geste) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i != null && i.pantin && i.permanent && i.forceePartielle && (geste == null || geste.equals(i.forcee))) i.arreterAnimation();
+    }
+
+    /**
+     * Pantin permanent : posture qui change ses mouvements (« combat », « blesse »...). Pour chaque mouvement, la variante
+     * « marche_combat » est prise si elle existe, sinon « marche ». Null : aucune.
+     */
+    public void postureJoueur(Player joueur, String posture) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i != null && i.pantin) i.posture = posture == null || posture.isBlank() ? null : posture.toLowerCase(Locale.ROOT);
+    }
+
     /** Arrête l'animation du pantin du joueur (animation en boucle : Reprise de souffle) ; il disparaît. */
     public void arreterJoueur(Player joueur) {
         Instance i = instances.get(joueur.getUniqueId());
@@ -338,6 +447,24 @@ public final class Modeles {
         ModeleBB m = modele(id);
         if (m == null) return false;
         Instance ancien = instances.get(joueur.getUniqueId());
+        if (ancien != null && ancien.pantin && ancien.permanent && ancien.modele == m && ancien.trouver(animation) != null) {
+            // pantin permanent : il joue l'animation puis revient à ses mouvements ; fin est appelé à la fin de l'animation
+            if (!ancien.memeArmure(armure)) ancien.rhabiller(peaux, armure);
+            ancien.apresAnimation = fin;
+            ancien.demarrer(animation, boucle, false);
+            ancien.debutCinema(animation);
+            return true;
+        }
+        if (ancien != null && ancien.pantin && ancien.permanent) {
+            // autre modèle (classe) : le pantin permanent passe sur ce modèle, puis joue l'animation
+            if (porterJoueur(joueur, id, peaux, armure) == null) return false;
+            ancien = instances.get(joueur.getUniqueId());
+            if (ancien.trouver(animation) == null) return false;
+            ancien.apresAnimation = fin;
+            ancien.demarrer(animation, boucle, false);
+            ancien.debutCinema(animation);
+            return true;
+        }
         if (ancien != null && ancien.pantin && ancien.modele == m && ancien.trouver(animation) != null && ancien.memeArmure(armure)) {
             // coups enchaînés : le même pantin joue la suite, sans disparaître entre deux coups
             ancien.demarrer(animation, boucle, false);
@@ -589,7 +716,7 @@ public final class Modeles {
                 if (verifier || i.distanceJoueur < 0) i.verifierDistance(joueurs);
                 if (i.endormi) {
                     // personne ne regarde : aucune entité d'affichage, aucun calcul ; seulement la fin du modèle
-                    if (i.fixe != null || !i.base.isValid() || i.base.isDead() || (i.pantin && i.forcee == null)) {
+                    if (i.fixe != null || !i.base.isValid() || i.base.isDead() || (i.pantin && !i.permanent && i.forcee == null)) {
                         i.supprimerParties();
                         instances.remove(i.base.getUniqueId());
                         i.finir();
@@ -663,6 +790,12 @@ public final class Modeles {
         private long debutRetour = -1;
         private Animation retourAnim;
         private double retourTemps;
+        /** Pantin permanent : il ne disparaît jamais de lui-même et joue ses mouvements entre deux animations demandées. */
+        boolean permanent;
+        /** Pantin permanent : appelé à la fin de l'animation demandée en cours. */
+        Runnable apresAnimation;
+        /** Pantin permanent : posture qui choisit les variantes des mouvements (« marche_combat »...). */
+        String posture;
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
         UUID proprietaire;
@@ -885,7 +1018,7 @@ public final class Modeles {
                 teteSoi = null;
             }
             // pantin monté : chaque morceau est passager du joueur ; son jeu le place lui-même à chaque image, sans retard
-            if (monte()) for (Display d : affichages()) base.addPassenger(d);
+            if (monte()) monter();
             mettreAJour(1);
         }
 
@@ -1013,7 +1146,28 @@ public final class Modeles {
             return pantin && mob && pantinMonte && base instanceof Player && ancre == null;
         }
 
+        private Montures montures() {
+            Pantins p = plugin.pantins();
+            return p == null ? null : p.montures();
+        }
+
+        /** Monte les morceaux sur le joueur : chez les clients seulement (Montures), à défaut pour de vrai. */
+        private void monter() {
+            Montures mo = montures();
+            if (mo != null && mo.actif() && base instanceof Player pj) mo.monter(pj, affichages());
+            else for (Display d : affichages()) base.addPassenger(d);
+        }
+
+        /** Ce morceau est-il porté par le joueur (vrai passager, ou monté chez les clients) ? */
+        private boolean porte(Display d) {
+            if (base.equals(d.getVehicle())) return true;
+            Montures mo = montures();
+            return mo != null && mo.monte(d);
+        }
+
         void supprimerParties() {
+            Montures mo = montures();
+            if (mo != null) mo.oublier(affichages());
             for (Display d : affichages()) d.remove();
             parties = new ItemDisplay[0];
             armures = new ItemDisplay[0];
@@ -1056,6 +1210,8 @@ public final class Modeles {
             ancre = p.getLocation();
             modeAvant = p.getGameMode();
             base.eject();   // les morceaux descendent du joueur : le pantin reste à sa place
+            Montures mo = montures();
+            if (mo != null && mo.actif()) mo.descendre(p);
             derniere = null;
             // le joueur voit le vrai pantin (pas sa copie reculée)
             for (ItemDisplay d : parties) if (d != null) p.showEntity(plugin, d);
@@ -1325,7 +1481,12 @@ public final class Modeles {
 
         /** Joue une animation automatique (dégâts, attaque...) si le modèle l'a. */
         public boolean jouerAuto(String role) {
-            if (pantin) return false;  // le pantin d'un joueur ne joue que l'animation demandée
+            // le pantin d'un joueur ne joue que l'animation demandée ; permanent, il réagit aux coups (geste par-dessus)
+            if (pantin && !(permanent && "degat".equals(role) && !animationDemandee())) return false;
+            if (pantin) {
+                Animation g = trouver("degat");
+                return g != null && demarrer(g.nom(), false, true);
+            }
             for (String n : AUTO.getOrDefault(role, List.of())) {
                 if (modele.animations().containsKey(n)) {
                     if (Bukkit.isPrimaryThread()) {
@@ -1350,7 +1511,12 @@ public final class Modeles {
 
         /** Le mob est touché : animation « degat » par-dessus et teinte rouge un court instant. */
         public void blesser() {
-            if (pantin) return;
+            if (pantin) {
+                // pantin permanent : un sursaut par-dessus ses mouvements ; pas de teinte rouge (elle effacerait les couleurs
+                // du skin, portées par les mêmes données des morceaux)
+                if (permanent) jouerAuto("degat");
+                return;
+            }
             jouerAuto("degat");
             if (!teinteDegats || endormi) return;
             if (rouges == null) {
@@ -1391,6 +1557,84 @@ public final class Modeles {
             Animation a = modele.animations().get(n);
             if (a != null) return a;
             for (String alias : AUTO.getOrDefault(n, List.of())) if (modele.animations().containsKey(alias)) return modele.animations().get(alias);
+            // pantin d'un joueur : les mouvements (marche, course, gestes...) viennent du modèle des mouvements
+            return pantin ? emprunter(modele, n) : null;
+        }
+
+        /** Une animation demandée (compétence, emote) est en cours, pas un simple geste par-dessus les mouvements. */
+        boolean animationDemandee() {
+            return forcee != null && !forceePartielle;
+        }
+
+        /** Pantin permanent : l'animation demandée est finie, il revient à ses mouvements (en fondu). */
+        void finAnimationPermanente() {
+            boolean demandee = animationDemandee();
+            forcee = null;
+            forceePartielle = false;
+            Runnable r = demandee ? apresAnimation : null;
+            if (demandee) apresAnimation = null;
+            if (r != null) {
+                try { r.run(); } catch (Throwable t) { plugin.getLogger().warning("Fin d'animation du pantin : " + t); }
+            }
+        }
+
+        /** Pantin permanent : nouveau skin, armure ou objets tenus. Les objets changent sur place si les os sont les mêmes. */
+        void rhabiller(Map<String, ItemStack> nouvellesPeaux, List<Map.Entry<String, ItemStack>> armure) {
+            Map<Integer, ItemStack> avantPeaux = new HashMap<>(peaux);
+            List<Integer> avantOs = new ArrayList<>(armureOs), avantMain = new ArrayList<>(armureMain);
+            List<ItemStack> avantObjets = new ArrayList<>(armureObjets);
+            peaux.clear();
+            armureOs.clear();
+            armureObjets.clear();
+            armureMain.clear();
+            armureBout.clear();
+            habiller(this, modele, nouvellesPeaux, armure);
+            boolean memesPeaux = avantPeaux.keySet().equals(peaux.keySet());
+            if (memesPeaux) for (Map.Entry<Integer, ItemStack> e : peaux.entrySet()) if (!e.getValue().isSimilar(avantPeaux.get(e.getKey()))) memesPeaux = false;
+            if (endormi) return;
+            if (memesPeaux && avantOs.equals(armureOs) && avantMain.equals(armureMain) && armures.length == armureObjets.size()) {
+                // mêmes os : seuls les objets changent (arme en main, pièce d'armure), sans refaire le pantin
+                for (int a = 0; a < armureObjets.size(); a++) {
+                    if (armureObjets.get(a).isSimilar(avantObjets.get(a))) continue;
+                    if (armures[a] != null && armures[a].isValid()) armures[a].setItemStack(armureObjets.get(a));
+                    if (a < armuresSoi.length && armuresSoi[a] != null && armuresSoi[a].isValid()) armuresSoi[a].setItemStack(armureObjets.get(a));
+                }
+                return;
+            }
+            reconstruire();
+        }
+
+        /**
+         * Mouvement du pantin d'un joueur d'après ce qu'il fait : couché, monté, en vol, nage, échelle, en l'air, accroupi,
+         * recul, pas de côté, course, marche, repos. Pour chacun, la variante de la posture (« marche_combat ») d'abord ;
+         * un mouvement absent laisse la place au suivant de la liste.
+         */
+        private Animation locomotion(Player p, Location l, double dx, double dy, double dz) {
+            List<String> c = new ArrayList<>(6);
+            double v = Math.sqrt(dx * dx + dz * dz);
+            @SuppressWarnings("deprecation")
+            boolean sol = p.isOnGround();
+            if (p.isSleeping()) c.add("dormir");
+            else if (p.isInsideVehicle()) c.add("assis");
+            else if (p.isGliding()) c.add("vol");
+            else if (p.isSwimming()) c.add("nage");
+            else if (p.isClimbing() && !sol) c.add("echelle");
+            else if (!sol && !p.isFlying()) c.add(dy < -0.25 ? "chute" : "saut");
+            if (p.isSneaking()) c.add(v > 0.01 ? "accroupi_marche" : "accroupi");
+            if (v > 0.01) {
+                double r = Math.toRadians(l.getYaw());
+                double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
+                if (avant < -0.5 * v) c.add("recul");
+                else if (Math.abs(cote) > 0.75 * v) c.add(cote > 0 ? "pas_droite" : "pas_gauche");
+                if (p.isSprinting() || v > 0.24) c.add("course");
+                c.add("marche");
+            }
+            c.add("repos");
+            for (String n : c) {
+                Animation a = posture == null ? null : trouver(n + "_" + posture);
+                if (a == null) a = trouver(n);
+                if (a != null) return a;
+            }
             return null;
         }
 
@@ -1411,10 +1655,17 @@ public final class Modeles {
                 LivingEntity le = (LivingEntity) base;
                 // pantin : le corps regarde où regarde le joueur (pas le corps du jeu, qui tourne en retard)
                 yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? l.getYaw() : corps(le);
-                double dx = derniere == null ? 0 : l.getX() - derniere.getX(), dz = derniere == null ? 0 : l.getZ() - derniere.getZ();
+                boolean memeMonde = derniere != null && derniere.getWorld().equals(l.getWorld());
+                double dx = !memeMonde ? 0 : l.getX() - derniere.getX(), dz = !memeMonde ? 0 : l.getZ() - derniere.getZ();
+                double dy = !memeMonde ? 0 : l.getY() - derniere.getY();
                 double vitesse = Math.sqrt(dx * dx + dz * dz);
-                String voulue = vitesse > 0.15 && trouver("course") != null ? "course" : vitesse > 0.01 ? "marche" : "repos";
-                Animation a = trouver(voulue);
+                Animation a;
+                if (pantin && le instanceof Player pj) {
+                    a = locomotion(pj, l, dx, dy, dz);
+                } else {
+                    String voulue = vitesse > 0.15 && trouver("course") != null ? "course" : vitesse > 0.01 ? "marche" : "repos";
+                    a = trouver(voulue);
+                }
                 String nom = a == null ? null : a.nom();
                 if (nom != null && !nom.equals(auto)) { auto = nom; debutAuto = tic; }
                 if (nom == null) auto = null;
@@ -1432,7 +1683,20 @@ public final class Modeles {
             }
 
             // déplacement des parties avec la base (pantin monté : elles sont passagères ; on remonte celles qui sont tombées)
-            if (monte()) {
+            Montures mo = montures();
+            if (monte() && mo != null && mo.actif()) {
+                // montées chez les clients seulement : le serveur les garde près du joueur pour qu'elles restent suivies,
+                // leurs déplacements ne sont pas envoyés (Montures)
+                List<Display> aff = affichages();
+                if (base instanceof Player pj && !aff.isEmpty() && !mo.monte(aff.get(0))) mo.monter(pj, aff);   // après une caméra
+                if (derniere == null || !derniere.getWorld().equals(l.getWorld()) || derniere.distanceSquared(l) > 1e-6) {
+                    Location c = l.clone();
+                    c.setYaw(0);
+                    c.setPitch(0);
+                    for (Display d : affichages()) d.teleport(c);
+                }
+                derniere = l;
+            } else if (monte()) {
                 for (Display d : affichages()) {
                     if (d.getVehicle() != null) continue;
                     Location c = l.clone();
@@ -1463,14 +1727,15 @@ public final class Modeles {
                     if (mort) return false;
                     // pantin : garde un instant la dernière pose (le coup suivant d'un combo reprend le même pantin),
                     // puis revient à la pose du vrai joueur avant de disparaître
-                    if (pantin && tf < fa.duree() + pauseFinTics / 20.0) { /* attend */ }
+                    if (pantin && !forceePartielle && tf < fa.duree() + pauseFinTics / 20.0) { /* attend */ }
+                    else if (pantin && permanent) finAnimationPermanente();
                     else if (pantin) commencerRetour();
                     else if (!fa.boucle().equals("hold") || forceePartielle) forcee = null;
                 }
             }
-            boolean retour = pantin && forcee == null && debutRetour >= 0;
-            // fin de l'animation du joueur : le pantin disparaît (après le retour à la pose du jeu)
-            if (pantin && forcee == null && (!retour || tic - debutRetour >= sortieTics + intervalle)) return false;
+            boolean retour = pantin && !permanent && forcee == null && debutRetour >= 0;
+            // fin de l'animation du joueur : le pantin disparaît (après le retour à la pose du jeu), sauf s'il est permanent
+            if (pantin && !permanent && forcee == null && (!retour || tic - debutRetour >= sortieTics + intervalle)) return false;
             if (retour) {
                 // le corps du pantin tourne vers celui du vrai joueur (le jeu le fait tourner en retard sur le regard),
                 // la tête continue de regarder où regarde le joueur
@@ -1563,7 +1828,7 @@ public final class Modeles {
                 Transformation tr = peaux.containsKey(k)
                     ? new Transformation(p.translation(), p.rotation(), new Vector3f(p.echelle()).div((float) Math.max(1e-6, modele.parties().get(k).echelle())), droite)
                     : new Transformation(p.translation(), p.rotation(), p.echelle(), droite);
-                if (siege != 0f && base.equals(d.getVehicle())) {
+                if (siege != 0f && porte(d)) {
                     // passager : le jeu le place au sommet de la boîte du joueur (1,8 debout, 1,5 accroupi) ; on redescend
                     tr = new Transformation(new Vector3f(tr.getTranslation()).sub(0, siege, 0), tr.getLeftRotation(), tr.getScale(), tr.getRightRotation());
                 }
@@ -1585,7 +1850,7 @@ public final class Modeles {
                 Pose p = poses[k];
                 Vector3f ech = new Vector3f(p.echelle()).div((float) Math.max(1e-6, modele.parties().get(k).echelle()));
                 Vector3f tr = new Vector3f(p.translation());
-                if (siege != 0f && base.equals(d.getVehicle())) tr.sub(0, siege, 0);
+                if (siege != 0f && porte(d)) tr.sub(0, siege, 0);
                 Quaternionf rot = p.rotation();
                 if (bouclierGauche(a)) {
                     // bouclier sanglé à l'avant-bras gauche (comme l'écu des animations, epee.py) : la plaque à l'extérieur du
@@ -1838,7 +2103,7 @@ public final class Modeles {
             Path liste = plugin.getDataFolder().toPath().resolve("donnees").resolve("exemples.txt");
             List<String> faits = new ArrayList<>(Files.isRegularFile(liste) ? Files.readAllLines(liste) : List.of());
             // squelette du pantin des joueurs et mannequin des réactions : toujours remis s'ils manquent
-            for (String f : List.of("joueur.bbmodel", "mannequin_reactions.bbmodel")) {
+            for (String f : List.of("joueur.bbmodel", "mannequin_reactions.bbmodel", MOUVEMENTS + ".bbmodel")) {
                 Path c = dossier().resolve(f);
                 // squelette livré par une version précédente et pas retouché : remplacé par celui-ci
                 if (Files.isRegularFile(c) && SQUELETTES_ANCIENS.contains(empreinte(Files.readAllBytes(c)))) Files.delete(c);

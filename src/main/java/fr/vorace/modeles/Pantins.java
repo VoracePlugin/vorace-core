@@ -76,7 +76,11 @@ public final class Pantins implements Listener {
 
     public void arreter() {
         file.shutdownNow();
-        for (Player p : Bukkit.getOnlinePlayers()) montrer(p);
+        if (tachePermanente != null) tachePermanente.cancel();
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            permanents.remove(p.getUniqueId());
+            montrerTout(p);
+        }
         if (fantomes != null) fantomes.arreter();
     }
 
@@ -132,6 +136,8 @@ public final class Pantins implements Listener {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     for (Map.Entry<String, PeauUV.Donnees> e : donnees.entrySet()) m.put(e.getKey(), objetPeau(PeauUV.morceauObjet(e.getKey(), fin), e.getValue()));
                     etats.put(id, "prêt");
+                    // pantin permanent déjà en place avec les habits par défaut : il prend le skin
+                    if (p.isOnline() && permanent(p)) porter(p);
                     // bras du joueur à la première personne avec une arme de poing (vorace-item)
                     if (caches != null && p.isOnline()) caches.bras(p, bras, fin);
                 });
@@ -205,12 +211,16 @@ public final class Pantins implements Listener {
      * joueur est resté invisible.
      */
     public void rendreVisible(Player p) {
+        // secours : le pantin permanent est coupé pour ce joueur jusqu'à sa reconnexion (ou autoriserPermanent)
+        if (permanent(p)) autoriserPermanent(p, false);
         arreter(p);
         invisiblesAvant.remove(p.getUniqueId());
         p.setInvisible(false);
+        if (fantomes != null) fantomes.montrer(p);
         // d'abord ne plus cacher le joueur dans les paquets, ensuite renvoyer son équipement (voir montrer)
         boolean etaitCache = caches != null && caches.cache(p);
-        if (etaitCache) caches.montrer(p);
+        if (caches != null) caches.montrerAutres(p);
+        if (etaitCache) caches.montrerSoi(p);
         renvoyerEquipement(p, false);
         if (!etaitCache) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         envoyerPaire(p);
@@ -263,6 +273,7 @@ public final class Pantins implements Listener {
 
     private void plusTard(Player p) {
         Bukkit.getScheduler().runTaskLater(plugin, () -> envoyerPaire(p), 1);
+        rhabillerPlusTard(p);
     }
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
@@ -331,14 +342,18 @@ public final class Pantins implements Listener {
         return m.attacherDouble(mob, modele == null || modele.isBlank() ? SQUELETTE : modele, new LinkedHashMap<>(pretes), porte, animation) != null;
     }
 
-    /** Arrête le pantin du joueur (fin d'une animation en boucle). */
+    /** Arrête le pantin du joueur (fin d'une animation en boucle). Pantin permanent : seule l'animation s'arrête. */
     public void arreter(Player p) {
-        if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
+        if (plugin.modeles() == null) return;
+        if (permanent(p)) plugin.modeles().arreterAnimationJoueur(p);
+        else plugin.modeles().arreterJoueur(p);
     }
 
     /** Arrête le pantin du joueur en douceur : retour à la pose du vrai joueur, puis échange sans saut. */
     public void relacher(Player p) {
-        if (plugin.modeles() != null) plugin.modeles().relacherJoueur(p);
+        if (plugin.modeles() == null) return;
+        if (permanent(p)) plugin.modeles().arreterAnimationJoueur(p);
+        else plugin.modeles().relacherJoueur(p);
     }
 
     /** @param boucle animation répétée jusqu'à {@link #arreter(Player)} (Reprise de souffle) */
@@ -350,6 +365,15 @@ public final class Pantins implements Listener {
             preparer(p);
             pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
         }
+        java.util.List<Map.Entry<String, ItemStack>> porte = tenue(p);
+        boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
+            porte, () -> montrer(p));
+        if (ok) cacher(p);
+        return ok;
+    }
+
+    /** Armure et objets tenus du joueur, tels que son pantin les porte. */
+    java.util.List<Map.Entry<String, ItemStack>> tenue(Player p) {
         java.util.List<Map.Entry<String, ItemStack>> porte = armure(p);
         java.util.List<Map.Entry<String, ItemStack>> tenus = mains(p);
         // arme par paire (gantelets, bandes...) : elle couvre les avant-bras ; la manche d'armure dessous ressortirait
@@ -361,10 +385,157 @@ public final class Pantins implements Listener {
         }
         if (paire) porte.removeIf(c -> c.getKey().startsWith("peau_bras_") && c.getKey().endsWith("_bas"));
         porte.addAll(tenus);
-        boolean ok = m.animerJoueur(p, modele == null || modele.isBlank() ? SQUELETTE : modele, animation, boucle, new LinkedHashMap<>(pretes),
-            porte, () -> montrer(p));
-        if (ok) cacher(p);
-        return ok;
+        return porte;
+    }
+
+    // ------------------------------------------------------------------ pantin permanent
+
+    /** Joueurs qui ont leur pantin permanent. */
+    private final java.util.Set<UUID> permanents = ConcurrentHashMap.newKeySet();
+    /** Modèle du pantin permanent de chaque joueur (sa classe), choisi par l'API ; défaut : le squelette. */
+    private final Map<UUID, String> modelesPermanents = new ConcurrentHashMap<>();
+    /** Geste en boucle en cours (manger, viser à l'arc...) de chaque joueur. */
+    private final Map<UUID, String> gestes = new ConcurrentHashMap<>();
+    /** Joueurs qui ont coupé leur pantin permanent (commande, API). */
+    private final java.util.Set<UUID> sansPermanent = ConcurrentHashMap.newKeySet();
+    private org.bukkit.scheduler.BukkitTask tachePermanente;
+
+    /** Choix de la commande (/vorace pantin permanent on|off) jusqu'au redémarrage ; null : config.yml. */
+    private volatile Boolean permanentForce;
+
+    public void forcerPermanent(Boolean oui) {
+        permanentForce = oui;
+    }
+
+    /** Le pantin permanent est-il activé sur le serveur ? */
+    public boolean permanentActif() {
+        return actif() && (permanentForce != null ? permanentForce : plugin.getConfig().getBoolean("pantin.permanent.actif", false));
+    }
+
+    /** Ce joueur a-t-il son pantin permanent ? */
+    public boolean permanent(Player p) {
+        return permanents.contains(p.getUniqueId());
+    }
+
+    /** Coupe ou remet le pantin permanent de ce joueur (essais, cinématiques d'un autre plugin). */
+    public void autoriserPermanent(Player p, boolean oui) {
+        if (oui) sansPermanent.remove(p.getUniqueId());
+        else {
+            sansPermanent.add(p.getUniqueId());
+            lacher(p);
+        }
+    }
+
+    /** Modèle du pantin permanent de ce joueur (sa classe : « guerrier »...) ; null : le squelette « joueur ». */
+    public void modelePermanent(Player p, String modele) {
+        if (modele == null || modele.isBlank()) modelesPermanents.remove(p.getUniqueId());
+        else modelesPermanents.put(p.getUniqueId(), modele);
+        if (permanent(p)) porter(p);
+    }
+
+    /** Le joueur peut-il avoir son pantin en ce moment (vivant, pas spectateur, pas sous une vraie potion d'invisibilité) ? */
+    private boolean peutPorter(Player p) {
+        if (!permanentActif() || sansPermanent.contains(p.getUniqueId()) || !p.isOnline() || p.isDead()) return false;
+        if (p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return false;
+        if (p.hasPotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY)) return false;
+        // caméra de cinéma d'un ultime en cours : le pantin de l'ultime reste jusqu'à la fin
+        return !p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA));
+    }
+
+    /** Met (ou met à jour : skin, armure, objets tenus) le pantin permanent du joueur. Faux s'il ne peut pas en avoir. */
+    public boolean porter(Player p) {
+        Modeles m = plugin.modeles();
+        if (m == null || !peutPorter(p)) return false;
+        Map<String, ItemStack> pretes = peaux.get(p.getUniqueId());
+        if (pretes == null) {
+            preparer(p);
+            pretes = peaux.getOrDefault(p.getUniqueId(), Map.of());
+        }
+        String modele = modelesPermanents.getOrDefault(p.getUniqueId(), SQUELETTE);
+        boolean deja = m.permanent(p);
+        if (m.porterJoueur(p, modele, new LinkedHashMap<>(pretes), tenue(p)) == null) return false;
+        if (!deja) {
+            permanents.add(p.getUniqueId());
+            cacherCorps(p);
+            // une animation non permanente a pu être remplacée : ce qu'il voit sur lui revient
+            montrerSoi(p);
+        }
+        return true;
+    }
+
+    /** Retire le pantin permanent du joueur : il redevient le joueur du jeu. */
+    public void lacher(Player p) {
+        if (!permanents.remove(p.getUniqueId())) return;
+        gestes.remove(p.getUniqueId());
+        if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
+        montrerTout(p);
+    }
+
+    /** Toutes les 2 tics : pantin mis ou retiré selon l'état du joueur, gestes en boucle (manger, viser, bouclier). */
+    public void demarrerPermanent() {
+        if (tachePermanente != null) tachePermanente.cancel();
+        tachePermanente = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            Modeles m = plugin.modeles();
+            if (m == null) return;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                // caméra de cinéma d'un ultime : on ne touche à rien jusqu'à la fin
+                if (p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA))) continue;
+                boolean peut = peutPorter(p);
+                if (peut && !m.permanent(p)) {
+                    // une animation non permanente (pantin des compétences sans mode permanent) se finit d'abord
+                    Modeles.Instance i = m.instance(p);
+                    if (i == null) porter(p);
+                } else if (!peut && permanents.contains(p.getUniqueId())) {
+                    lacher(p);
+                }
+                if (peut && m.permanent(p)) gesteEnBoucle(p, m);
+            }
+        }, 20L, 2L);
+    }
+
+    /** Main levée (manger, boire, arc, arbalète, bouclier, trident) : le geste en boucle par-dessus les mouvements. */
+    private void gesteEnBoucle(Player p, Modeles m) {
+        String voulu = null;
+        if (p.isHandRaised()) {
+            ItemStack o = p.getActiveItem();
+            Material t = o == null ? Material.AIR : o.getType();
+            if (t.isEdible() || t == Material.POTION || t == Material.MILK_BUCKET || t == Material.HONEY_BOTTLE) voulu = "manger";
+            else if (t == Material.BOW) voulu = "viser_arc";
+            else if (t == Material.CROSSBOW) voulu = "viser_arbalete";
+            else if (t == Material.SHIELD) voulu = "garde_bouclier";
+            else if (t == Material.TRIDENT) voulu = "viser_trident";
+            else if (t == Material.SPYGLASS) voulu = "longue_vue";
+        }
+        String actuel = gestes.get(p.getUniqueId());
+        if (java.util.Objects.equals(voulu, actuel)) {
+            if (voulu != null) m.gesteJoueur(p, voulu, true);   // repris s'il a été coupé (coup reçu...)
+            return;
+        }
+        if (actuel != null) m.finGesteJoueur(p, actuel);
+        if (voulu != null && m.gesteJoueur(p, voulu, true)) gestes.put(p.getUniqueId(), voulu);
+        else gestes.remove(p.getUniqueId());
+    }
+
+    /** Coup de bras (frapper, poser, miner) : le geste par-dessus les mouvements. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void brasLeve(org.bukkit.event.player.PlayerAnimationEvent e) {
+        Player p = e.getPlayer();
+        if (!permanent(p) || plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
+        boolean gauche = e instanceof io.papermc.paper.event.player.PlayerArmSwingEvent s && s.getHand() == EquipmentSlot.OFF_HAND;
+        if (!(gauche && plugin.modeles().gesteJoueur(p, "geste_main_gauche", false))) plugin.modeles().gesteJoueur(p, "geste_main", false);
+    }
+
+    /** Armure ou objets tenus changés : le pantin permanent se rhabille au tic suivant. */
+    private void rhabillerPlusTard(Player p) {
+        if (!permanent(p)) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (permanent(p)) porter(p);
+        }, 1);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void armureChangee(com.destroystokyo.paper.event.player.PlayerArmorChangeEvent e) {
+        rhabillerPlusTard(e.getPlayer());
     }
 
     private final Map<UUID, Boolean> invisiblesAvant = new HashMap<>();
@@ -466,6 +637,27 @@ public final class Pantins implements Listener {
      * lui-même, son armure de corps disparaît aussi (en F5 elle flotterait autour du pantin) ; ses mains ne changent pas.
      */
     private void cacher(Player p) {
+        cacherCorps(p);
+        cacherSoi(p);
+    }
+
+    /** Ce que le joueur voit sur lui pendant une animation : ni armure (sauf corps fantôme) ni objets en main. */
+    private void cacherSoi(Player p) {
+        if (!plugin.getConfig().getBoolean("pantin.cacher-joueur", true)) return;
+        ItemStack vide = new ItemStack(Material.AIR);
+        if (caches != null && caches.actif() && plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)) caches.cacherSoi(p);
+        else if (!armureInventaire()) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
+    }
+
+    /** Fin d'une animation d'un pantin permanent : il revoit ses objets en main ; son corps reste caché. */
+    private void montrerSoi(Player p) {
+        if (caches != null && caches.cache(p)) caches.montrerSoi(p);
+        else if (!armureInventaire()) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
+        envoyerPaire(p);
+    }
+
+    /** Le vrai corps du joueur disparaît (pour les autres et, fantôme, pour lui) ; les autres ne voient plus son équipement. */
+    private void cacherCorps(Player p) {
         if (!plugin.getConfig().getBoolean("pantin.cacher-joueur", true)) return;
         // pendant une caméra de cinéma le joueur est spectateur, donc invisible pour le jeu : ce n'est pas son état à lui
         boolean cinema = p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA));
@@ -478,10 +670,8 @@ public final class Pantins implements Listener {
             if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
             for (EquipmentSlot e : EMPLACEMENTS) autre.sendEquipmentChange(p, e, vide);
         }
-        // chez lui : ni armure sur son corps invisible (F5), ni objets en main (ils sont dans les mains de son pantin) ;
-        // l'inventaire du serveur n'est pas touché, seules les copies envoyées changent (ObjetsCaches)
-        if (caches != null && caches.actif() && plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)) caches.cacher(p);
-        else if (!armureInventaire()) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
+        // les copies envoyées aux autres restent vides tant qu'il est caché (ObjetsCaches) ; chez lui, voir cacherSoi
+        if (caches != null && caches.actif()) caches.cacherAutres(p);
     }
 
     private ObjetsCaches caches;
@@ -496,12 +686,24 @@ public final class Pantins implements Listener {
         return fantomes;
     }
 
+    private Montures montures;
+
+    /** Morceaux montés sur le joueur chez les clients seulement (null : vrais passagers). */
+    public Montures montures() {
+        return montures;
+    }
+
     /** Après la couche paquets de Vorace : ce que le joueur voit sur lui pendant une animation, armes par paire. */
     public void brancherObjetsCaches() {
         if (plugin.getConfig().getBoolean("pantin.fantome.actif", true)) {
             Fantomes f = new Fantomes(plugin);
             if (f.demarrer()) fantomes = f;
         }
+        if (plugin.getConfig().getBoolean("pantin.monter-par-paquets", true)) {
+            Montures m = new Montures(plugin);
+            if (m.demarrer()) montures = m;
+        }
+        demarrerPermanent();
         ObjetsCaches c = new ObjetsCaches(plugin);
         if (!c.demarrer()) return;
         c.garderArmureSoi(armureInventaire());
@@ -538,6 +740,14 @@ public final class Pantins implements Listener {
     }
 
     private void montrer(Player p) {
+        if (permanent(p) && p.isOnline()) {
+            montrerSoi(p);
+            return;
+        }
+        montrerTout(p);
+    }
+
+    private void montrerTout(Player p) {
         Boolean avant = invisiblesAvant.remove(p.getUniqueId());
         if (avant == null || !p.isOnline()) return;
         if (fantomes != null && fantomes.cache(p)) fantomes.montrer(p);
@@ -546,7 +756,8 @@ public final class Pantins implements Listener {
         // l'écoute d'ObjetsCaches vide tout ce qui concerne une entité encore cachée. Renvoyés avant, le premier
         // (la main droite) arrivait souvent vide chez les autres et l'arme restait invisible jusqu'au changement suivant.
         boolean etaitCache = caches != null && caches.cache(p);
-        if (etaitCache) caches.montrer(p);
+        if (caches != null) caches.montrerAutres(p);
+        if (etaitCache) caches.montrerSoi(p);
         renvoyerEquipement(p, true);
         if (!etaitCache) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, p.getEquipment().getItem(e));
         envoyerPaire(p);
@@ -635,7 +846,14 @@ public final class Pantins implements Listener {
     /** Mort : le pantin s'arrête (ses morceaux sont des passagers du joueur). */
     @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
     public void mort(org.bukkit.event.entity.PlayerDeathEvent e) {
-        if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getEntity());
+        if (permanent(e.getEntity())) lacher(e.getEntity());
+        else if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getEntity());
+    }
+
+    /** Changement de monde : le pantin permanent est refait dans le nouveau monde (la tâche le remet). */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void mondePermanent(org.bukkit.event.player.PlayerChangedWorldEvent e) {
+        if (permanent(e.getPlayer())) lacher(e.getPlayer());
     }
 
     @EventHandler
@@ -643,8 +861,12 @@ public final class Pantins implements Listener {
         pairesMontrees.remove(e.getPlayer().getUniqueId());
         dernieresPaires.remove(e.getPlayer().getUniqueId());
         if (caches != null) caches.oublier(e.getPlayer());
+        permanents.remove(e.getPlayer().getUniqueId());
+        gestes.remove(e.getPlayer().getUniqueId());
+        sansPermanent.remove(e.getPlayer().getUniqueId());
+        modelesPermanents.remove(e.getPlayer().getUniqueId());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(e.getPlayer());
-        montrer(e.getPlayer());
+        montrerTout(e.getPlayer());
         invisiblesAvant.remove(e.getPlayer().getUniqueId());
         peaux.remove(e.getPlayer().getUniqueId());
         etats.remove(e.getPlayer().getUniqueId());

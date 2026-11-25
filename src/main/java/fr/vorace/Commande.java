@@ -600,7 +600,35 @@ public final class Commande implements CommandExecutor, TabCompleter {
                     ? "<green>Ton pantin joue " + Messages.echapper(anim) + ". <gray>(" + Messages.echapper(pa.etat(soi)) + ")"
                     : "<red>Animation inconnue dans joueur.bbmodel : " + Messages.echapper(anim)));
             }
-            default -> s.sendMessage(Messages.brut("<gray>/vorace pantin <white>preparer|etat [joueur]</white>, <white>jouer <joueur> <animation> [modèle]</white>, <white>essai [animation]</white>, <white>visible [joueur]"));
+            case "permanent" -> {
+                // /vorace pantin permanent <on|off> : pantin permanent pour tout le serveur, jusqu'au redémarrage
+                if (a.length < 3) {
+                    s.sendMessage(Messages.brut("<gray>Pantin permanent : <white>" + (pa.permanentActif() ? "activé" : "coupé")
+                        + "</white>. <gray>/vorace pantin permanent <white>on|off"));
+                    return;
+                }
+                boolean on = a[2].equalsIgnoreCase("on") || a[2].equalsIgnoreCase("oui");
+                pa.forcerPermanent(on);
+                s.sendMessage(Messages.brut(on ? "<green>Pantin permanent activé pour tous (jusqu'au redémarrage du serveur)."
+                    : "<yellow>Pantin permanent coupé pour tous."));
+            }
+            case "posture" -> {
+                if (a.length < 3) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace pantin posture <posture|aucune> [joueur]")); return; }
+                Player p = a.length > 3 ? Bukkit.getPlayerExact(a[3]) : soi;
+                if (p == null) { s.sendMessage(Messages.brut("<red>Joueur introuvable.")); return; }
+                String po = a[2].equalsIgnoreCase("aucune") ? null : a[2];
+                plugin.modeles().postureJoueur(p, po);
+                s.sendMessage(Messages.brut("<green>Posture de " + Messages.echapper(p.getName()) + " : " + (po == null ? "aucune" : Messages.echapper(po)) + "."));
+            }
+            case "modele", "modèle" -> {
+                if (a.length < 3) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace pantin modele <modèle> [joueur]")); return; }
+                Player p = a.length > 3 ? Bukkit.getPlayerExact(a[3]) : soi;
+                if (p == null) { s.sendMessage(Messages.brut("<red>Joueur introuvable.")); return; }
+                if (plugin.modeles().modele(a[2]) == null) { s.sendMessage(Messages.brut("<red>Modèle inconnu : " + Messages.echapper(a[2]))); return; }
+                pa.modelePermanent(p, a[2]);
+                s.sendMessage(Messages.brut("<green>Pantin permanent de " + Messages.echapper(p.getName()) + " : modèle " + Messages.echapper(a[2]) + "."));
+            }
+            default -> s.sendMessage(Messages.brut("<gray>/vorace pantin <white>preparer|etat [joueur]</white>, <white>jouer <joueur> <animation> [modèle]</white>, <white>essai [animation]</white>, <white>visible [joueur]</white>, <white>permanent on|off</white>, <white>posture <posture|aucune> [joueur]</white>, <white>modele <modèle> [joueur]"));
         }
     }
 
@@ -649,7 +677,17 @@ public final class Commande implements CommandExecutor, TabCompleter {
         } else if (a.length == 3 && a[0].equalsIgnoreCase("modele") && a[1].equalsIgnoreCase("reaction") && s.hasPermission("vorace.admin")) {
             for (String o : Modeles.REACTIONS) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
         } else if (a.length == 2 && a[0].equalsIgnoreCase("pantin") && s.hasPermission("vorace.admin")) {
-            for (String o : List.of("preparer", "etat", "jouer", "essai", "visible")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
+            for (String o : List.of("preparer", "etat", "jouer", "essai", "visible", "permanent", "posture", "modele")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("permanent") && s.hasPermission("vorace.admin")) {
+            for (String o : List.of("on", "off")) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("posture") && s.hasPermission("vorace.admin")) {
+            for (String o : List.of("aucune", "combat", "blesse")) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("modele") && s.hasPermission("vorace.admin") && plugin.modeles() != null) {
+            for (ModeleBB def : plugin.modeles().tous()) if (def.id().startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(def.id());
+        } else if (a.length == 4 && a[0].equalsIgnoreCase("pantin") && List.of("posture", "modele").contains(a[1].toLowerCase(Locale.ROOT))
+            && s.hasPermission("vorace.admin")) {
+            Bukkit.getOnlinePlayers().forEach(p -> r.add(p.getName()));
+            r.removeIf(x -> !x.toLowerCase(Locale.ROOT).startsWith(a[3].toLowerCase(Locale.ROOT)));
         } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && List.of("preparer", "etat", "jouer", "visible").contains(a[1].toLowerCase(Locale.ROOT))
             && s.hasPermission("vorace.admin")) {
             Bukkit.getOnlinePlayers().forEach(p -> r.add(p.getName()));
