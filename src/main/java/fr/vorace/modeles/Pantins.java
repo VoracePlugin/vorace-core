@@ -574,13 +574,66 @@ public final class Pantins implements Listener {
         java.util.List<Map.Entry<String, ItemStack>> l = new java.util.ArrayList<>();
         if (!plugin.getConfig().getBoolean("pantin.armure", true) || plugin.objets() == null) return l;
         java.util.List<String> connus = plugin.modeles() == null ? ArmuresPantin.VANILLE : plugin.modeles().armuresPantin();
+        org.bukkit.configuration.ConfigurationSection en3d = plugin.getConfig().getConfigurationSection("pantin.armures-3d");
+        boolean garderPlat = plugin.getConfig().getBoolean("pantin.armures-3d-plat", true);
         for (EquipmentSlot e : ARMURE) {
             ItemStack porte = p.getEquipment().getItem(e);
+            if (porte == null || porte.getType().isAir()) continue;
             String asset = asset(porte);
-            if (asset == null || !connus.contains(asset)) continue;
-            for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset))) l.add(Map.entry(c.os(), objetArmure(c, porte)));
+            // pièce d'armure en volume : un .bbmodel au squelette du joueur (pantin.armures-3d)
+            boolean volume = asset != null && en3d != null && en3d.isString(asset) && piecesEnVolume(l, en3d.getString(asset), e, porte);
+            if (asset != null && connus.contains(asset) && (!volume || garderPlat)) {
+                for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset))) l.add(Map.entry(c.os(), objetArmure(c, porte)));
+            } else if (e == EquipmentSlot.HEAD && asset == null) {
+                // casque 3D d'objet (vorace-item), citrouille, tête : posé sur la tête du pantin comme le jeu le fait
+                l.add(Map.entry(Modeles.TETE + "peau_tete", porte.clone()));
+            }
         }
         return l;
+    }
+
+    /** Groupe du .bbmodel d'une armure en volume qui contient les os de chaque pièce. */
+    private static String groupePiece(EquipmentSlot e) {
+        return switch (e) {
+            case HEAD -> "casque";
+            case CHEST -> "plastron";
+            case LEGS -> "jambieres";
+            default -> "bottes";
+        };
+    }
+
+    /**
+     * Pièce d'armure en volume : le .bbmodel {@code modele} (copie du squelette du joueur, mêmes os et mêmes pivots) range
+     * ses os par pièce dans des groupes « casque », « plastron », « jambieres », « bottes » ; chaque os qui a des cubes est
+     * posé sur l'os du pantin de même nom (« peau_bras_droit_haut »...). Faux si le modèle ou le groupe manque.
+     */
+    private boolean piecesEnVolume(java.util.List<Map.Entry<String, ItemStack>> l, String modele, EquipmentSlot e, ItemStack porte) {
+        ModeleBB m = plugin.modeles() == null ? null : plugin.modeles().modele(modele);
+        if (m == null || plugin.objets() == null) return false;
+        String groupe = groupePiece(e);
+        boolean trouve = false;
+        for (int k = 0; k < m.parties().size(); k++) {
+            ModeleBB.Partie pa = m.parties().get(k);
+            if (!pa.visible() || pa.nom() == null || !dansGroupe(m, k, groupe)) continue;
+            ItemStack o = plugin.objets().objetVisuel(GenerateurModeles.idPartie(m.id(), k)).clone();
+            org.bukkit.inventory.meta.ItemMeta meta = o.getItemMeta();
+            if (meta != null) {
+                meta.getPersistentDataContainer().set(Modeles.ECHELLE_PIECE, org.bukkit.persistence.PersistentDataType.FLOAT, (float) pa.echelle());
+                if (!porte.getEnchantments().isEmpty()) meta.setEnchantmentGlintOverride(true);
+                o.setItemMeta(meta);
+            }
+            l.add(Map.entry(pa.nom(), o));
+            trouve = true;
+        }
+        return trouve;
+    }
+
+    /** L'os k est-il rangé (à n'importe quelle profondeur) dans le groupe de ce nom ? */
+    private static boolean dansGroupe(ModeleBB m, int k, String groupe) {
+        for (int i = m.parties().get(k).parent(); i >= 0; i = m.parties().get(i).parent()) {
+            if (groupe.equalsIgnoreCase(m.parties().get(i).nom())) return true;
+        }
+        return false;
     }
 
     /** Os où le pantin tient ses objets (squelette « joueur » : au bout des avant-bras). */

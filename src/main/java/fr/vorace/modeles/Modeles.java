@@ -91,12 +91,26 @@ public final class Modeles {
      * voient le pantin à sa vraie place. 0 : pas de copie.
      */
     private float pantinRecul = 4f;
+    /**
+     * Essai : la copie pour soi tourne avec la caméra du joueur, à chaque image, sans attendre le serveur (affichages en
+     * « billboard » vertical) ; plus de retard du corps quand on tourne vite. Le serveur envoie alors ses poses sans
+     * orientation (repère du décalage, en degrés). En vue F5 de face, la caméra est retournée : la copie aussi.
+     */
+    private boolean billboardSoi;
+    private float billboardYaw;
     /** Caméra de cinéma en montant le joueur sur un support (barre d'objets gardée, moins fluide) au lieu du mode spectateur. */
     private boolean cameraMonture;
     /** Caméra de cinéma pour les animations qui ont un os « camera » animé (ultimes). */
     private boolean cameraCinema = true;
     /** Préfixes de nom d'os des objets tenus par le pantin (« main:poing_droit ») dans la liste des couches d'armure. */
     public static final String MAIN = "main:", MAIN_G = "main_gauche:";
+    /** Préfixe d'un objet porté sur la tête comme le jeu le fait (casque 3D d'objet, citrouille, tête) : « tete:peau_tete ». */
+    public static final String TETE = "tete:";
+    /**
+     * Échelle de la pièce dans son propre modèle (pièce d'armure 3D tirée d'un .bbmodel) : posée sur l'objet affiché par
+     * Pantins, lue ici ; absente : 1 (couches d'ArmuresPantin, générées à l'échelle 1).
+     */
+    public static final NamespacedKey ECHELLE_PIECE = new NamespacedKey("vorace", "echelle_piece");
 
     /**
      * Orientation d'un objet tenu dans le repère de l'avant-bras du modèle (Blockbench : y en haut, droite en +x, avant
@@ -514,15 +528,19 @@ public final class Modeles {
         }
         for (Map.Entry<String, ItemStack> c : armure) {
             String os = c.getKey();
-            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : 0;
+            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : os.startsWith(TETE) ? 3 : 0;
             if (main == 2) os = os.substring(MAIN_G.length());
             else if (main == 1) os = os.substring(MAIN.length());
+            else if (main == 3) os = os.substring(TETE.length());
             for (int k = 0; k < m.parties().size(); k++) {
                 if (!os.equalsIgnoreCase(m.parties().get(k).nom())) continue;
                 i.armureOs.add(k);
                 i.armureObjets.add(c.getValue());
                 i.armureMain.add(main);
                 i.armureBout.add(bout(m, k));
+                Float e = c.getValue().hasItemMeta()
+                    ? c.getValue().getItemMeta().getPersistentDataContainer().get(ECHELLE_PIECE, PersistentDataType.FLOAT) : null;
+                i.armureEchelle.add(e == null ? 1f : e);
                 break;
             }
         }
@@ -700,6 +718,8 @@ public final class Modeles {
             sortieTics = (int) Math.round(Math.max(0, Math.min(1, plugin.getConfig().getDouble("pantin.retour-secondes", 0.25))) * 20);
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
+            billboardSoi = plugin.getConfig().getBoolean("pantin.soi-tourne-avec-la-camera", false);
+            billboardYaw = (float) plugin.getConfig().getDouble("pantin.soi-tourne-avec-la-camera-decalage", 0);
             cameraCinema = plugin.getConfig().getBoolean("pantin.camera-ultimes", true);
             cameraMonture = "monture".equalsIgnoreCase(plugin.getConfig().getString("pantin.camera-mode", "spectateur"));
         } catch (Throwable t) {
@@ -1087,6 +1107,8 @@ public final class Modeles {
         final List<Integer> armureMain = new ArrayList<>();
         /** Bout de l'avant-bras vu depuis le pivot de l'os qui tient l'objet (pixels, repère de repos ; voir Modeles.bout). */
         final List<Vector3f> armureBout = new ArrayList<>();
+        /** Échelle de chaque couche dans son propre modèle (pièce d'armure 3D) ; 1 pour les couches d'ArmuresPantin. */
+        final List<Float> armureEchelle = new ArrayList<>();
 
         private Vector3f bout(int a) {
             return a < armureBout.size() ? new Vector3f(armureBout.get(a)) : new Vector3f();
@@ -1107,6 +1129,7 @@ public final class Modeles {
             int main = main(a);
             if (main == 1) return ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
             if (main == 0) return ItemDisplay.ItemDisplayTransform.NONE;
+            if (main == 3) return ItemDisplay.ItemDisplayTransform.HEAD;
             ItemStack o = armureObjets.get(a);
             boolean paire = o.hasItemMeta() && o.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE);
             if (o.getType() == org.bukkit.Material.SHIELD) return ItemDisplay.ItemDisplayTransform.NONE;   // placé à la main (ECU)
@@ -1146,7 +1169,16 @@ public final class Modeles {
                 if (seul != null || spectateurs != null) e.setVisibleByDefault(false);
             });
             if (seul != null) seul.showEntity(plugin, d);
+            if (seul != null && billboardSoi && pantin) d.setBillboard(Display.Billboard.VERTICAL);
             return d;
+        }
+
+        /** Copie pour soi en billboard : la transformation ramenée dans le repère sans orientation (la caméra la tourne). */
+        private Transformation repereSoi(Transformation t) {
+            if (!billboardSoi) return t;
+            Quaternionf delta = new Quaternionf().rotateY((float) Math.toRadians(yaw - billboardYaw));
+            return new Transformation(delta.transform(new Vector3f(t.getTranslation())), new Quaternionf(delta).mul(t.getLeftRotation()),
+                t.getScale(), t.getRightRotation());
         }
 
         private void envoyer(ItemDisplay d, Transformation t, Transformation[] cache, int i, int intervalle) {
@@ -1646,6 +1678,7 @@ public final class Modeles {
             armureObjets.clear();
             armureMain.clear();
             armureBout.clear();
+            armureEchelle.clear();
             habiller(this, modele, nouvellesPeaux, armure);
             boolean memesPeaux = avantPeaux.keySet().equals(peaux.keySet());
             if (memesPeaux) for (Map.Entry<Integer, ItemStack> e : peaux.entrySet()) if (!e.getValue().isSimilar(avantPeaux.get(e.getKey()))) memesPeaux = false;
@@ -1893,8 +1926,8 @@ public final class Modeles {
                     tr = new Transformation(new Vector3f(tr.getTranslation()).sub(0, siege, 0), tr.getLeftRotation(), tr.getScale(), tr.getRightRotation());
                 }
                 if (k < partiesSoi.length && partiesSoi[k] != null) {
-                    envoyer(partiesSoi[k], new Transformation(new Vector3f(tr.getTranslation()).add(recul), tr.getLeftRotation(), tr.getScale(),
-                        tr.getRightRotation()), envoyeesSoi, k, intervalle);
+                    envoyer(partiesSoi[k], repereSoi(new Transformation(new Vector3f(tr.getTranslation()).add(recul), tr.getLeftRotation(), tr.getScale(),
+                        tr.getRightRotation())), envoyeesSoi, k, intervalle);
                 }
                 if (!imageAutres || tr.equals(envoyees[k])) continue;
                 envoyees[k] = tr;
@@ -1909,9 +1942,16 @@ public final class Modeles {
                 if (d == null || !d.isValid() || k >= poses.length || poses[k] == null) continue;
                 Pose p = poses[k];
                 Vector3f ech = new Vector3f(p.echelle()).div((float) Math.max(1e-6, modele.parties().get(k).echelle()));
+                if (a < armureEchelle.size()) ech.mul(armureEchelle.get(a));
                 Vector3f tr = new Vector3f(p.translation());
                 if (siege != 0f && porte(d)) tr.sub(0, siege, 0);
                 Quaternionf rot = p.rotation();
+                if (main(a) == 3) {
+                    // objet porté sur la tête, comme la couche « tête » du jeu : 4 pixels au-dessus du cou, réduit à 0,625
+                    // (dans le repère de Blockbench, le demi-tour et le retournement du jeu s'annulent : seule l'échelle reste)
+                    tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 4f / 16f, 0).mul(ech)));
+                    ech.mul(0.625f);
+                }
                 if (bouclierGauche(a)) {
                     // bouclier sanglé à l'avant-bras gauche (comme l'écu des animations, epee.py) : la plaque à l'extérieur du
                     // bras, son haut vers le coude, son centre 4,5 pixels à l'extérieur et 4 au-dessus du poing. Dessiné sans
@@ -1923,7 +1963,7 @@ public final class Modeles {
                     rot = new Quaternionf(p.rotation()).rotateY((float) (-Math.PI / 2));
                     tr.add(new Quaternionf(p.rotation()).transform(bout(a).add(-3f, 4f, 0).div(16f).mul(e)));
                     tr.add(new Quaternionf(rot).transform(new Vector3f(0.5f, 0.5f, 0.5f).mul(e)));
-                } else if (main(a) != 0) {
+                } else if (main(a) == 1 || main(a) == 2) {
                     // objet tenu : au point de prise du jeu (2 pixels devant le bout de l'avant-bras), orienté comme en main. Le
                     // pivot du poing peut être ailleurs que le bout de l'avant-bras (sur la poignée : le poignet tourne alors autour
                     // de la poignée, qui reste dans le poing) : le décalage part du pivot (Modeles.bout).
@@ -1932,7 +1972,7 @@ public final class Modeles {
                 }
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
-                    envoyer(armuresSoi[a], new Transformation(new Vector3f(tr).add(recul), rot, ech, droite), armuresEnvoyeesSoi, a, intervalle);
+                    envoyer(armuresSoi[a], repereSoi(new Transformation(new Vector3f(tr).add(recul), rot, ech, droite)), armuresEnvoyeesSoi, a, intervalle);
                 }
                 if (!imageAutres || t.equals(armuresEnvoyees[a])) continue;
                 armuresEnvoyees[a] = t;

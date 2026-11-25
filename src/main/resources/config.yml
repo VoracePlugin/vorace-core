@@ -149,6 +149,18 @@ pantin:
     actif: false
     # modèle des mouvements prêtés
     mouvements: pantin_mouvements
+  # Essai : la copie que le joueur voit de lui-même tourne avec sa caméra à chaque image (affichages « billboard »), sans
+  # attendre le serveur : plus de retard du corps quand il tourne vite à la première personne. Limite : en vue F5 de face,
+  # la caméra est retournée et la copie aussi. Le décalage (degrés) corrige l'orientation si elle est fausse en jeu.
+  soi-tourne-avec-la-camera: false
+  soi-tourne-avec-la-camera-decalage: 0
+  # Armures en volume sur le pantin : modèle d'équipement de la pièce (composant equippable, « babel:fer ») → .bbmodel de
+  # modeles-animes. Ce .bbmodel est une copie du squelette du joueur (mêmes noms d'os, mêmes pivots) dont les os sont rangés
+  # dans des groupes « casque », « plastron », « jambieres », « bottes » ; les cubes de chaque os sont posés sur l'os du
+  # pantin de même nom (« peau_bras_droit_haut »...). Exemple :  babel:fer: armure_fer
+  armures-3d: {}
+  # garder aussi la couche plate du jeu sous la pièce en volume
+  armures-3d-plat: true
   # Fin d'une animation : le pantin garde sa dernière pose ce temps-là (le coup suivant d'un combo reprend le même
   # pantin), puis revient en douceur à la pose que le jeu donne au vrai joueur (corps tourné comme le sien, bras le long
   # du corps ou levé s'il tient un objet) avant l'échange : plus de saut vers le skin de base. 0 : échange immédiat.
