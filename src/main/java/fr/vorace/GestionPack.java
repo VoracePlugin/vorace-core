@@ -124,6 +124,13 @@ public final class GestionPack {
                 plugin.getLogger().warning("Pack illisible, ignoré : " + t.chemin() + " (" + e.getMessage() + ")");
             }
         }
+        // corps fantôme du pantin : les dessins d'armure portée ne se voient que dans les menus (MarqueArmures)
+        if (plugin.pantins() != null && plugin.getConfig().getBoolean("pantin.fantome.actif", true)
+                && plugin.getConfig().getBoolean("pantin.fantome.shader", true) && plugin.getConfig().getBoolean("pantin.fantome.armure-inventaire", true)) {
+            int n = 0;
+            for (Source s : sources) n += fr.vorace.modeles.MarqueArmures.marquer(s.fichiers());
+            if (r.debug()) plugin.getLogger().info("Corps fantôme : " + n + " dessin(s) d'armure marqué(s)");
+        }
         if (plugin.objets() != null) {
             Journal journalObjets = new Journal();
             java.util.Map<String, byte[]> objets = new java.util.TreeMap<>(plugin.objets().fichiersPack(format, journalObjets));

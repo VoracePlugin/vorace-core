@@ -119,6 +119,20 @@ pantin:
   # « spectateur » : caméra fluide, sans barre d'objets ni interface (cinématique). « monture » : le joueur monte sur
   # un support invisible et garde sa barre d'objets, mais la caméra est moins fluide.
   camera-mode: spectateur
+  # Corps fantôme : pendant que le pantin le remplace, le vrai joueur est invisible seulement dans les paquets (le serveur
+  # et les monstres le voient toujours). Chez lui, il est mis dans une équipe à lui (« voir les alliés invisibles ») et le
+  # shader du pack le dessine opaque dans les menus (son personnage dans l'inventaire, armure comprise) et l'efface dans le
+  # monde (F5 : il voit son pantin). Avec un pack de shaders Iris ou OptiFine actif, le shader du pack est ignoré : le
+  # fantôme reste semi-transparent. Les dessins d'armure portée du pack sont marqués (opacité 253) pour n'être dessinés sur
+  # le vrai joueur que dans les menus.
+  fantome:
+    actif: true
+    # false : chez lui, le joueur est totalement invisible (plus de fantôme, ni dans l'inventaire ni en F5)
+    equipe-soi: true
+    # shaders du corps fantôme et des armures ajoutés au pack
+    shader: true
+    # l'armure reste envoyée au joueur pendant une animation (visible dans son inventaire, effacée en F5 par le shader)
+    armure-inventaire: true
   # Fin d'une animation : le pantin garde sa dernière pose ce temps-là (le coup suivant d'un combo reprend le même
   # pantin), puis revient en douceur à la pose que le jeu donne au vrai joueur (corps tourné comme le sien, bras le long
   # du corps ou levé s'il tient un objet) avant l'échange : plus de saut vers le skin de base. 0 : échange immédiat.

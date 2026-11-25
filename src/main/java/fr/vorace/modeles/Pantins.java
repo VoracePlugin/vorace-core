@@ -77,6 +77,7 @@ public final class Pantins implements Listener {
     public void arreter() {
         file.shutdownNow();
         for (Player p : Bukkit.getOnlinePlayers()) montrer(p);
+        if (fantomes != null) fantomes.arreter();
     }
 
     // ------------------------------------------------------------------ préparation
@@ -469,7 +470,9 @@ public final class Pantins implements Listener {
         // pendant une caméra de cinéma le joueur est spectateur, donc invisible pour le jeu : ce n'est pas son état à lui
         boolean cinema = p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA));
         invisiblesAvant.putIfAbsent(p.getUniqueId(), !cinema && p.getGameMode() != org.bukkit.GameMode.SPECTATOR && p.isInvisible());
-        p.setInvisible(true);
+        // invisible seulement dans les paquets (les monstres le voient toujours) ; à défaut, invisible pour le serveur
+        if (fantomes != null && fantomes.actif()) fantomes.cacher(p);
+        else p.setInvisible(true);
         ItemStack vide = new ItemStack(Material.AIR);
         for (Player autre : p.getWorld().getPlayers()) {
             if (autre == p || autre.getLocation().distanceSquared(p.getLocation()) > 128 * 128) continue;
@@ -478,15 +481,30 @@ public final class Pantins implements Listener {
         // chez lui : ni armure sur son corps invisible (F5), ni objets en main (ils sont dans les mains de son pantin) ;
         // l'inventaire du serveur n'est pas touché, seules les copies envoyées changent (ObjetsCaches)
         if (caches != null && caches.actif() && plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)) caches.cacher(p);
-        else for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
+        else if (!armureInventaire()) for (EquipmentSlot e : ARMURE_SOI) p.sendEquipmentChange(p, e, vide);
     }
 
     private ObjetsCaches caches;
+    private Fantomes fantomes;
+
+    /** Le corps fantôme est en place : l'armure reste envoyée au joueur (il la voit dans son inventaire, le shader l'efface en F5). */
+    boolean armureInventaire() {
+        return fantomes != null && fantomes.actif() && plugin.getConfig().getBoolean("pantin.fantome.armure-inventaire", true);
+    }
+
+    public Fantomes fantomes() {
+        return fantomes;
+    }
 
     /** Après la couche paquets de Vorace : ce que le joueur voit sur lui pendant une animation, armes par paire. */
     public void brancherObjetsCaches() {
+        if (plugin.getConfig().getBoolean("pantin.fantome.actif", true)) {
+            Fantomes f = new Fantomes(plugin);
+            if (f.demarrer()) fantomes = f;
+        }
         ObjetsCaches c = new ObjetsCaches(plugin);
         if (!c.demarrer()) return;
+        c.garderArmureSoi(armureInventaire());
         caches = c;
         // filet : un joueur qui n'est plus caché par son pantin revoit tout ce qu'il porte
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {
@@ -522,7 +540,8 @@ public final class Pantins implements Listener {
     private void montrer(Player p) {
         Boolean avant = invisiblesAvant.remove(p.getUniqueId());
         if (avant == null || !p.isOnline()) return;
-        p.setInvisible(avant);
+        if (fantomes != null && fantomes.cache(p)) fantomes.montrer(p);
+        else p.setInvisible(avant);
         // D'abord retirer le joueur des entités cachées : les paquets d'équipement partent sur le fil réseau, où
         // l'écoute d'ObjetsCaches vide tout ce qui concerne une entité encore cachée. Renvoyés avant, le premier
         // (la main droite) arrivait souvent vide chez les autres et l'arme restait invisible jusqu'au changement suivant.

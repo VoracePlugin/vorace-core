@@ -122,6 +122,13 @@ public final class ObjetsCaches {
         return actif;
     }
 
+    private volatile boolean garderArmureSoi;
+
+    /** Corps fantôme : l'armure reste envoyée telle quelle au joueur pendant une animation (visible dans son inventaire). */
+    public void garderArmureSoi(boolean oui) {
+        garderArmureSoi = oui;
+    }
+
     // ------------------------------------------------------------------ état (fil principal)
 
     /** Début d'une animation : le joueur ne voit plus rien sur lui, les autres plus rien en main ni sur lui. */
@@ -282,7 +289,7 @@ public final class ObjetsCaches {
             }
             return o;
         }
-        if (cache && slot >= 5 && slot <= 8) return armure(o, PLACES_MENU[slot - 5]);
+        if (cache && slot >= 5 && slot <= 8) return garderArmureSoi ? o : armure(o, PLACES_MENU[slot - 5]);
         boolean barre = slot >= 36 && slot <= 44;
         Bras bras = barre ? brasSoi.get(j.getUniqueId()) : null;
         if (!cache && bras == null) return o;

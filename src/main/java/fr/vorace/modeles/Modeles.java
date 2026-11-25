@@ -229,6 +229,16 @@ public final class Modeles {
                     ObjetsCaches.definitionCachee(t));
             }
         }
+        // corps fantôme : shaders qui montrent le vrai joueur dans les menus seulement (Fantomes, MarqueArmures)
+        if (plugin.getConfig().getBoolean("pantin.fantome.actif", true) && plugin.getConfig().getBoolean("pantin.fantome.shader", true)) {
+            for (String n : MarqueArmures.SHADERS) {
+                try (InputStream in = plugin.getResource("pack-fantome/" + n)) {
+                    if (in != null) f.put(n, in.readAllBytes());
+                } catch (IOException e) {
+                    plugin.getLogger().warning("Shader du corps fantôme illisible : " + n);
+                }
+            }
+        }
         // case de la main gauche à côté de la barre d'objets : transparente (arme par paire montrée en F5 sans case)
         if (plugin.getConfig().getBoolean("pantin.cacher-case-main-gauche", true)) {
             for (String c : List.of("hotbar_offhand_left", "hotbar_offhand_right")) {
