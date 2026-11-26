@@ -91,6 +91,12 @@ public final class Modeles {
      * voient le pantin à sa vraie place. 0 : pas de copie.
      */
     private float pantinRecul = 4f;
+    /**
+     * Recul de plus (pixels) quand il regarde par terre, pantin permanent seulement. Les yeux du jeu sont 3 pixels au-dessus
+     * du haut du torse : en regardant en bas, le torse et les épaules remplissaient l'écran. Le corps recule donc à mesure
+     * que le regard descend : il voit son ventre en bas de l'écran et ses pieds, comme quand on se regarde les pieds.
+     */
+    private float pantinReculBas = 5f;
     /** Taille du pantin d'un joueur : le jeu dessine ses joueurs à 0,9375 (30 pixels de haut, 1,875 bloc), pas à 1 (2 blocs). */
     private float pantinTaille = 0.9375f;
     /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic en marche (1 : toujours face au regard), et écart maximal tête-corps. */
@@ -461,6 +467,9 @@ public final class Modeles {
         // geste « tenu » (hold : bander l'arc, charger l'arbalète) : joué une fois, il reste sur sa dernière pose
         boolean tenu = boucle && a.boucle().equals("hold");
         if (geste.equals(i.forcee) && i.forceePartielle && boucle) return true;
+        // coup joué une fois, redemandé avant d'avoir porté (clics rapides ; en minant, le jeu relance le bras tous les 3 ou
+        // 4 tics) : il va au bout. Sinon il repartait sans cesse de son élan et ne frappait jamais.
+        if (!boucle && geste.equals(i.forcee) && i.forceePartielle && tic - i.debutForcee < Math.round(a.duree() * 20 * 0.6)) return true;
         return i.demarrer(geste, boucle && !tenu, true);
     }
 
@@ -478,8 +487,17 @@ public final class Modeles {
             return false;
         }
         if (!geste.equals(i.fond) || i.finFond >= 0) {
-            // changement de main : le nouveau geste entre en fondu (l'ancien disparaît, les deux se ressemblent)
-            if (!geste.equals(i.fond)) i.debutFond = tic;
+            // autre objet ou autre main : le nouveau geste entre en fondu ; l'ancien reste entier dessous pendant ce temps,
+            // puis sort (le bras passe de l'un à l'autre au lieu de retomber)
+            if (!geste.equals(i.fond)) {
+                Animation av = i.fond == null || i.finFond >= 0 ? null : i.trouver(i.fond);
+                if (av != null) {
+                    i.fondSortant = av;
+                    i.tempsFondSortant = i.tempsPiste(av, i.debutFond, true);
+                    i.debutFondSortie = tic + fonduTics;
+                }
+                i.debutFond = tic;
+            }
             i.fond = geste;
             i.finFond = -1;
         }
@@ -795,6 +813,7 @@ public final class Modeles {
             sortieTics = (int) Math.round(Math.max(0, Math.min(1, plugin.getConfig().getDouble("pantin.retour-secondes", 0.25))) * 20);
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
+            pantinReculBas = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-regard-bas", 5)));
             pantinTaille = (float) Math.max(0.25, Math.min(4, plugin.getConfig().getDouble("pantin.taille", 0.9375)));
             pantinCorpsSuit = (float) Math.max(0.05, Math.min(1, plugin.getConfig().getDouble("pantin.corps-suit-regard", 0.3)));
             pantinTeteMax = (float) Math.max(0, Math.min(75, plugin.getConfig().getDouble("pantin.tete-max", 50)));
@@ -844,6 +863,12 @@ public final class Modeles {
     }
 
     /** Gestes de visée du pantin : leurs bras suivent le regard vers le haut ou le bas (voir Animateur.posesCompletes). */
+    /**
+     * Poids du geste de fond (la main qui tient un objet) : le reste laisse passer un peu du mouvement du corps, le bras qui
+     * porte l'épée balance légèrement avec la marche au lieu d'être figé.
+     */
+    static final float POIDS_FOND = 0.85f;
+
     static final java.util.Set<String> VISEES = java.util.Set.of("viser_arc", "viser_arc_tenu", "tir_arc", "viser_arbalete", "garde_bouclier",
         "longue_vue", "cor");
 
@@ -1268,13 +1293,22 @@ public final class Modeles {
 
         private ItemStack objetSoi(int k) {
             ItemStack o = objets[k];
-            return marqueSoi && o != null && MarqueSoi.bras(modele, k) ? MarqueSoi.marquer(o) : o;
+            return o != null && ((marqueSoi && MarqueSoi.bras(modele, k)) || teteMarquee(k)) ? MarqueSoi.marquer(o) : o;
+        }
+
+        /**
+         * Pantin permanent : la tête de sa copie (et son casque) est toujours marquée, donc effacée à la première personne
+         * (comme First-person Model, qui ne dessine jamais la tête) et entière en F5. Sans cela, il voyait sa propre tête
+         * en regardant par terre : elle se penche avec le regard et passait devant la caméra.
+         */
+        private boolean teteMarquee(int k) {
+            return permanent && MarqueSoi.tete(modele, k);
         }
 
         /** Objet de sa copie pour une couche : couche d'armure d'un bras marquée comme le bras (pas les objets tenus). */
         private ItemStack armureSoi(int a) {
             ItemStack o = armureObjets.get(a);
-            return marqueSoi && main(a) == 0 && MarqueSoi.bras(modele, armureOs.get(a)) ? MarqueSoi.marquer(o) : o;
+            return main(a) == 0 && ((marqueSoi && MarqueSoi.bras(modele, armureOs.get(a))) || teteMarquee(armureOs.get(a))) ? MarqueSoi.marquer(o) : o;
         }
 
         /** Change la marque des bras de sa copie (début ou fin d'une compétence). */
@@ -1446,6 +1480,12 @@ public final class Modeles {
         /** Pantin permanent : geste de fond (voir gesteDeFond), son début, et le tic où il a commencé à sortir (-1 : en place). */
         private String fond;
         private long debutFond, finFond = -1;
+        /** Geste de fond qu'on vient de remplacer, figé sur sa pose, qui sort en fondu sous le nouveau. */
+        private Animation fondSortant;
+        private double tempsFondSortant;
+        private long debutFondSortie;
+        /** Part du geste de fond (0 à 1) : il s'efface à plat ventre, sur une échelle et au lit, où les bras ont leur mouvement. */
+        private float partFond = 1f;
 
         /** Pantin d'un joueur : sa vitesse du dernier tic (blocs par tic), à plat et en hauteur. */
         private double vitesseAuto, monteeAuto;
@@ -1505,6 +1545,8 @@ public final class Modeles {
 
         /** Corps penché vers le regard (nage, vol, vrille), en degrés ; lissé d'un tic à l'autre. */
         private float inclinaison;
+        /** Part du recul « regard vers le bas » de sa copie (0 à 1), lissée. */
+        private float reculBas;
 
         /**
          * Penche le corps entier autour de la place du joueur (sa tête, à plat ventre) : positif = vers le bas. Le jeu fait
@@ -2223,6 +2265,16 @@ public final class Modeles {
 
             // geste de fond du pantin permanent (la main qui tient un objet) : sous les autres gestes, pas pendant une
             // compétence (elle anime elle-même les bras)
+            // À la nage, en rampant, en vol, sur une échelle ou au lit, les deux bras font le mouvement : le fond s'efface.
+            boolean fondPermis = !animationDemandee() && posture == null && !aPlat() && !auto("echelle") && !auto("dormir");
+            float pasFond = fonduTics > 0 ? Math.max(1, intervalle) / (float) fonduTics : 1f;
+            partFond = fondPermis ? Math.min(1f, partFond + pasFond) : Math.max(0f, partFond - pasFond);
+            if (animationDemandee() || posture != null) partFond = 0f;
+            if (fondSortant != null) {
+                float w = fonduTics > 0 ? Math.min(1f, 1f - (tic - debutFondSortie + 1) / (float) fonduTics) : 0f;
+                if (w <= 0f || fond == null) fondSortant = null;
+                else if (partFond > 0f) couches.add(new Animateur.Couche(fondSortant, tempsFondSortant, w * partFond * POIDS_FOND, true));
+            }
             if (fond != null) {
                 Animation fa = trouver(fond);
                 float w = fonduTics > 0 ? Math.min(1f, (tic - debutFond + 1) / (float) fonduTics) : 1f;
@@ -2230,8 +2282,8 @@ public final class Modeles {
                 if (fa == null || w <= 0f) {
                     fond = null;
                     finFond = -1;
-                } else if (!animationDemandee() && posture == null) {
-                    couches.add(new Animateur.Couche(fa, tempsPiste(fa, debutFond, true), w, true));
+                } else if (partFond > 0f) {
+                    couches.add(new Animateur.Couche(fa, tempsPiste(fa, debutFond, true), w * partFond * POIDS_FOND, true));
                 }
             }
 
@@ -2302,8 +2354,16 @@ public final class Modeles {
             List<Display> affAtt = moAtt == null ? List.of() : affichages();
             boolean attente = monte() && moAtt != null && moAtt.actif() && !affAtt.isEmpty() && moAtt.enAttente(affAtt.get(0));
             // copie pour soi : reculée vers l'arrière du corps (l'avant du modèle regarde -z)
+            // (pantin permanent debout : un peu plus quand il regarde par terre, de 20° à 80° vers le bas, voir pantinReculBas)
+            float bas = 0f;
+            if (permanent && pantinReculBas > 0 && base instanceof Player && ancre == null && !animationDemandee() && !aPlat() && !auto("dormir")) {
+                bas = lisse(Math.max(0f, Math.min(1f, (base.getLocation().getPitch() - 20f) / 60f)));
+            }
+            reculBas += (bas - reculBas) * 0.5f;
+            if (Math.abs(bas - reculBas) < 0.01f) reculBas = bas;
             Vector3f recul = partiesSoi.length == 0 ? new Vector3f()
-                : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw))).transform(new Vector3f(0, 0, pantinRecul / 16f * taille));
+                : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw))).transform(
+                    new Vector3f(0, 0, (pantinRecul + pantinReculBas * reculBas) / 16f * taille));
             for (int k = 0; k < parties.length; k++) {
                 ItemDisplay d = parties[k];
                 if (d == null || poses[k] == null || !d.isValid()) continue;
@@ -2588,9 +2648,10 @@ public final class Modeles {
         // pantin_mouvements.bbmodel de la 1.6.0 (24 animations) : remplacé par celui de la 1.7.0 s'il n'a pas été retouché.
         // À chaque nouvelle version de ce fichier, ajouter ici l'empreinte SHA-256 de la précédente.
         "e942599e1e7f3ce3f132d71de326028660feeb941780f9acfcae77e08476ba2a",
-        // ceux de la 1.7.0 (45 animations) et de la 1.7.1 (47)
+        // ceux de la 1.7.0 (45 animations), de la 1.7.1 (47) et de la 1.7.2 (49)
         "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e",
-        "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d");
+        "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d",
+        "3f7bfc697804da0ee20676b502b437b4667572d0fb0c4008f345d6e29ccc09bc");
 
     static String empreinte(byte[] octets) {
         try {

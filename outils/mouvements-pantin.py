@@ -10,7 +10,7 @@
 #   mouvements (corps entier, en boucle) : repos, marche, course, recul, pas_droite, pas_gauche, accroupi, accroupi_marche,
 #       saut, chute, planer, planer_avance (vol en créatif), nage, ramper, echelle, assis, dormir, vol, vrille
 #   gestes (par-dessus les mouvements : seuls leurs os bougent) : main droite, et « _gauche » pour la main gauche
-#       tenir, tenir_deux, geste_main, manger, boire, viser_arc, viser_arc_tenu, tir_arc, charger_arbalete, viser_arbalete, garde_bouclier,
+#       tenir, tenir_deux, tenir_arme (arme longue portée sur le côté), geste_main (coup court : outil, bloc), coup_poing (main vide), coup_arme (épée), coup_hache (hache, masse), manger, boire, viser_arc, viser_arc_tenu, tir_arc, charger_arbalete, viser_arbalete, garde_bouclier,
 #       viser_trident, longue_vue, cor, brosse ; et degat (coup reçu)
 #
 # Repère de Blockbench (x à droite du personnage, y en haut, il regarde vers -z) ; une clé de rotation (x, y, z) vaut la
@@ -651,6 +651,30 @@ p = copy.deepcopy(TENIR)
 p.update(miroir(TENIR))
 A.append(animation("tenir_deux", T, "loop", p))
 
+# tenir_arme : une arme longue (épée, hache, pioche, trident...) portée sur le côté, pas devant soi. Le bras pend, un peu
+# écarté ; le poignet penche la lame vers le sol (33°) et l'ouvre vers l'extérieur : elle pointe devant le pied, à 40° sous
+# l'horizontale, sans barrer la vue ni croiser les jambes. Vorace joue ce geste à 85 % : le reste est le balancement du
+# bras de la marche, qui passe un peu au travers.
+POIGNET_ARME = (33.0, 14.0, 0.0)       # y positif : la pointe vers l'extérieur (mesuré dans Blockbench)
+MAIN_ARME = (7.7, 12.4, 0.8)
+COUDE_ARME = (0.0, -0.2, 1.0)      # coude droit derrière : le bras plie d'avant en arrière, la lame reste dans l'axe
+
+
+def tenir_arme(t):
+    s = math.sin(PHI(t, T))
+    return {"droit": ((MAIN_ARME[0] + 0.1 * s, MAIN_ARME[1] + 0.2 * s, MAIN_ARME[2]), COUDE_ARME)}
+
+
+TENIR_ARME = geste(T, tenir_arme, "loop")
+TENIR_ARME["poing_droit"] = {"rotation": ech(T, lambda t: (POIGNET_ARME[0] + 1.5 * math.sin(PHI(t, T) - 0.8), POIGNET_ARME[1], 0))}
+deux("tenir_arme", T, "loop", TENIR_ARME)
+# avec autre chose dans l'autre main : arme à droite et objet à gauche, l'inverse, ou deux armes
+for nom_, droite_, gauche_ in (("tenir_arme_deux", TENIR_ARME, miroir(TENIR)), ("tenir_deux_arme", TENIR, miroir(TENIR_ARME)),
+                               ("tenir_armes", TENIR_ARME, miroir(TENIR_ARME))):
+    p = copy.deepcopy(droite_)
+    p.update(gauche_)
+    A.append(animation(nom_, T, "loop", p))
+
 
 # coup de bras (9 tics ; 6 dans le jeu) : un coup DROIT, de haut en bas devant l'épaule, comme le jeu et comme le coup d'outil
 # de Mo' Bends (le bras ne tourne que d'avant en arrière, le buste accompagne). Le bras reste dans le plan de l'épaule : la
@@ -677,6 +701,92 @@ def coup(t):
 COUP_PISTES = geste(0.45, coup, "once")
 COUP_PISTES["poing_droit"] = {"rotation": ech(0.45, lambda t: (max(-10.0, min(45.0, courbe(COUP, t)[4])), 0, 0), False)}
 deux("geste_main", 0.45, "once", COUP_PISTES)
+
+# coup d'arme (épée, masse ; 11 tics) : une vraie taille de haut en bas, avec tout le haut du corps. L'arme part du côté
+# (la pose tenir_arme), monte par devant jusqu'au-dessus de l'épaule pendant que le buste se tourne et se redresse
+# (l'élan, 3 tics) ; le buste revient et plonge, le bras se tend, le poignet se casse : la lame tombe droit
+# devant sur son tranchant (2 tics), continue jusque devant la cuisse, puis l'arme retourne sur le côté. L'autre bras fait
+# contrepoids : devant pendant l'élan, ramené à la hanche pendant le coup.
+# (temps, main, rotation du buste (x, y), poignet (x, y), main de l'autre bras)
+TAILLE = [
+    (0.00, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
+    (0.05, (8.2, 15.6, -4.6), (-1.0, 5.0), (20.0, 10.0), (-6.4, 13.6, -2.6)),
+    (0.10, (8.0, 22.5, -6.0), (-4.0, 12.0), (2.0, 4.0), (-5.8, 15.6, -5.4)),
+    (0.15, (7.1, 28.4, -2.2), (-6.0, 18.0), (-10.0, 0.0), (-5.4, 17.0, -6.8)),
+    (0.20, (6.6, 24.4, -8.8), (2.0, 2.0), (12.0, 0.0), (-6.4, 15.0, -3.0)),
+    (0.25, (6.0, 15.6, -11.0), (9.0, -12.0), (42.0, 0.0), (-7.4, 13.6, 1.4)),
+    (0.30, (5.4, 12.6, -6.0), (11.0, -15.0), (45.0, 0.0), (-7.6, 13.4, 2.4)),
+    (0.40, (6.6, 12.2, -2.6), (6.0, -8.0), (40.0, 8.0), (-7.2, 13.0, 1.2)),
+    (0.55, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
+]
+
+
+def taille(t):
+    main = courbe([(a, m) for a, m, _, _, _ in TAILLE], t)
+    bx, by = courbe([(a, b) for a, _, b, _, _ in TAILLE], t)
+    autre = courbe([(a, g) for a, _, _, _, g in TAILLE], t)
+    # le coude plie dans le plan du bras (une charnière) : la lame reste dans ce plan, elle tombe sur son tranchant
+    return {"buste": (bx, by, 0), "droit": (main, (0.1, main[2], 22 - main[1])), "gauche": (autre, (-0.6, -0.4, 1.0))}
+
+
+TAILLE_PISTES = geste(0.55, taille, "once")
+TAILLE_PISTES["poing_droit"] = {"rotation": ech(0.55, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, _, q, _ in TAILLE], t))),
+                                                                 courbe([(a, q[1]) for a, _, _, q, _ in TAILLE], t), 0), False)}
+deux("coup_arme", 0.55, "once", TAILLE_PISTES)
+
+# coup de poing (main vide ; 9 tics) : un direct. Le poing se ramène contre les côtes, l'épaule recule (2 tics), puis
+# part droit devant à hauteur de poitrine, le buste tourne avec lui et l'autre main monte en garde ; il revient aussitôt.
+# (temps, poing, rotation du buste (x, y), autre main)
+DIRECT = [
+    (0.00, (6.4, 12.6, -1.0), (0.0, 0.0), (-6.4, 12.6, -1.0)),
+    (0.05, (7.0, 16.8, -2.0), (-1.0, 9.0), (-5.8, 15.4, -3.8)),
+    (0.10, (6.8, 19.4, -4.4), (-1.0, 13.0), (-5.0, 18.0, -5.6)),
+    (0.15, (5.6, 20.9, -9.4), (2.0, -4.0), (-4.8, 18.8, -5.8)),
+    (0.20, (4.6, 21.4, -13.8), (4.0, -18.0), (-4.6, 19.2, -5.8)),
+    (0.25, (4.8, 21.0, -12.2), (4.0, -15.0), (-4.6, 19.0, -5.8)),
+    (0.30, (5.4, 20.2, -9.6), (3.0, -9.0), (-5.0, 17.6, -5.2)),
+    (0.35, (6.2, 17.6, -6.0), (1.0, -4.0), (-5.8, 15.0, -3.4)),
+    (0.45, (6.4, 12.6, -1.0), (0.0, 0.0), (-6.4, 12.6, -1.0)),
+]
+
+
+def direct(t):
+    main = courbe([(a, m) for a, m, _, _ in DIRECT], t)
+    bx, by = courbe([(a, b) for a, _, b, _ in DIRECT], t)
+    autre = courbe([(a, g) for a, _, _, g in DIRECT], t)
+    return {"buste": (bx, by, 0), "droit": (main, (0.5, -1, 0.6)), "gauche": (autre, (-0.5, -1, 0.5))}
+
+
+deux("coup_poing", 0.45, "once", geste(0.45, direct, "once"))
+
+# coup de hache (hache, masse ; 13 tics) : plus lourd que la taille à l'épée. L'élan est plus long (4 tics, le buste se
+# cambre et tourne davantage), la hache tombe de plus haut et le buste plonge avec elle ; elle finit basse devant la jambe
+# et remonte lentement. En coupant du bois, Vorace n'en relance un que quand celui-ci a porté.
+HACHE = [
+    (0.00, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
+    (0.05, (8.2, 15.0, -4.2), (-1.0, 5.0), (22.0, 10.0), (-6.4, 13.4, -2.4)),
+    (0.10, (8.2, 20.6, -6.2), (-4.0, 12.0), (8.0, 4.0), (-6.0, 15.0, -4.6)),
+    (0.15, (7.6, 26.4, -4.4), (-8.0, 20.0), (-6.0, 0.0), (-5.4, 16.8, -6.4)),
+    (0.20, (7.0, 29.0, -1.2), (-10.0, 24.0), (-10.0, 0.0), (-5.2, 17.4, -7.0)),
+    (0.25, (6.6, 25.0, -8.6), (0.0, 6.0), (10.0, 0.0), (-6.2, 15.4, -3.4)),
+    (0.30, (5.8, 15.0, -10.8), (13.0, -14.0), (42.0, 0.0), (-7.4, 13.4, 1.6)),
+    (0.35, (5.2, 11.6, -6.4), (16.0, -18.0), (45.0, 0.0), (-7.6, 13.0, 2.6)),
+    (0.45, (6.2, 11.8, -3.4), (10.0, -11.0), (42.0, 6.0), (-7.2, 12.8, 1.4)),
+    (0.65, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
+]
+
+
+def hache(t):
+    main = courbe([(a, m) for a, m, _, _, _ in HACHE], t)
+    bx, by = courbe([(a, b) for a, _, b, _, _ in HACHE], t)
+    autre = courbe([(a, g) for a, _, _, _, g in HACHE], t)
+    return {"buste": (bx, by, 0), "droit": (main, (0.1, main[2], 22 - main[1])), "gauche": (autre, (-0.6, -0.4, 1.0))}
+
+
+HACHE_PISTES = geste(0.65, hache, "once")
+HACHE_PISTES["poing_droit"] = {"rotation": ech(0.65, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, _, q, _ in HACHE], t))),
+                                                                courbe([(a, q[1]) for a, _, _, q, _ in HACHE], t), 0), False)}
+deux("coup_hache", 0.65, "once", HACHE_PISTES)
 
 # manger : la main à la bouche, de petits va-et-vient (une bouchée tous les 4 tics dans le jeu) ; la tête pique un peu
 T = 0.4

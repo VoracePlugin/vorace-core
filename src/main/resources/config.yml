@@ -113,6 +113,9 @@ pantin:
   # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
   # lui sans avoir les épaules dans la caméra. Les autres voient le pantin à sa vraie place. 0 : pas de recul.
   recul-pour-soi: 4
+  # Pantin permanent : recul de plus (pixels) quand il regarde par terre. Les yeux du jeu sont juste au-dessus du torse :
+  # sans ce recul, le torse et les épaules remplissent l'écran dès qu'on baisse les yeux. 0 : désactivé.
+  recul-regard-bas: 5
   # Taille du pantin des joueurs. Le jeu dessine ses joueurs à 0,9375 (1,875 bloc de haut) : à 1, le pantin fait 2 blocs et
   # son crâne entre dans le plafond d'un couloir de 2 blocs.
   taille: 0.9375

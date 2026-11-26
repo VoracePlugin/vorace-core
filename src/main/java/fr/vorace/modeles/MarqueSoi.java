@@ -55,6 +55,18 @@ public final class MarqueSoi {
         return c;
     }
 
+    /** Os de la tête (ou d'un de ses enfants : chapeau, casque) : « tete… », « head »… */
+    static boolean tete(ModeleBB m, int k) {
+        for (int i = k; i >= 0 && i < m.parties().size(); i = m.parties().get(i).parent()) {
+            String n = m.parties().get(i).nom();
+            if (n == null) continue;
+            n = n.toLowerCase(Locale.ROOT);
+            if (n.startsWith("peau_")) n = n.substring(5);
+            if (n.startsWith("tete") || n.startsWith("tête") || n.equals("head") || n.startsWith("head_")) return true;
+        }
+        return false;
+    }
+
     /** Os du bras (ou d'un de ses enfants : avant-bras, poing) : « bras… », « …_bras… », « arm », « left_arm »… */
     static boolean bras(ModeleBB m, int k) {
         for (int i = k; i >= 0 && i < m.parties().size(); i = m.parties().get(i).parent()) {

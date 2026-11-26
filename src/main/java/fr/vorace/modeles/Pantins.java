@@ -600,8 +600,7 @@ public final class Pantins implements Listener {
         }
         // geste de fond : la main qui tient un objet (la pose « objet en main » du jeu), sous les autres gestes ; une posture
         // de classe pose elle-même les bras
-        boolean d = droite != null && !droite.getType().isAir(), g = autre != null && !autre.getType().isAir();
-        m.gesteDeFond(p, m.aPosture(p) || !(d || g) ? null : d && g ? "tenir_deux" : d ? "tenir" : "tenir_gauche");
+        m.gesteDeFond(p, m.aPosture(p) ? null : fond(p, m, droite, autre));
         if (voulu != null && gauche) voulu += "_gauche";
         String actuel = gestes.get(p.getUniqueId());
         if (java.util.Objects.equals(voulu, actuel)) {
@@ -614,6 +613,42 @@ public final class Pantins implements Listener {
         else gestes.remove(p.getUniqueId());
         // l'arc de son pantin se tend ou se détend (voir mains)
         if (commence(voulu, "viser_arc") || commence(actuel, "viser_arc")) porter(p);
+    }
+
+    /**
+     * Geste de fond selon ce qu'il tient : une arme longue (épée, hache, outil, trident...) se porte sur le côté
+     * (« tenir_arme »), le reste devant soi comme dans le jeu (« tenir »). Null : mains vides. Un modèle qui n'a pas les
+     * gestes d'arme garde « tenir ».
+     */
+    private static String fond(Player p, Modeles m, ItemStack droite, ItemStack gauche) {
+        boolean d = droite != null && !droite.getType().isAir(), g = gauche != null && !gauche.getType().isAir();
+        if (!d && !g) return null;
+        boolean ad = d && armeLongue(droite), ag = g && armeLongue(gauche);
+        String simple = d && g ? "tenir_deux" : d ? "tenir" : "tenir_gauche";
+        String voulu = d && g ? (ad && ag ? "tenir_armes" : ad ? "tenir_arme_deux" : ag ? "tenir_deux_arme" : simple)
+            : d ? (ad ? "tenir_arme" : simple) : (ag ? "tenir_arme_gauche" : simple);
+        return voulu.equals(simple) || m.aGeste(p, voulu) ? voulu : simple;
+    }
+
+    /** Arme ou outil à long manche : épée, hache, pioche, pelle, houe, lance, trident, masse. */
+    static boolean armeLongue(ItemStack o) {
+        if (o == null) return false;
+        String n = o.getType().name();
+        return n.endsWith("_SWORD") || n.endsWith("_AXE") || n.endsWith("_PICKAXE") || n.endsWith("_SHOVEL") || n.endsWith("_HOE")
+            || n.endsWith("_SPEAR") || n.equals("TRIDENT") || n.equals("MACE");
+    }
+
+    /**
+     * Geste du coup selon ce que tient la main qui frappe : un direct à main nue (« coup_poing »), une taille de haut en
+     * bas à l'épée (« coup_arme »), un coup lourd à la hache ou à la masse (« coup_hache ») ; le coup court pour le reste
+     * (« geste_main » : pioche, pelle, bloc qu'on pose, objet qu'on utilise).
+     */
+    static String coup(ItemStack o) {
+        if (o == null || o.getType().isAir()) return "coup_poing";
+        String n = o.getType().name();
+        if (n.endsWith("_SWORD") || n.equals("TRIDENT") || n.endsWith("_SPEAR")) return "coup_arme";
+        if ((n.endsWith("_AXE") && !n.endsWith("_PICKAXE")) || n.equals("MACE")) return "coup_hache";
+        return "geste_main";
     }
 
     private static boolean commence(String geste, String nom) {
@@ -667,7 +702,11 @@ public final class Pantins implements Listener {
         // pas pendant un geste d'utilisation (manger, viser...)
         if (!permanent(p) || plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
         boolean gauche = e instanceof io.papermc.paper.event.player.PlayerArmSwingEvent s && s.getHand() == EquipmentSlot.OFF_HAND;
-        if (!(gauche && plugin.modeles().gesteJoueur(p, "geste_main_gauche", false))) plugin.modeles().gesteJoueur(p, "geste_main", false);
+        Modeles m = plugin.modeles();
+        // un coup par sorte d'objet (poing, épée, hache...) ; un modèle qui ne l'a pas garde le coup court
+        String coup = coup(gauche ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand());
+        if (!coup.equals("geste_main") && m.gesteJoueur(p, gauche ? coup + "_gauche" : coup, false)) return;
+        if (!(gauche && m.gesteJoueur(p, "geste_main_gauche", false))) m.gesteJoueur(p, "geste_main", false);
     }
 
     /** Armure ou objets tenus changés : le pantin permanent se rhabille au tic suivant. */

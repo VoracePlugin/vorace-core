@@ -126,6 +126,13 @@ public final class TestPantins {
             if (n.contains("bras") || n.startsWith("poing")) brasOk &= estBras; else autresOk &= !estBras;
         }
         verifier(brasOk && autresOk, "marque : bras, avant-bras et poings, rien d'autre (tête, tronc, jambes)");
+        // tête de sa copie (pantin permanent) : marquée elle aussi, effacée à la première personne ; elle seule
+        boolean teteOk = true;
+        for (int k = 0; k < j.parties().size(); k++) {
+            String n = String.valueOf(j.parties().get(k).nom()).toLowerCase(java.util.Locale.ROOT);
+            teteOk &= MarqueSoi.tete(j, k) == n.contains("tete");
+        }
+        verifier(teteOk, "marque : la tête (et ce qu'elle porte), pas le tronc ni les membres");
 
         // tête du pantin : l'os « peau_tete » suit le regard (il n'était pas reconnu : la tête ne tournait jamais)
         boolean[] tetes = Animateur.tetes(j);
@@ -141,7 +148,7 @@ public final class TestPantins {
         ModeleBB mv = lire("pantin_mouvements");
         boolean tous = true;
         for (String n : List.of("repos", "marche", "course", "recul", "pas_droite", "pas_gauche", "accroupi", "accroupi_marche", "saut", "chute",
-                "planer", "planer_avance", "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
+                "planer", "planer_avance", "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir_arme", "tenir_arme_gauche", "tenir_arme_deux", "tenir_deux_arme", "tenir_armes", "coup_arme", "coup_arme_gauche", "coup_poing", "coup_poing_gauche", "coup_hache", "coup_hache_gauche", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
                 "geste_main_gauche", "manger", "boire", "viser_arc", "viser_arc_gauche", "viser_arc_tenu", "viser_arc_tenu_gauche", "tir_arc", "charger_arbalete", "viser_arbalete",
                 "garde_bouclier", "garde_bouclier_gauche", "viser_trident", "longue_vue", "cor", "brosse", "degat")) {
             tous &= mv.animations().containsKey(n);

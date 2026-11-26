@@ -1,5 +1,36 @@
 # Journal des changements
 
+## 1.7.3 (novembre 2026) : arme portée sur le côté, un vrai coup par arme, tête et épaules à la première personne
+
+Retours d'Antoine en jeu : « quand on marche, il faudrait que l'épée soit pas aussi devant nous, elle devrait être sur le
+côté ; c'est bon pour un arc parce qu'il est court » ; « pour chaque coup, faut une vraie animation : un vrai coup de poing,
+un vrai tapage à l'épée, à la hache, tous les coups possibles » ; « quand je regarde par terre en marchant, je vois ma
+tête » ; « c'est un peu bizarre de voir ses épaules aussi grosses sur soi ».
+
+- **Arme longue portée sur le côté** (`tenir_arme` : épée, hache, pioche, pelle, houe, lance, trident, masse) : le bras
+  pend, la lame pointe vers le sol devant le pied, un peu ouverte vers l'extérieur. Elle ne barre plus la vue. Les autres
+  objets (arc, bloc, nourriture) restent tenus devant, comme dans le jeu. Variantes pour les deux mains : `tenir_arme_gauche`,
+  `tenir_arme_deux` (arme et objet), `tenir_deux_arme`, `tenir_armes`.
+- **Un coup par sorte d'objet**, pour la main droite et la gauche :
+  - main vide : `coup_poing`, un direct (le poing se ramène aux côtes, part droit devant, le buste tourne, l'autre main
+    monte en garde) ;
+  - épée, trident, lance : `coup_arme`, une taille de haut en bas avec tout le haut du corps (élan au-dessus de l'épaule, le
+    buste revient et plonge, le poignet se casse, l'autre bras fait contrepoids), qui part du côté et y revient ;
+  - hache, masse : `coup_hache`, plus lourd (élan plus long, la hache tombe de plus haut et finit basse) ;
+  - pioche, pelle, houe, bloc, objet : `geste_main`, le coup court.
+- **Un coup va au bout avant d'être relancé** : en minant, le jeu relance le bras tous les 3 ou 4 tics ; le geste repartait
+  à chaque fois de son élan et ne frappait jamais. Il n'est relancé qu'après avoir porté (60 % de sa durée).
+- **Sa tête n'est plus dessinée à la première personne** (pantin permanent) : la tête de sa copie porte la marque que le
+  shader du pack efface près de la caméra, comme ses bras en vue « main-du-jeu ». En F5, elle est là. Elle se penche avec le
+  regard et passait devant la caméra quand il regardait par terre.
+- **Recul quand il regarde par terre** (`pantin.recul-regard-bas`, 5 pixels) : les yeux du jeu sont 3 pixels au-dessus du
+  torse ; en baissant les yeux, le torse et les épaules remplissaient l'écran. Le corps recule à mesure que le regard
+  descend (de 20° à 80°) : il voit son ventre en bas de l'écran et ses pieds.
+- **Geste de fond** (la main qui tient un objet) : joué à 85 %, le bras qui porte l'arme balance un peu avec la marche au
+  lieu d'être figé ; on passe d'un objet à l'autre en fondu (le bras ne retombe plus entre les deux) ; il s'efface à la
+  nage, en rampant, en vol, sur une échelle et au lit, où les deux bras font le mouvement.
+- Le `pantin_mouvements.bbmodel` de la 1.7.2 est remplacé tout seul s'il n'a pas été retouché (60 animations).
+
 ## 1.7.2 (novembre 2026) : course, vol en créatif, coup d'épée droit, manches courtes, épée en double
 
 Retours d'Antoine en jeu : « comment tu cours, c'est pas beau, surtout les deux mains qui font comme ça ; c'est encore plus
