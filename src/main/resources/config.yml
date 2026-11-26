@@ -132,7 +132,10 @@ pantin:
     equipe-soi: true
     # shaders du corps fantôme et des armures ajoutés au pack
     shader: true
-    # l'armure reste envoyée au joueur pendant une animation (visible dans son inventaire, effacée en F5 par le shader)
+    # Avec le pantin permanent seulement : l'armure reste envoyée au joueur (visible sur son personnage dans l'inventaire) et
+    # le shader des armures du pack l'efface dans le monde, où son pantin porte la sienne. Sans pantin permanent, le pack ne
+    # touche pas aux armures (les joueurs sont dessinés par le jeu). Après /vorace pantin permanent on|off : /vorace reload
+    # puis /vorace envoyer tous, pour que le pack suive.
     armure-inventaire: true
     # aucune armure portée dessinée dans le monde (armures du jeu comprises, dont les dessins ne sont pas dans le pack et ne
     # peuvent pas être marqués) : le vrai joueur n'en porte plus en F5, le pantin porte la sienne. Effet de bord : les
@@ -158,6 +161,13 @@ pantin:
     # envoyées moins souvent quand personne n'est près : 1 tic sur 2 au-delà de 16 blocs, 1 sur 3 au-delà de 32, 1 sur 4
     # au-delà de 64 ; le jeu adoucit entre deux). Avec cacher-toutes-armures, le joueur du jeu vu de loin n'a pas d'armure.
     distance: 0
+    # Qui tient l'objet à la première personne (essai en jeu : /vorace pantin vue pantin|main-du-jeu) :
+    #   pantin       comme le mod First-person Model : le pantin tient l'objet dans ses mains, à la première personne comme
+    #                en F5 ; la main du jeu est cachée (l'objet garde son icône dans la barre). Le joueur voit ses bras et
+    #                son arme bouger avec ses animations.
+    #   main-du-jeu  la main du jeu tient l'objet à la première personne ; les bras de son pantin sont effacés près de la
+    #                caméra (shader du pack) et son pantin ne tient rien hors compétence, même en F5.
+    premiere-personne: pantin
   # Essai : la copie que le joueur voit de lui-même tourne avec sa caméra à chaque image (affichages « billboard »), sans
   # attendre le serveur : plus de retard du corps quand il tourne vite à la première personne. Limite : en vue F5 de face,
   # la caméra est retournée et la copie aussi. Le décalage (degrés) corrige l'orientation si elle est fausse en jeu.

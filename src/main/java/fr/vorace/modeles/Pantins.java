@@ -414,6 +414,58 @@ public final class Pantins implements Listener {
         return actif() && (permanentForce != null ? permanentForce : plugin.getConfig().getBoolean("pantin.permanent.actif", false));
     }
 
+    /** Vues à la première personne d'un pantin permanent (pantin.permanent.premiere-personne). */
+    public static final String VUE_PANTIN = "pantin", VUE_MAIN_DU_JEU = "main-du-jeu";
+
+    /** Choix de la commande (/vorace pantin vue ...) jusqu'au redémarrage ; null : config.yml. */
+    private volatile String vueForcee;
+    /** Vue en vigueur (relue toutes les 2 tics) : vrai = la main du jeu tient l'objet à la première personne. */
+    private volatile boolean vueMainDuJeu;
+    /** Vue déjà appliquée à chaque joueur au pantin permanent (vrai = main du jeu). */
+    private final Map<UUID, Boolean> vues = new ConcurrentHashMap<>();
+
+    public void forcerVue(String vue) {
+        vueForcee = vue == null || vue.isBlank() ? null : vue.toLowerCase(java.util.Locale.ROOT);
+        vueMainDuJeu = lireVue();
+    }
+
+    /** Nom de la vue en vigueur (« pantin » ou « main-du-jeu »). */
+    public String vue() {
+        return lireVue() ? VUE_MAIN_DU_JEU : VUE_PANTIN;
+    }
+
+    /**
+     * Vue à la première personne des pantins permanents. « pantin » (comme le mod First-person Model) : le pantin tient
+     * l'objet, la main du jeu est cachée, à la première personne comme en F5. « main-du-jeu » : la main du jeu tient
+     * l'objet, les bras de sa copie sont effacés près de la caméra et sa copie ne tient rien hors compétence. Sans les
+     * objets cachés par paquets (ObjetsCaches), seule la seconde est possible.
+     */
+    private boolean lireVue() {
+        if (caches == null || !caches.actif() || !plugin.getConfig().getBoolean("pantin.cacher-joueur", true)
+            || !plugin.getConfig().getBoolean("pantin.cacher-objets-soi", true)) return true;
+        String v = vueForcee != null ? vueForcee : plugin.getConfig().getString("pantin.permanent.premiere-personne", VUE_PANTIN);
+        return VUE_MAIN_DU_JEU.equalsIgnoreCase(v);
+    }
+
+    /** La main du jeu tient-elle l'objet à la première personne (vue « main-du-jeu ») ? Lu par les pantins à chaque image. */
+    public boolean vueMainDuJeu() {
+        return vueMainDuJeu;
+    }
+
+    /** Ce que le joueur voit dans ses mains selon la vue : objets en main cachés (pantin), ou seulement en F5 (main du jeu). */
+    private void appliquerVue(Player p, boolean mainDuJeu) {
+        vues.put(p.getUniqueId(), mainDuJeu);
+        if (caches == null || !caches.actif()) return;
+        caches.cacherTiers(p, mainDuJeu);
+        if (!mainDuJeu) {
+            cacherSoi(p);
+            return;
+        }
+        // une compétence en cours garde ses objets cachés jusqu'à sa fin
+        Modeles.Instance i = plugin.modeles() == null ? null : plugin.modeles().instance(p);
+        if (i == null || !i.animationDemandee()) montrerSoi(p);
+    }
+
     /** Ce joueur a-t-il son pantin permanent ? */
     public boolean permanent(Player p) {
         return permanents.contains(p.getUniqueId());
@@ -459,9 +511,9 @@ public final class Pantins implements Listener {
         if (!deja) {
             permanents.add(p.getUniqueId());
             cacherCorps(p);
-            if (caches != null && caches.actif()) caches.cacherTiers(p, true);
-            // une animation non permanente a pu être remplacée : ce qu'il voit sur lui revient
-            montrerSoi(p);
+            // ses mains selon la vue (une animation non permanente a pu être remplacée : ce qu'il voit sur lui revient)
+            vueMainDuJeu = lireVue();
+            appliquerVue(p, vueMainDuJeu);
         }
         return true;
     }
@@ -470,6 +522,7 @@ public final class Pantins implements Listener {
     public void lacher(Player p) {
         if (!permanents.remove(p.getUniqueId())) return;
         lointains.remove(p.getEntityId());
+        vues.remove(p.getUniqueId());
         if (caches != null) caches.cacherTiers(p, false);
         gestes.remove(p.getUniqueId());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
@@ -482,6 +535,7 @@ public final class Pantins implements Listener {
         tachePermanente = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             Modeles m = plugin.modeles();
             if (m == null) return;
+            boolean mainDuJeu = vueMainDuJeu = lireVue();
             for (Player p : Bukkit.getOnlinePlayers()) {
                 // caméra de cinéma d'un ultime : on ne touche à rien jusqu'à la fin
                 if (p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA))) continue;
@@ -493,7 +547,12 @@ public final class Pantins implements Listener {
                 } else if (!peut && permanents.contains(p.getUniqueId())) {
                     lacher(p);
                 }
-                if (peut && m.permanent(p)) gesteEnBoucle(p, m);
+                if (peut && m.permanent(p)) {
+                    // vue changée (commande, config.yml rechargé) : ses mains suivent
+                    Boolean vue = vues.get(p.getUniqueId());
+                    if (vue != null && vue != mainDuJeu) appliquerVue(p, mainDuJeu);
+                    gesteEnBoucle(p, m);
+                }
             }
         }, 20L, 2L);
     }
@@ -519,6 +578,8 @@ public final class Pantins implements Listener {
         if (actuel != null) m.finGesteJoueur(p, actuel);
         if (voulu != null && m.gesteJoueur(p, voulu, true)) gestes.put(p.getUniqueId(), voulu);
         else gestes.remove(p.getUniqueId());
+        // l'arc de son pantin se tend ou se détend (voir mains)
+        if ("viser_arc".equals(voulu) || "viser_arc".equals(actuel)) porter(p);
     }
 
     /** Pantin permanent : numéro d'entité du joueur → joueurs trop loin, qui voient le joueur du jeu (sans ses morceaux). */
@@ -656,6 +717,11 @@ public final class Pantins implements Listener {
         // pantin permanent : les deux mains ont toujours leur objet (de l'air si elles sont vides), pour que changer d'objet
         // ne fasse que changer l'objet affiché, sans refaire tout le pantin (il disparaissait un instant)
         boolean toujours = permanent(p);
+        // arc que le joueur bande : dessiné tendu dans la main de son pantin (un affichage d'objet reste sinon au repos)
+        if (p.isHandRaised() && p.getActiveItem().getType() == Material.BOW) {
+            if (p.getActiveItemHand() == EquipmentSlot.OFF_HAND) { if (g) gauche = ObjetsCaches.tendu(gauche); }
+            else if (d) droite = ObjetsCaches.tendu(droite);
+        }
         if (d) l.add(Map.entry(MAIN_DROITE, droite.clone()));
         else if (toujours) l.add(Map.entry(MAIN_DROITE, new ItemStack(Material.AIR)));
         if (g) l.add(Map.entry(MAIN_GAUCHE, gauche.clone()));
@@ -760,9 +826,37 @@ public final class Pantins implements Listener {
     private ObjetsCaches caches;
     private Fantomes fantomes;
 
-    /** Le corps fantôme est en place : l'armure reste envoyée au joueur (il la voit dans son inventaire, le shader l'efface en F5). */
+    /**
+     * Le corps fantôme est en place et le pack efface l'armure du vrai corps dans le monde : l'armure reste envoyée au joueur
+     * (il la voit dans son inventaire). Sinon elle lui est envoyée sans modèle porté tant que son pantin le remplace.
+     */
     boolean armureInventaire() {
-        return fantomes != null && fantomes.actif() && plugin.getConfig().getBoolean("pantin.fantome.armure-inventaire", true);
+        return fantomes != null && fantomes.actif() && armuresDansPack;
+    }
+
+    /** Le pack en service a été construit avec les armures portées effacées dans le monde (voir {@link #armuresVoulues()}). */
+    private volatile boolean armuresDansPack;
+
+    /**
+     * Le pack doit-il effacer les armures portées dans le monde (shader des armures, dessins marqués) ? Seulement avec le
+     * pantin permanent : chaque joueur a alors son pantin, qui porte la sienne. Sans lui, les joueurs sont dessinés par le
+     * jeu presque tout le temps : les effacer leur retirerait leur armure à tous.
+     */
+    public boolean armuresVoulues() {
+        return permanentActif() && plugin.getConfig().getBoolean("pantin.fantome.actif", true)
+            && plugin.getConfig().getBoolean("pantin.fantome.shader", true)
+            && plugin.getConfig().getBoolean("pantin.fantome.armure-inventaire", true);
+    }
+
+    /** Appelé à chaque construction du pack : ce pack efface (ou non) les armures portées dans le monde. */
+    public void armuresDansPack(boolean oui) {
+        armuresDansPack = oui;
+        if (caches != null) caches.garderArmureSoi(armureInventaire());
+    }
+
+    /** Le pack en service correspond-il au réglage actuel (faux : à reconstruire, /vorace reload puis /vorace envoyer tous) ? */
+    public boolean packAJour() {
+        return armuresDansPack == armuresVoulues();
     }
 
     public Fantomes fantomes() {
@@ -826,7 +920,9 @@ public final class Pantins implements Listener {
 
     private void montrer(Player p) {
         if (permanent(p) && p.isOnline()) {
-            montrerSoi(p);
+            // vue « pantin » : ses objets restent dans les mains du pantin, la main du jeu reste cachée
+            if (vueMainDuJeu) montrerSoi(p);
+            else envoyerPaire(p);
             return;
         }
         montrerTout(p);
@@ -947,6 +1043,8 @@ public final class Pantins implements Listener {
         dernieresPaires.remove(e.getPlayer().getUniqueId());
         if (caches != null) caches.oublier(e.getPlayer());
         permanents.remove(e.getPlayer().getUniqueId());
+        vues.remove(e.getPlayer().getUniqueId());
+        lointains.remove(e.getPlayer().getEntityId());
         gestes.remove(e.getPlayer().getUniqueId());
         sansPermanent.remove(e.getPlayer().getUniqueId());
         modelesPermanents.remove(e.getPlayer().getUniqueId());

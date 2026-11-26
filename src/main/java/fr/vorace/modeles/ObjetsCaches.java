@@ -104,10 +104,20 @@ public final class ObjetsCaches {
         if (o == null || (boolean) estVide.invoke(o)) return;
         ItemStack b = (ItemStack) versBukkit.invoke(null, o);
         Player j = p.joueur();
-        if (marque(b)) {
+        if (copie(b)) {
+            // copie qui n'existe que chez lui (paire de la main gauche, armure sans modèle porté) : jamais un vrai objet
             p.annuler();
             if (j != null) Bukkit.getScheduler().runTask(plugin, j::updateInventory);
             return;
+        }
+        if (marque(b)) {
+            // objet de sa barre caché en main (pantin permanent : tout le temps) : c'est bien son objet, il le déplace ;
+            // le serveur le reçoit sans la marque (sinon l'objet resterait caché en main pour toujours, chez tout le monde)
+            ItemStack propre = reparer(b);
+            if (propre != null) {
+                b = propre;
+                p.ecrire("itemStack", versJeu.invoke(null, b));
+            }
         }
         // arme par paire revenue du client avec les couleurs de son bras : on les retire, l'objet reste le sien
         if (j != null && brasSoi.containsKey(j.getUniqueId()) && b.hasItemMeta()
@@ -125,12 +135,24 @@ public final class ObjetsCaches {
         }
     }
 
-    /** Copie marquée par Vorace (drapeau 0 ou 1 de custom_model_data). */
+    /** Drapeaux de custom_model_data que Vorace lève sur les copies envoyées aux clients. */
+    private static final int[] DRAPEAUX_VORACE = {CACHE_EN_MAIN, PAIRE, ARMURE_CACHEE, CACHE_TIERS};
+
+    /** Objet marqué par Vorace (un drapeau de custom_model_data, ou l'équipement vide). */
     static boolean marque(ItemStack o) {
         if (o == null || !o.hasItemMeta()) return false;
         ItemMeta m = o.getItemMeta();
         List<Boolean> f = m.getCustomModelDataComponent().getFlags();
-        for (int i : new int[]{CACHE_EN_MAIN, PAIRE, ARMURE_CACHEE}) if (i < f.size() && Boolean.TRUE.equals(f.get(i))) return true;
+        for (int i : DRAPEAUX_VORACE) if (i < f.size() && Boolean.TRUE.equals(f.get(i))) return true;
+        return m.hasEquippable() && VIDE.equals(m.getEquippable().getModel());
+    }
+
+    /** Copie qui n'a pas d'objet du serveur derrière elle ou qui a perdu son équipement : paire, armure sans modèle porté. */
+    static boolean copie(ItemStack o) {
+        if (o == null || !o.hasItemMeta()) return false;
+        ItemMeta m = o.getItemMeta();
+        List<Boolean> f = m.getCustomModelDataComponent().getFlags();
+        for (int i : new int[]{PAIRE, ARMURE_CACHEE}) if (i < f.size() && Boolean.TRUE.equals(f.get(i))) return true;
         return m.hasEquippable() && VIDE.equals(m.getEquippable().getModel());
     }
 
@@ -217,6 +239,28 @@ public final class ObjetsCaches {
         pairesEntites.remove(p.getEntityId());
     }
 
+    /** Drapeau 5, « tendu » : arc dessiné bandé (lu par les arcs de vorace-item 0.14.13 et plus). */
+    public static final int TENDU = 5;
+    /** Définition de l'arc du jeu bandé (assets/vorace/items/pantin_tendu/bow.json). */
+    public static final String ARC_TENDU = "pantin_tendu/bow";
+
+    /**
+     * Copie d'un arc dessinée bandée, pour la main du pantin d'un joueur qui vise : un affichage d'objet n'a pas de porteur,
+     * le jeu y dessine toujours l'arc au repos. Arc de vorace-item : drapeau « tendu » ; arc du jeu : la définition de Vorace.
+     */
+    static ItemStack tendu(ItemStack o) {
+        ItemStack c = avecDrapeau(o, TENDU);
+        ItemMeta m = c.getItemMeta();
+        if (m == null || o.getType() != org.bukkit.Material.BOW) return c;
+        CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+        boolean duJeu = (!m.hasItemModel() || org.bukkit.Material.BOW.getKey().equals(m.getItemModel()))
+            && cmd.getFloats().isEmpty() && cmd.getStrings().isEmpty();
+        if (!duJeu) return c;
+        m.setItemModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, ARC_TENDU));
+        c.setItemMeta(m);
+        return c;
+    }
+
     /** Copie d'un objet avec un drapeau de custom_model_data levé (les autres valeurs gardées). */
     public static ItemStack avecDrapeau(ItemStack o, int index) {
         ItemStack c = o.clone();
@@ -260,7 +304,7 @@ public final class ObjetsCaches {
         boolean change = false;
         CustomModelDataComponent cmd = m.getCustomModelDataComponent();
         List<Boolean> f = new ArrayList<>(cmd.getFlags());
-        for (int i : new int[]{CACHE_EN_MAIN, PAIRE, ARMURE_CACHEE}) {
+        for (int i : DRAPEAUX_VORACE) {
             if (i < f.size() && Boolean.TRUE.equals(f.get(i))) {
                 f.set(i, false);
                 change = true;
@@ -272,7 +316,8 @@ public final class ObjetsCaches {
             m.setCustomModelDataComponent(cmd);
         }
         if (m.hasItemModel() && m.getItemModel() != null && fr.vorace.objets.GenerateurPack.NS.equals(m.getItemModel().getNamespace())
-                && m.getItemModel().getKey().startsWith(CACHE_DU_JEU) && !m.getPersistentDataContainer().has(CACHE_VOULU)) {
+                && (m.getItemModel().getKey().startsWith(CACHE_DU_JEU) || m.getItemModel().getKey().startsWith(CACHE_TIERS_DU_JEU))
+                && !m.getPersistentDataContainer().has(CACHE_VOULU)) {
             m.setItemModel(null);   // copie « cachée en main » d'un objet du jeu revenue du client en mode créatif
             change = true;
         }
@@ -332,7 +377,9 @@ public final class ObjetsCaches {
             }
             return o;
         }
-        if (cache && slot >= 5 && slot <= 8) return garderArmureSoi ? o : armure(o, PLACES_MENU[slot - 5]);
+        // son armure, tant que son pantin le remplace (animation, ou pantin permanent) : gardée si le pack l'efface dans le
+        // monde (il la voit sur son personnage dans l'inventaire), sinon envoyée sans modèle porté (elle flotterait en F5)
+        if ((cache || tiers) && slot >= 5 && slot <= 8) return garderArmureSoi ? o : armure(o, PLACES_MENU[slot - 5]);
         boolean barre = slot >= 36 && slot <= 44;
         Bras bras = barre ? brasSoi.get(j.getUniqueId()) : null;
         if (!cache && !tiers && bras == null) return o;
@@ -378,6 +425,10 @@ public final class ObjetsCaches {
         if (m == null) return o;
         org.bukkit.NamespacedKey modele = m.hasItemModel() ? m.getItemModel() : o.getType().getKey();
         if (modele == null || !"minecraft".equals(modele.getNamespace())) return o;
+        // apparence choisie par un pack dans la définition du jeu (nombres ou textes de custom_model_data) : la définition de
+        // Vorace ne la connaît pas, l'objet deviendrait son objet de base dans la barre ; on le laisse tel quel
+        CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+        if (!cmd.getFloats().isEmpty() || !cmd.getStrings().isEmpty()) return o;
         org.bukkit.Material type = org.bukkit.Registry.MATERIAL.get(modele);
         if (type == null || !objetDuJeu(type)) type = o.getType();
         if (!objetDuJeu(type)) return o;
@@ -388,10 +439,32 @@ public final class ObjetsCaches {
         return c;
     }
 
-    /** Objets du jeu qui ont leur définition « caché en main » dans le pack de Vorace (pas les blocs : leur icône est un bloc). */
+    /**
+     * Objets du jeu qui ont leur définition « caché en main » dans le pack de Vorace. Les blocs aussi quand Vorace a les
+     * définitions du jeu de cette version (leur icône est un modèle de bloc, pas « item/<nom> ») ; sinon pas les blocs.
+     */
     @SuppressWarnings("deprecation")
     public static boolean objetDuJeu(org.bukkit.Material t) {
-        return !t.isLegacy() && t.isItem() && !t.isBlock() && !t.isAir();
+        return !t.isLegacy() && t.isItem() && !t.isAir() && (!t.isBlock() || definitionsFiables());
+    }
+
+    private static volatile Boolean fiables;
+
+    /**
+     * Les définitions de pack-fantome/definitions-jeu-1.21.4.json sont celles du jeu de ce serveur (1.21.4). Sur une autre
+     * version, elles pourraient ne plus être valides (ou des objets manquer) : on garde alors les icônes simples.
+     */
+    static boolean definitionsFiables() {
+        Boolean f = fiables;
+        if (f == null) {
+            try {
+                f = "1.21.4".equals(Bukkit.getMinecraftVersion());
+            } catch (Throwable t) {
+                f = false;   // hors serveur (tests)
+            }
+            fiables = f;
+        }
+        return f;
     }
 
     /** Définition « caché en main » d'un objet du jeu : son dessin dans l'inventaire, au sol, dans un cadre ; rien en main. */
@@ -401,7 +474,9 @@ public final class ObjetsCaches {
 
     /**
      * Définition « caché en main » ({@code premiere} faux) ou « caché à la troisième personne » ({@code premiere} vrai :
-     * l'objet reste aussi dessiné à la première personne) d'un objet du jeu.
+     * l'objet reste aussi dessiné à la première personne) d'un objet du jeu. Là où il reste dessiné, c'est avec la vraie
+     * définition du jeu (potion à sa couleur, boussole qui tourne, arc qui se bande) quand Vorace l'a pour cette version :
+     * avec le pantin permanent, la barre d'objets du joueur porte ces copies tout le temps.
      */
     public static byte[] definitionCachee(org.bukkit.Material t, boolean premiere) {
         String id = t.getKey().getKey();
@@ -415,7 +490,7 @@ public final class ObjetsCaches {
         String json = "{\"model\":{\"type\":\"minecraft:select\",\"property\":\"minecraft:display_context\",\"cases\":[{\"when\":"
             + (premiere ? "[\"gui\",\"ground\",\"fixed\",\"head\",\"firstperson_righthand\",\"firstperson_lefthand\"]"
                 : "[\"gui\",\"ground\",\"fixed\",\"head\"]")
-            + ",\"model\":" + (premiere ? definitionDuJeu(id, icone) : icone) + "}],\"fallback\":{\"type\":\"minecraft:empty\"}}}";
+            + ",\"model\":" + (definitionsFiables() ? definitionDuJeu(id, icone) : icone) + "}],\"fallback\":{\"type\":\"minecraft:empty\"}}}";
         return json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 

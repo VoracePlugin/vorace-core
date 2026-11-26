@@ -25,14 +25,36 @@
 - **Armures** : objets portés sur la tête (casque 3D de vorace-item, citrouille, tête) posés sur la tête du pantin comme le
   jeu le fait ; armures en volume tirées d'un .bbmodel (`pantin.armures-3d`, groupes « casque », « plastron »,
   « jambieres », « bottes »).
-- **Première personne comme First-person Model (« Vanilla Hands »)** : hors compétence, la main du jeu tient l'arme et les
-  bras de sa propre copie du pantin (skin et armure) sont effacés quand la caméra est dans sa tête ; en regardant vers le
-  bas, il voit son tronc et ses jambes animés ; en F5, son pantin est entier. Le shader du pack le devine à la distance de la
-  caméra : les bras de sa copie portent une marque dans leur teinte (deux bits bas des couleurs), que les autres pantins
-  évitent. Pendant une compétence, ses bras restent visibles à la première personne. Un pantin permanent a toujours sa
-  copie, même avec `recul-pour-soi: 0`.
+- **Première personne comme le mod First-person Model** (`pantin.permanent.premiere-personne`, essai en jeu avec
+  `/vorace pantin vue pantin|main-du-jeu`) :
+  - `pantin` (défaut, le réglage d'origine du mod) : le pantin tient l'objet dans ses mains, à la première personne comme
+    en F5 ; la main du jeu est cachée (l'objet garde son icône dans la barre). Le joueur voit ses bras et son arme bouger
+    avec ses animations.
+  - `main-du-jeu` (« Vanilla Hands » du mod) : la main du jeu tient l'objet ; les bras de sa propre copie du pantin (skin et
+    armure) sont effacés quand la caméra est dans sa tête, par le shader du pack (ils portent une marque dans leur teinte,
+    deux bits bas des couleurs, que les autres pantins évitent) ; sa copie ne tient rien hors compétence.
+  Un pantin permanent a toujours sa copie pour lui-même, même avec `recul-pour-soi: 0`.
+- **Arc tendu dans la main du pantin** : pendant que le joueur vise, l'arc de son pantin est dessiné bandé (arc du jeu :
+  définition du pack ; arcs de vorace-item 0.14.13 et plus : drapeau 5 « tendu »). Un affichage d'objet n'a pas de porteur,
+  le jeu l'aurait laissé au repos.
+- **Barre d'objets du pantin permanent** : les copies « cachées en main » des objets du jeu gardent leur vraie icône
+  (potion à sa couleur, boussole et horloge qui tournent, arbalète chargée) et les blocs tenus sont cachés aussi (définitions
+  du jeu 1.21.4 livrées avec Vorace ; sur une autre version, icônes simples et blocs non cachés, comme avant). Un objet
+  dont l'apparence vient des nombres ou textes de custom_model_data (pack d'un autre plugin) n'est plus remplacé.
+- **Mode créatif** : un objet de la barre déplacé avec le pantin permanent ne garde plus la marque « caché » (drapeau 4 ou
+  0 et définition `cache_tiers/` ou `cache_en_main/` : il restait invisible en main pour tout le monde). Le serveur le
+  reçoit nettoyé ; les objets déjà abîmés sont réparés tout seuls.
+- **Armures effacées dans le monde seulement avec le pantin permanent** : sans lui (réglage par défaut), le pack ne touche
+  plus aux armures portées. Avant, `cacher-toutes-armures` retirait leur armure à tous les joueurs, monstres et
+  porte-armures même sans pantin permanent. Après `/vorace pantin permanent on|off`, la commande dit s'il faut reconstruire
+  le pack. L'armure du joueur n'est plus jamais dessinée sur son corps invisible, même avec un pack pas encore reconstruit.
+- **Caméra de cinéma avec les montures par paquets** : à la descente des morceaux, leur position exacte est renvoyée aux
+  clients (le pantin d'un ultime pouvait être dessiné chez les autres joueurs décalé du chemin parcouru depuis son
+  apparition).
+- **Charge** : un joueur qui arrive reçoit une seule annonce de passagers par pantin (une par morceau avant) ; les morceaux
+  montés par paquets ne sont plus déplacés sur le serveur à chaque tic, seulement quand le joueur s'éloigne de 2 blocs.
 - Essai : `pantin.soi-tourne-avec-la-camera` (copie pour soi en billboard, plus de retard en tournant à la 1re personne).
-- Commandes : `/vorace pantin permanent on|off`, `posture <posture|aucune> [joueur]`, `modele <modèle> [joueur]`.
+- Commandes : `/vorace pantin permanent on|off`, `vue pantin|main-du-jeu`, `posture <posture|aucune> [joueur]`, `modele <modèle> [joueur]`.
 - API : `pantinPermanentActif`, `pantinPermanent`, `modelePantin`, `posturePantin`, `autoriserPantin`. `arreterJoueur` et
   `relacherJoueur` n'arrêtent que l'animation d'un pantin permanent.
 
