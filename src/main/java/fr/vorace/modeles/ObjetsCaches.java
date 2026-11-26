@@ -99,6 +99,45 @@ public final class ObjetsCaches {
         return true;
     }
 
+    private Constructor<?> caseInventaire;
+    private boolean caseCherchee;
+
+    /**
+     * Renvoie au joueur les objets de sa barre et de sa main gauche tels qu'il doit les voir (les copies marquées « caché
+     * en main »). À appeler après un clic dans un inventaire : le client y déplace lui-même SA copie de l'objet, non marquée
+     * si elle vient du reste de l'inventaire, d'un coffre ou de l'inventaire du mode créatif ; le serveur, d'accord avec
+     * lui, ne renvoie rien, et l'objet restait dessiné dans la main du jeu en plus de celui que tient le pantin. Une case
+     * à la fois (ClientboundSetPlayerInventoryPacket) : l'objet sous le curseur n'est pas touché.
+     */
+    public void rafraichirBarre(Player p) {
+        if (!actif || !p.isOnline()) return;
+        UUID id = p.getUniqueId();
+        if (!cachesSoi.contains(id) && !tiersSoi.contains(id) && !brasSoi.containsKey(id)) return;
+        try {
+            if (!caseCherchee) {
+                caseCherchee = true;
+                try {
+                    Class<?> c = Class.forName("net.minecraft.network.protocol.game.ClientboundSetPlayerInventoryPacket", false,
+                        Bukkit.getServer().getClass().getClassLoader());
+                    caseInventaire = c.getConstructor(int.class, versJeu.getReturnType());
+                } catch (ReflectiveOperationException e) {
+                    plugin.getLogger().warning("Objets cachés du pantin : paquet d'une case d'inventaire introuvable (" + e + ")");
+                }
+            }
+            if (caseInventaire == null) return;
+            for (int s = 0; s <= 9; s++) {
+                int inv = s == 9 ? 40 : s;   // 0 à 8 : la barre ; 40 : la main gauche
+                ItemStack b = p.getInventory().getItem(inv);
+                if (b == null || b.getType().isAir()) continue;
+                Object o = versJeu.invoke(null, b);
+                Object n = caseMenu(p, inv == 40 ? 45 : 36 + inv, o);
+                if (n != o) plugin.paquets().envoyer(p, caseInventaire.newInstance(inv, n), false);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            plugin.getLogger().log(Level.WARNING, "Objets cachés du pantin : barre non renvoyée à " + p.getName(), e);
+        }
+    }
+
     private void creatif(Paquet p) throws ReflectiveOperationException {
         Object o = p.lire("itemStack");
         if (o == null || (boolean) estVide.invoke(o)) return;

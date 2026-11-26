@@ -1,5 +1,30 @@
 # Journal des changements
 
+## 1.7.2 (novembre 2026) : course, vol en créatif, coup d'épée droit, manches courtes, épée en double
+
+Retours d'Antoine en jeu : « comment tu cours, c'est pas beau, surtout les deux mains qui font comme ça ; c'est encore plus
+dégueulasse en vol, quand tu voles en créatif, faudrait une animation spéciale » ; « quand je tape, j'ai l'impression que je
+tape pas droit » ; « l'armure en diamant qui va sur la deuxième partie du bras, ça fait un bug de texture » ; « je vois l'épée
+qui est dans ma main visible, qui est pas dans le pantin ». Mesures reprises sur Mo' Bends (course, coup d'outil, vol).
+
+- **Course** : les bras restent longs, comme ceux du jeu (avant-bras plié de 20 à 46° au lieu de 72 à 88°), et le buste tourne
+  deux fois moins. Les coudes pliés à 90° qui pompaient faisaient monter les deux mains dans le champ à la première personne.
+- **Vol en créatif** : deux mouvements à lui au lieu de la course dans le vide. `planer` (sur place, en reculant ou de
+  côté) : le corps flotte, bras un peu ouverts, une jambe pliée. `planer_avance` (vers l'avant) : le corps penché de 26°,
+  les bras le long du corps, les jambes qui traînent ; la tête reste à la place du joueur.
+- **Coup de bras droit** : de haut en bas devant l'épaule, comme le jeu, au lieu d'une diagonale venue du côté. Le bras
+  reste dans le plan de l'épaule, l'épée descend sur son tranchant ; le poignet se casse pendant le coup (45°), la lame part
+  de derrière la tête et finit pointée devant, un peu vers le bas.
+- **Armures à manches courtes** : plus de couche d'armure sur l'avant-bras pour les armures du jeu. Mesuré sur leurs
+  textures : la manche du plastron s'arrête au-dessus du coude (lignes 0 à 4 ou 5 des 12 du bras, 6 pour la netherite) ;
+  la couche de l'avant-bras n'en montrait que le bord, qui partait avec l'avant-bras et se décollait de l'épaulière dès que
+  le coude pliait. Pour une armure d'un pack : `pantin.armures-manches-courtes` dans config.yml.
+- **Épée dessinée deux fois** (dans la main du jeu et dans celle du pantin) après l'avoir prise dans un inventaire, celui du
+  mode créatif surtout : le client y déplace lui-même sa copie de l'objet, sans la marque « caché en main », et le serveur ne
+  lui renvoyait rien. Sa barre lui est maintenant renvoyée un tic après chaque clic dans un inventaire et à sa fermeture.
+- `outils/apercu-mouvements.py` : le fichier de relecture Blockbench avec une épée en main.
+- Le `pantin_mouvements.bbmodel` de la 1.7.1 est remplacé tout seul s'il n'a pas été retouché.
+
 ## 1.7.1 (novembre 2026) : animations du pantin plus belles, contrôlées une à une
 
 Retour d'Antoine : « c'est bien, mais faut vraiment aller beaucoup plus loin : des animations super belles, qui ne sont pas

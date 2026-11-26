@@ -141,7 +141,7 @@ public final class TestPantins {
         ModeleBB mv = lire("pantin_mouvements");
         boolean tous = true;
         for (String n : List.of("repos", "marche", "course", "recul", "pas_droite", "pas_gauche", "accroupi", "accroupi_marche", "saut", "chute",
-                "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
+                "planer", "planer_avance", "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
                 "geste_main_gauche", "manger", "boire", "viser_arc", "viser_arc_gauche", "viser_arc_tenu", "viser_arc_tenu_gauche", "tir_arc", "charger_arbalete", "viser_arbalete",
                 "garde_bouclier", "garde_bouclier_gauche", "viser_trident", "longue_vue", "cor", "brosse", "degat")) {
             tous &= mv.animations().containsKey(n);
@@ -175,8 +175,11 @@ public final class TestPantins {
         verifier(bas[poingD].translation().y < arc[poingD].translation().y - 0.2f && haut[poingD].translation().y > arc[poingD].translation().y + 0.2f
                 && sans[poingD].translation().distance(nu[poingD].translation()) < 1e-5f,
             "visée : les bras du geste suivent le regard vers le haut et le bas");
-        verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
-            "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
+        verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 5
+                && ArmuresPantin.couches(java.util.Map.of("CHEST", "babel:fer"), java.util.Set.of()).size() == 6
+                && ArmuresPantin.couches(java.util.Map.of("CHEST", "babel:fer"), java.util.Set.of("babel:fer")).size() == 4
+                && ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond")).stream().noneMatch(co -> co.os().endsWith("_bas") && co.os().contains("bras")),
+            "armure : plastron du jeu = tronc + haut des bras (manches courtes, rien sur l'avant-bras), manches longues = 6 couches, carapace de tortue = tête seule");
 
         // skin pixel par pixel (PeauUV) : modèles du pack et couleurs d'un skin
         java.util.Map<String, byte[]> uv = PeauUV.generer(j);

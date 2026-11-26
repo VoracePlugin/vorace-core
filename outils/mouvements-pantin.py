@@ -8,7 +8,7 @@
 # genoux et des coudes, un buste qui tourne, les pieds posés au sol.
 #
 #   mouvements (corps entier, en boucle) : repos, marche, course, recul, pas_droite, pas_gauche, accroupi, accroupi_marche,
-#       saut, chute, nage, ramper, echelle, assis, dormir, vol, vrille
+#       saut, chute, planer, planer_avance (vol en créatif), nage, ramper, echelle, assis, dormir, vol, vrille
 #   gestes (par-dessus les mouvements : seuls leurs os bougent) : main droite, et « _gauche » pour la main gauche
 #       tenir, tenir_deux, geste_main, manger, boire, viser_arc, viser_arc_tenu, tir_arc, charger_arbalete, viser_arbalete, garde_bouclier,
 #       viser_trident, longue_vue, cor, brosse ; et degat (coup reçu)
@@ -319,8 +319,10 @@ def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vri
 # marche : le jeu balance les jambes de ±69° à 4,3 blocs par seconde (cos · 1,4 · 0,86) sans plier le genou ; avec un genou,
 # ±40° couvrent presque la même foulée. Un cycle en 0,5 s à cette vitesse (Vorace règle la cadence sur la vitesse réelle).
 pas("marche", 0.5, 40, 8, 52, 30, 14, 22, 4, -4, 11, roulis=1.5)
-# course : 5,6 blocs par seconde, ±80° dans le jeu ; buste penché, coudes pliés, un temps en l'air entre deux appuis
-pas("course", 0.42, 50, 14, 88, 46, 72, 16, 17, -15, 20, vol=1.6, biais=-8, ecart=5.0, roulis=4)
+# course : 5,6 blocs par seconde, ±80° dans le jeu ; buste penché, un temps en l'air entre deux appuis. Les bras restent
+# longs, comme ceux du jeu (Mo' Bends : avant-bras plié de 10 à 45°) : des coudes pliés à 90° qui pompent font monter les
+# deux mains dans le champ à la première personne, et le buste ne tourne que de ±15° (les mains ne balaient pas le corps).
+pas("course", 0.42, 50, 14, 88, 40, 20, 26, 14, -12, 10, vol=1.6, biais=-8, ecart=4.0, roulis=3)
 
 # recul : la jambe part vers l'arrière, genou plié quand elle recule
 T = 0.5
@@ -430,6 +432,41 @@ A.append(animation("chute", T, "loop", {
     "jambe_gauche_bas": {"rotation": ech(T, lambda t: (22 + 10 * math.sin(PHI(t, T)), 0, 0))},
     "corps_bas": {"rotation": (4, 0, 0)},
     "tete": {"rotation": (-10, 0, 0)},
+}))
+
+# planer (vol en créatif, sur place ou en reculant) : le corps flotte, bras un peu ouverts, une jambe pliée et l'autre
+# presque tendue (Mo' Bends : cuisses à -45° et -6°), le tout qui ondule lentement
+T = 3.0
+A.append(animation("planer", T, "loop", {
+    "racine": {"rotation": (3, 0, 0), "position": ech(T, lambda t: (0, 0.6 * math.sin(PHI(t, T)), 0))},
+    "corps_bas": {"rotation": (2, 0, 0)},
+    "corps_haut": {"rotation": ech(T, lambda t: (-4 + 1.0 * math.sin(PHI(t, T) - 0.6), 0, 0))},
+    "tete": {"rotation": (-1, 0, 0)},
+    "bras_droit_haut": {"rotation": ech(T, lambda t: (7, 0, 15 + 2.5 * math.sin(PHI(t, T) - 0.9)))},
+    "bras_gauche_haut": {"rotation": ech(T, lambda t: (7, 0, -15 - 2.5 * math.sin(PHI(t, T) - 0.9)))},
+    "bras_droit_bas": {"rotation": ech(T, lambda t: (-16 - 3 * math.sin(PHI(t, T) - 1.6), 0, 0))},
+    "bras_gauche_bas": {"rotation": ech(T, lambda t: (-16 - 3 * math.sin(PHI(t, T) - 1.6), 0, 0))},
+    "jambe_droite_haut": {"rotation": ech(T, lambda t: (-7 + 2 * math.sin(PHI(t, T) - 0.8), 0, 3))},
+    "jambe_gauche_haut": {"rotation": ech(T, lambda t: (-32 - 3 * math.sin(PHI(t, T) - 0.8), 0, -3))},
+    "jambe_droite_bas": {"rotation": ech(T, lambda t: (13 + 3 * math.sin(PHI(t, T) - 1.5), 0, 0))},
+    "jambe_gauche_bas": {"rotation": ech(T, lambda t: (40 + 4 * math.sin(PHI(t, T) - 1.5), 0, 0))},
+}))
+
+# planer_avance (vol en créatif vers l'avant) : le corps penché de 26° (la racine recule pour que la tête reste à la place
+# du joueur), la tête redressée, les bras le long du corps vers l'arrière, les jambes serrées qui traînent
+T = 2.0
+A.append(animation("planer_avance", T, "loop", {
+    "racine": {"rotation": (26, 0, 0), "position": ech(T, lambda t: (0, 1.5 + 0.4 * math.sin(PHI(t, T)), 12))},
+    "corps_haut": {"rotation": (-4, 0, 0)},
+    "tete": {"rotation": (-22, 0, 0)},
+    "bras_droit_haut": {"rotation": ech(T, lambda t: (20 + 2 * math.sin(PHI(t, T) - 0.7), 0, 10 + 1.5 * math.sin(PHI(t, T))))},
+    "bras_gauche_haut": {"rotation": ech(T, lambda t: (20 + 2 * math.sin(PHI(t, T) - 0.7), 0, -10 - 1.5 * math.sin(PHI(t, T))))},
+    "bras_droit_bas": {"rotation": (-9, 0, 0)},
+    "bras_gauche_bas": {"rotation": (-9, 0, 0)},
+    "jambe_droite_haut": {"rotation": ech(T, lambda t: (7 + 2 * math.sin(PHI(t, T)), 0, 1.5))},
+    "jambe_gauche_haut": {"rotation": ech(T, lambda t: (-3 - 2 * math.sin(PHI(t, T)), 0, -1.5))},
+    "jambe_droite_bas": {"rotation": ech(T, lambda t: (7 + 2 * math.sin(PHI(t, T) - 0.8), 0, 0))},
+    "jambe_gauche_bas": {"rotation": ech(T, lambda t: (18 - 2 * math.sin(PHI(t, T) - 0.8), 0, 0))},
 }))
 
 # À plat ventre (nage, ramper, vol, vrille) : la racine bascule de 90° vers l'avant et recule de 28 pixels, pour que la
@@ -615,25 +652,31 @@ p.update(miroir(TENIR))
 A.append(animation("tenir_deux", T, "loop", p))
 
 
-# coup de bras (9 tics ; 6 dans le jeu, mais un bras qui tourne de 100° en un tic saute à l'écran) : la main part sur le côté à
-# hauteur d'épaule, coude et épaule en arrière, puis fend en diagonale vers le bas
-# et le milieu, le buste qui tourne avec le coup ; le jeu ne fait que lever et baisser le bras. La main ne passe jamais
-# devant le visage ni au-dessus de la tête.
+# coup de bras (9 tics ; 6 dans le jeu) : un coup DROIT, de haut en bas devant l'épaule, comme le jeu et comme le coup d'outil
+# de Mo' Bends (le bras ne tourne que d'avant en arrière, le buste accompagne). Le bras reste dans le plan de l'épaule : la
+# lame de l'épée tenue descend sur son tranchant, sans partir de côté. La main monte à côté du front, jamais dans la tête
+# ni au-dessus, marque un temps, puis fend vers l'avant et le bas. Le poignet se casse pendant le coup (45° vers le petit
+# doigt, la limite d'une main) : la lame part de derrière la tête et finit pointée devant, un peu vers le bas. Sans lui,
+# elle s'arrêtait pointée vers le ciel (dans le jeu aussi : l'épée y reste à 80° de l'avant-bras).
 MAIN_REPOS = (5.6, 13.6, -4.2)
-# (temps, main, rotation du buste) : armé en 2 à 3 tics, coup en 4, retour en 3 ; la main suit une courbe par ces points
-COUP = [(0.0, MAIN_REPOS, 0.0), (0.12, (9.6, 22.6, -2.2), 13.0), (0.24, (5.4, 21.8, -9.0), -8.0), (0.32, (0.6, 16.0, -8.6), -17.0),
-        (0.45, MAIN_REPOS, 0.0)]
+# (temps, (angle de la main autour de l'épaule : 0 en bas, 90 devant, 180 en haut ; distance à l'épaule ; x ; rotation du
+# buste ; poignet)) : armé en 2 tics, un tic d'arrêt, coup en 2 tics bras presque tendu (un grand arc), la main continue, retour
+COUP = [(0.0, (26.6, 9.4, 5.6, 0.0, 0.0)), (0.1, (132.0, 7.4, 6.6, 9.0, -6.0)), (0.15, (140.0, 7.4, 6.6, 10.0, -8.0)),
+        (0.25, (48.0, 10.8, 6.0, -9.0, 42.0)), (0.3, (36.0, 10.4, 5.8, -11.0, 45.0)), (0.45, (26.6, 9.4, 5.6, 0.0, 0.0))]
 
 
 def coup(t):
-    # le temps ralentit au départ et à l'armé (un bref arrêt en haut : l'élan), puis le coup accélère jusqu'à l'impact
-    t = 0.12 * doux(t / 0.12) if t < 0.12 else 0.12 + 0.33 * doux((t - 0.12) / 0.33)
-    main = courbe([(a, m) for a, m, _ in COUP], t)
-    vr = courbe([(a, v) for a, _, v in COUP], t)
-    return {"buste": (3 * math.sin(math.pi * t / 0.45), vr, 0), "droit": (main, (1, -0.55, 0.45))}
+    angle, rayon, x, vr, _ = courbe(COUP, t)
+    a = math.radians(angle)
+    main = (x, 22 - rayon * math.cos(a), -rayon * math.sin(a))
+    # le coude plie toujours dans le plan du bras (comme une charnière) : derrière quand la main est en bas, devant et en
+    # dessous quand elle est levée
+    return {"buste": (5 * pos(math.sin(math.pi * (t - 0.12) / 0.33)), vr, 0), "droit": (main, (0.2, main[2], 22 - main[1]))}
 
 
-deux("geste_main", 0.45, "once", geste(0.45, coup, "once"))
+COUP_PISTES = geste(0.45, coup, "once")
+COUP_PISTES["poing_droit"] = {"rotation": ech(0.45, lambda t: (max(-10.0, min(45.0, courbe(COUP, t)[4])), 0, 0), False)}
+deux("geste_main", 0.45, "once", COUP_PISTES)
 
 # manger : la main à la bouche, de petits va-et-vient (une bouchée tous les 4 tics dans le jeu) ; la tête pique un peu
 T = 0.4

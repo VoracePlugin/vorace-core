@@ -117,7 +117,7 @@ def dans(po, os_, point, boite, marge):
 TETE = ((-4, 24, -4), (4, 32, 4))
 BUSTE = ((-4, 18, -2), (4, 24, 2))
 VENTRE = ((-4, 12, -2), (4, 18, 2))
-A_PLAT = ("nage", "ramper", "vol", "vrille", "dormir")
+A_PLAT = ("nage", "ramper", "vol", "vrille", "dormir", "planer")     # couchés ou en l'air : pas de sol sous les pieds
 defauts = 0
 for anim in d["animations"]:
     nom = anim["name"]

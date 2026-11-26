@@ -211,13 +211,27 @@ public final class ArmuresPantin {
         return Math.round(v * 1000) / 1000.0;
     }
 
-    /** Liste des couches d'un ensemble porté : emplacement -> asset (null : rien). */
+    /** Liste des couches d'un ensemble porté : emplacement -> asset (null : rien). Les armures du jeu ont des manches courtes. */
     public static List<Couche> couches(Map<String, String> portes) {
+        return couches(portes, new java.util.HashSet<>(VANILLE));
+    }
+
+    /**
+     * @param manchesCourtes armures dont la manche s'arrête au-dessus du coude. Celles du jeu (mesuré sur leurs textures :
+     *     la manche du plastron couvre les lignes 0 à 4 ou 5 des 12 du bras, 6 pour la netherite) et celles de
+     *     pantin.armures-manches-courtes. Elles n'ont pas de couche sur l'avant-bras : cette couche ne montrait que le
+     *     bord de la manche (les 2 lignes de recouvrement au-dessus du coude), qui partait avec l'avant-bras et se
+     *     décollait de l'épaulière dès que le coude pliait.
+     */
+    public static List<Couche> couches(Map<String, String> portes, java.util.Set<String> manchesCourtes) {
         List<Couche> l = new ArrayList<>();
         for (Map.Entry<String, String> e : portes.entrySet()) {
             if (e.getValue() == null) continue;
+            String asset = e.getValue().toLowerCase(Locale.ROOT);
+            boolean courtes = manchesCourtes.contains(asset.contains(":") ? asset : "minecraft:" + asset);
             for (String[] m : morceaux(e.getKey())) {
                 if (e.getValue().endsWith("turtle_scute") && !m[0].equals("tete")) continue;
+                if (courtes && m[0].startsWith("bras_") && m[0].endsWith("_bas")) continue;
                 l.add(new Couche("peau_" + m[0], id(e.getValue(), m[1], m[0]), gonflement(m[1]), cuir(e.getValue())));
             }
         }

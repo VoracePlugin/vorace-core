@@ -296,6 +296,19 @@ public final class Modeles {
         }
     }
 
+    /**
+     * Armures à manches courtes ({@code pantin.armures-manches-courtes}, en plus de celles du jeu) : le pantin ne leur met
+     * pas de couche sur l'avant-bras (voir ArmuresPantin.manchesCourtes).
+     */
+    public java.util.Set<String> manchesCourtes() {
+        java.util.Set<String> l = new java.util.HashSet<>(ArmuresPantin.VANILLE);
+        for (String a : plugin.getConfig().getStringList("pantin.armures-manches-courtes")) {
+            String n = a.toLowerCase(Locale.ROOT).trim();
+            if (!n.isEmpty()) l.add(n.contains(":") ? n : "minecraft:" + n);
+        }
+        return l;
+    }
+
     /** Armures que le pantin sait porter : celles du jeu et celles de pantin.armures-perso (« babel:mythril »). */
     public List<String> armuresPantin() {
         List<String> l = new ArrayList<>(ArmuresPantin.VANILLE);
@@ -2014,10 +2027,16 @@ public final class Modeles {
             else if (p.getPose() == org.bukkit.entity.Pose.SWIMMING) { c.add("ramper"); c.add("nage"); }   // sous un bloc, hors de l'eau
             else if (p.isClimbing() && !sol) c.add("echelle");
             else if (!sol && !p.isFlying()) c.add(dy < -0.25 ? "chute" : "saut");
+            double r = Math.toRadians(l.getYaw());
+            double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
+            // vol en créatif : il plane (penché quand il avance) au lieu de courir dans le vide ; un modèle sans ces
+            // mouvements garde ceux d'avant
+            if (c.isEmpty() && p.isFlying() && !sol) {
+                if (v > 0.08 && avant > 0.6 * v) c.add("planer_avance");
+                c.add("planer");
+            }
             if (p.isSneaking()) c.add(v > 0.01 ? "accroupi_marche" : "accroupi");
             if (v > 0.01) {
-                double r = Math.toRadians(l.getYaw());
-                double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
                 if (avant < -0.5 * v) c.add("recul");
                 else if (Math.abs(cote) > 0.75 * v) c.add(cote > 0 ? "pas_droite" : "pas_gauche");
                 if (p.isSprinting() || v > 0.24) c.add("course");
@@ -2569,8 +2588,9 @@ public final class Modeles {
         // pantin_mouvements.bbmodel de la 1.6.0 (24 animations) : remplacé par celui de la 1.7.0 s'il n'a pas été retouché.
         // À chaque nouvelle version de ce fichier, ajouter ici l'empreinte SHA-256 de la précédente.
         "e942599e1e7f3ce3f132d71de326028660feeb941780f9acfcae77e08476ba2a",
-        // celui de la 1.7.0 (45 animations)
-        "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e");
+        // ceux de la 1.7.0 (45 animations) et de la 1.7.1 (47)
+        "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e",
+        "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d");
 
     static String empreinte(byte[] octets) {
         try {

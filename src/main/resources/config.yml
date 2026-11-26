@@ -216,6 +216,10 @@ pantin:
   # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
   # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
   armures-perso: []
+  # Armures d'un pack dont la manche s'arrête au-dessus du coude, comme toutes celles du jeu (leur plastron ne couvre que
+  # le haut du bras) : le pantin ne leur met rien sur l'avant-bras. Sans cela, le bord de la manche part avec l'avant-bras
+  # dès que le coude plie. Exemple : [babel:fer]
+  armures-manches-courtes: []
 
 surveillance:
   # Reconstruit le pack tout seul quand un pack source ou un objet change (par exemple après /meg reload).

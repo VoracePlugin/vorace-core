@@ -284,12 +284,28 @@ public final class Pantins implements Listener {
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
     public void paireInventaire(org.bukkit.event.inventory.InventoryClickEvent e) {
-        if (e.getWhoClicked() instanceof Player p) plusTard(p);
+        if (e.getWhoClicked() instanceof Player p) { plusTard(p); barrePlusTard(p); }
+    }
+
+    /**
+     * Après un clic dans un inventaire (celui du mode créatif compris) : sa barre lui est renvoyée avec les copies « caché
+     * en main ». Sans cela, une épée prise dans l'inventaire restait dessinée dans la main du jeu, à côté de celle du pantin.
+     */
+    private void barrePlusTard(Player p) {
+        if (caches == null || !permanent(p)) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (caches != null && p.isOnline()) caches.rafraichirBarre(p);
+        }, 1);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void barreFermee(org.bukkit.event.inventory.InventoryCloseEvent e) {
+        if (e.getPlayer() instanceof Player p) barrePlusTard(p);
     }
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
     public void paireGlisser(org.bukkit.event.inventory.InventoryDragEvent e) {
-        if (e.getWhoClicked() instanceof Player p) plusTard(p);
+        if (e.getWhoClicked() instanceof Player p) { plusTard(p); barrePlusTard(p); }
     }
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
@@ -682,6 +698,7 @@ public final class Pantins implements Listener {
         java.util.List<String> connus = plugin.modeles() == null ? ArmuresPantin.VANILLE : plugin.modeles().armuresPantin();
         org.bukkit.configuration.ConfigurationSection en3d = plugin.getConfig().getConfigurationSection("pantin.armures-3d");
         boolean garderPlat = plugin.getConfig().getBoolean("pantin.armures-3d-plat", true);
+        java.util.Set<String> courtes = plugin.modeles() == null ? new java.util.HashSet<>(ArmuresPantin.VANILLE) : plugin.modeles().manchesCourtes();
         for (EquipmentSlot e : ARMURE) {
             ItemStack porte = p.getEquipment().getItem(e);
             if (porte == null || porte.getType().isAir()) continue;
@@ -689,7 +706,7 @@ public final class Pantins implements Listener {
             // pièce d'armure en volume : un .bbmodel au squelette du joueur (pantin.armures-3d)
             boolean volume = asset != null && en3d != null && en3d.isString(asset) && piecesEnVolume(l, en3d.getString(asset), e, porte);
             if (asset != null && connus.contains(asset) && (!volume || garderPlat)) {
-                for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset))) l.add(Map.entry(c.os(), objetArmure(c, porte)));
+                for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset), courtes)) l.add(Map.entry(c.os(), objetArmure(c, porte)));
             } else if (e == EquipmentSlot.HEAD && asset == null) {
                 // casque 3D d'objet (vorace-item), citrouille, tête : posé sur la tête du pantin comme le jeu le fait
                 l.add(Map.entry(Modeles.TETE + "peau_tete", porte.clone()));
