@@ -1,5 +1,32 @@
 # Journal des changements
 
+## 1.7.1 (novembre 2026) : animations du pantin plus belles, contrôlées une à une
+
+Retour d'Antoine : « c'est bien, mais faut vraiment aller beaucoup plus loin : des animations super belles, qui ne sont pas
+buggées. Magnifiques, mais simples, pas trop compliquées. »
+
+- **Un contrôle rejoue chaque animation tic par tic** (`outils/verifier-mouvements.py`) et signale : une main, un avant-bras ou
+  un coude dans la tête ou le buste, un pied sous le sol, un os qui saute (plus de 70° en un tic, 90° pour un coude), une
+  boucle qui ne se referme pas. Il a trouvé 12 défauts dans la 1.7.0, tous corrigés ; les 47 animations passent.
+  - coup de bras : le bras tournait de 100° en un tic (il sautait à l'écran) ;
+  - viser à l'arc : la main de corde entrait dans la tête ; elle s'arrête maintenant sous la mâchoire ;
+  - manger : l'avant-bras touchait le visage ;
+  - tir à l'arc : le bras de corde sautait au lâcher.
+- **Coup de bras** refait (9 tics au lieu de 6) : la main suit une courbe (armé sur le côté, à hauteur d'épaule, bref arrêt,
+  puis le coup accélère en diagonale), au lieu d'aller en ligne droite d'une pose à l'autre.
+- **Arc bandé qui respire** (`viser_arc_tenu`) : après la traction (1 s), le pantin n'est plus figé, l'arc et la main de corde
+  bougent à peine. **Tir** : la main de corde part en arrière, l'arc tient un instant puis redescend (10 tics).
+- **Repos** : en plus de la respiration, le poids du corps passe lentement d'une jambe à l'autre (8 s), la tête suit à peine.
+- **Marche et course** : l'avant-bras suit le bras avec un peu de retard (le coude se plie quand le bras arrive devant), et
+  le corps monte et descend sans à-coup quand le pied d'appui change.
+- **Coup reçu** : le bassin, le buste et la tête partent en arrière l'un après l'autre ; les bras gardent ce qu'ils faisaient
+  (la main qui tient l'épée ne lâche plus sa pose). Il n'est plus joué pendant un geste tenu (arc bandé, bouclier levé,
+  repas) : il coupait le geste, qui repartait de zéro.
+- **D'un geste à l'autre sans que le bras retombe** : le geste tenu qu'on quitte reste sous le suivant le temps qu'il entre,
+  puis sort en fondu (traction de l'arc → arc bandé → tir, fin d'un repas, bouclier baissé).
+- Le fichier `plugins/Vorace/modeles-animes/pantin_mouvements.bbmodel` de la 1.7.0 est remplacé tout seul s'il n'a pas été
+  retouché.
+
 ## 1.7.0 (novembre 2026) : toutes les animations du pantin refaites
 
 Retour d'Antoine : « fais des animations plus réalistes que celles de Minecraft, prends en base les mods et les MMO ».

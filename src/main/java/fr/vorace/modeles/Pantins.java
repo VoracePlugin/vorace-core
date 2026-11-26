@@ -568,7 +568,8 @@ public final class Pantins implements Listener {
             gauche = p.getActiveItemHand() == EquipmentSlot.OFF_HAND;
             if (t == Material.POTION || t == Material.MILK_BUCKET || t == Material.HONEY_BOTTLE || t.name().equals("OMINOUS_BOTTLE")) voulu = "boire";
             else if (t.isEdible()) voulu = "manger";
-            else if (t == Material.BOW) voulu = "viser_arc";
+            // l'arc se bande en 1 s (20 tics), puis reste bandé : la même pose, qui respire (si le modèle a ce geste)
+            else if (t == Material.BOW) voulu = p.getActiveItemUsedTime() >= 20 && m.aGeste(p, "viser_arc_tenu") ? "viser_arc_tenu" : "viser_arc";
             else if (t == Material.CROSSBOW) voulu = "charger_arbalete";
             else if (t == Material.SHIELD) voulu = "garde_bouclier";
             else if (t == Material.TRIDENT) voulu = "viser_trident";
@@ -605,7 +606,8 @@ public final class Pantins implements Listener {
 
     /** Lance un geste en boucle ; celui de la main gauche (« _gauche ») retombe sur celui de droite si le modèle ne l'a pas. */
     private static boolean lancerGeste(Player p, Modeles m, String geste) {
-        return m.gesteJoueur(p, geste, true) || (geste.endsWith("_gauche") && m.gesteJoueur(p, geste.substring(0, geste.length() - 7), true));
+        return m.gesteJoueur(p, geste, true)
+            || (geste.endsWith("_gauche") && m.gesteJoueur(p, geste.substring(0, geste.length() - 7), true));
     }
 
     private static boolean arbaleteChargee(ItemStack o) {

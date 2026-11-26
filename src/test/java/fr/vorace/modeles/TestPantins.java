@@ -142,7 +142,7 @@ public final class TestPantins {
         boolean tous = true;
         for (String n : List.of("repos", "marche", "course", "recul", "pas_droite", "pas_gauche", "accroupi", "accroupi_marche", "saut", "chute",
                 "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
-                "geste_main_gauche", "manger", "boire", "viser_arc", "viser_arc_gauche", "tir_arc", "charger_arbalete", "viser_arbalete",
+                "geste_main_gauche", "manger", "boire", "viser_arc", "viser_arc_gauche", "viser_arc_tenu", "viser_arc_tenu_gauche", "tir_arc", "charger_arbalete", "viser_arbalete",
                 "garde_bouclier", "garde_bouclier_gauche", "viser_trident", "longue_vue", "cor", "brosse", "degat")) {
             tous &= mv.animations().containsKey(n);
         }
@@ -153,13 +153,22 @@ public final class TestPantins {
             if ("poing_droit".equals(mv.parties().get(k).nom())) poingD = k;
             if ("poing_gauche".equals(mv.parties().get(k).nom())) poingG = k;
         }
-        // arc bandé : la main de l'arc en (3,0 ; 23,4 ; -12,6) pixels, celle de la corde à la joue en (-5,0 ; 24,4 ; -2,6) ;
+        // arc bandé : la main de l'arc en (3,0 ; 23,4 ; -12,6) pixels, celle de la corde sous la mâchoire en (-5,4 ; 22,8 ; -3,0) ;
         // un modèle au yaw 0 regarde vers +z : x et z changent de signe
         List<Animateur.Couche> bande = List.of(new Animateur.Couche(mv.animations().get("viser_arc"), 1.0, 1f, true));
         Animateur.Pose[] arc = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f);
         verifier(arc[poingD].translation().distance(-3.0f / 16, 23.4f / 16, 12.6f / 16) < 0.01f
-                && arc[poingG].translation().distance(5.0f / 16, 24.4f / 16, 2.6f / 16) < 0.01f,
+                && arc[poingG].translation().distance(5.4f / 16, 22.8f / 16, 3.0f / 16) < 0.01f,
             "arc bandé : les mains là où le script les pose (même calcul que Blockbench)");
+        // l'arc bandé qui respire (viser_arc_tenu) commence sur la dernière pose de la traction : pas de saut entre les deux,
+        // et sa boucle se referme
+        ModeleBB.Animation tenu = mv.animations().get("viser_arc_tenu");
+        Animateur.Pose[] t0 = Animateur.posesCompletes(mv, List.of(new Animateur.Couche(tenu, 0.0, 1f, true)), 0f, 1f, 0f, 0f);
+        Animateur.Pose[] t1 = Animateur.posesCompletes(mv, List.of(new Animateur.Couche(tenu, tenu.duree(), 1f, true)), 0f, 1f, 0f, 0f);
+        verifier(tenu.boucle().equals("loop") && t0[poingD].translation().distance(arc[poingD].translation()) < 0.012f
+                && t0[poingG].translation().distance(arc[poingG].translation()) < 0.012f
+                && t1[poingD].translation().distance(t0[poingD].translation()) < 1e-4f && t1[poingG].translation().distance(t0[poingG].translation()) < 1e-4f,
+            "arc bandé tenu : il part de la fin de la traction et sa boucle se referme");
         // visée : regard 30° vers le bas, la main de l'arc descend ; 30° vers le haut, elle monte ; sans geste, rien ne bouge
         Animateur.Pose[] bas = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f, 30f), haut = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f, -30f);
         Animateur.Pose[] sans = Animateur.posesCompletes(mv, List.of(), 0f, 1f, 0f, 0f, 30f), nu = Animateur.posesCompletes(mv, List.of(), 0f, 1f, 0f, 0f);

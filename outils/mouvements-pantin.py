@@ -10,7 +10,7 @@
 #   mouvements (corps entier, en boucle) : repos, marche, course, recul, pas_droite, pas_gauche, accroupi, accroupi_marche,
 #       saut, chute, nage, ramper, echelle, assis, dormir, vol, vrille
 #   gestes (par-dessus les mouvements : seuls leurs os bougent) : main droite, et « _gauche » pour la main gauche
-#       tenir, tenir_deux, geste_main, manger, boire, viser_arc, tir_arc, charger_arbalete, viser_arbalete, garde_bouclier,
+#       tenir, tenir_deux, geste_main, manger, boire, viser_arc, viser_arc_tenu, tir_arc, charger_arbalete, viser_arbalete, garde_bouclier,
 #       viser_trident, longue_vue, cor, brosse ; et degat (coup reçu)
 #
 # Repère de Blockbench (x à droite du personnage, y en haut, il regarde vers -z) ; une clé de rotation (x, y, z) vaut la
@@ -121,6 +121,26 @@ def proche(e, avant):
 def doux(u):
     u = max(0.0, min(1.0, u))
     return u * u * (3 - 2 * u)
+
+
+def courbe(points, t):
+    """
+    Courbe lisse (Catmull-Rom) par des points datés [(t, valeur), ...] : la main suit un arc au lieu d'aller en ligne droite
+    d'une clé à l'autre. Valeur : nombre ou tuple.
+    """
+    if t <= points[0][0]:
+        return points[0][1]
+    if t >= points[-1][0]:
+        return points[-1][1]
+    i = max(k for k in range(len(points) - 1) if points[k][0] <= t)
+    p0, p1, p2, p3 = (points[max(0, min(len(points) - 1, k))][1] for k in (i - 1, i, i + 1, i + 2))
+    u = (t - points[i][0]) / (points[i + 1][0] - points[i][0])
+
+    def un(a, b, c, e):
+        return 0.5 * (2 * b + (c - a) * u + (2 * a - 5 * b + 4 * c - e) * u * u + (3 * b - a - 3 * c + e) * u ** 3)
+    if isinstance(p1, tuple):
+        return tuple(un(a, b, c, e) for a, b, c, e in zip(p0, p1, p2, p3))
+    return un(p0, p1, p2, p3)
 
 
 def entre(t, t0, t1):
@@ -235,20 +255,35 @@ pos = lambda x: max(0.0, x)
 
 def sol(T, hd, kd, hg, kg, leve=lambda t: 0.0):
     """Hauteur de la racine pour que le pied le plus bas touche le sol (jambes hd/kd et hg/kg : hanche et genou en degrés)."""
-    return ech(T, lambda t: (0, max(pied(hd(t), kd(t))[0], pied(hg(t), kg(t))[0]) - (CUISSE + TIBIA) + leve(t), 0))
+    brut = ech(T, lambda t: (0, max(pied(hd(t), kd(t))[0], pied(hg(t), kg(t))[0]) - (CUISSE + TIBIA) + leve(t), 0))
+    # le changement de pied d'appui fait un angle dans la courbe : adouci sur trois tics (la boucle se referme)
+    n = len(brut) - 1
+    ys = [brut[i][1][1] for i in range(n)]
+    lisse = [0.25 * ys[(i - 1) % n] + 0.5 * ys[i] + 0.25 * ys[(i + 1) % n] for i in range(n)]
+    monte = max(0.0, max(b - l for b, l in zip(ys, lisse)))       # jamais plus bas que le sol
+    lisse = [l + monte for l in lisse]
+    return Lin((brut[i][0], (0, lisse[i % n], 0)) for i in range(n + 1))
 
 
 # ------------------------------------------------------------------ mouvements (corps entier)
 
-# repos : le balancement des bras du jeu (bobModelPart : 0 à 5,7° d'écart, ±2,9° d'avant en arrière) et une respiration
-T = 4.0
+# repos : le balancement des bras du jeu (bobModelPart : 0 à 5,7° d'écart, ±2,9° d'avant en arrière), une respiration
+# (4 s) et le poids du corps qui passe lentement d'une jambe à l'autre (8 s) : le buste et la tête penchent à peine
+T = 8.0
+SOUFFLE = lambda t: math.sin(PHI(t, 4.0))
+POIDS = lambda t: math.sin(PHI(t, 8.0))
 A.append(animation("repos", T, "loop", {
-    "corps_haut": {"rotation": ech(T, lambda t: (0.8 + 0.8 * math.sin(PHI(t, T)), 0, 0))},
-    "tete": {"rotation": ech(T, lambda t: (-0.6 - 0.6 * math.sin(PHI(t, T)), 0, 0))},
-    "bras_droit_haut": {"rotation": ech(T, lambda t: (2.9 * math.sin(PHI(t, T)), 0, 2.9 + 2.9 * math.cos(PHI(t, T))))},
-    "bras_gauche_haut": {"rotation": ech(T, lambda t: (-2.9 * math.sin(PHI(t, T)), 0, -2.9 - 2.9 * math.cos(PHI(t, T))))},
-    "bras_droit_bas": {"rotation": (-6, 0, 0)},
-    "bras_gauche_bas": {"rotation": (-6, 0, 0)},
+    "corps_bas": {"rotation": ech(T, lambda t: (0, 1.2 * POIDS(t), 0.9 * POIDS(t)))},
+    "corps_haut": {"rotation": ech(T, lambda t: (0.9 + 0.9 * SOUFFLE(t), 0, -0.5 * POIDS(t)))},
+    "tete": {"rotation": ech(T, lambda t: (-0.7 - 0.7 * SOUFFLE(t), -1.2 * POIDS(t) + 1.5 * math.sin(PHI(t, 8.0) + 1.1), -0.4 * POIDS(t)))},
+    "bras_droit_haut": {"rotation": ech(T, lambda t: (2.9 * SOUFFLE(t), 0, 2.9 + 2.9 * math.cos(PHI(t, 4.0)) - 0.4 * POIDS(t)))},
+    "bras_gauche_haut": {"rotation": ech(T, lambda t: (-2.9 * SOUFFLE(t), 0, -2.9 - 2.9 * math.cos(PHI(t, 4.0)) - 0.4 * POIDS(t)))},
+    "bras_droit_bas": {"rotation": ech(T, lambda t: (-7 - 1.5 * math.sin(PHI(t, 4.0) - 0.9), 0, 0))},
+    "bras_gauche_bas": {"rotation": ech(T, lambda t: (-7 + 1.5 * math.sin(PHI(t, 4.0) - 0.9), 0, 0))},
+    "jambe_droite_bas": {"rotation": ech(T, lambda t: (1.5 + 1.5 * POIDS(t), 0, 0))},
+    "jambe_gauche_bas": {"rotation": ech(T, lambda t: (1.5 - 1.5 * POIDS(t), 0, 0))},
+    "jambe_droite_haut": {"rotation": ech(T, lambda t: (-0.75 - 0.75 * POIDS(t), 0, 0))},
+    "jambe_gauche_haut": {"rotation": ech(T, lambda t: (-0.75 + 0.75 * POIDS(t), 0, 0))},
 }))
 
 
@@ -271,8 +306,9 @@ def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vri
         "jambe_gauche_bas": {"rotation": ech(T, lambda t: (kg(t), 0, 0))},
         "bras_droit_haut": {"rotation": ech(T, lambda t: (bras_amp * math.cos(PHI(t, T)) - penche * 0.5, 0, ecart))},
         "bras_gauche_haut": {"rotation": ech(T, lambda t: (-bras_amp * math.cos(PHI(t, T)) - penche * 0.5, 0, -ecart))},
-        "bras_droit_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 - math.cos(PHI(t, T))) / 2, 0, 0))},
-        "bras_gauche_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 + math.cos(PHI(t, T))) / 2, 0, 0))},
+        # l'avant-bras suit le bras avec un peu de retard (0,5 rad) : le coude se plie quand le bras arrive devant
+        "bras_droit_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 - math.cos(PHI(t, T) - 0.5)) / 2, 0, 0))},
+        "bras_gauche_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 + math.cos(PHI(t, T) - 0.5)) / 2, 0, 0))},
         "corps_bas": {"rotation": ech(T, lambda t: (penche, -vrille * 0.5 * math.cos(PHI(t, T)), -roulis * math.sin(PHI(t, T))))},
         "corps_haut": {"rotation": ech(T, lambda t: (0, vrille * 1.5 * math.cos(PHI(t, T)), 0))},
         "tete": {"rotation": ech(T, lambda t: (tete, -vrille * math.cos(PHI(t, T)), roulis * math.sin(PHI(t, T))))},
@@ -579,28 +615,29 @@ p.update(miroir(TENIR))
 A.append(animation("tenir_deux", T, "loop", p))
 
 
-# coup de bras (6 tics, comme le jeu) : la main monte près de l'oreille, épaule en arrière, puis fend en diagonale vers le bas
+# coup de bras (9 tics ; 6 dans le jeu, mais un bras qui tourne de 100° en un tic saute à l'écran) : la main part sur le côté à
+# hauteur d'épaule, coude et épaule en arrière, puis fend en diagonale vers le bas
 # et le milieu, le buste qui tourne avec le coup ; le jeu ne fait que lever et baisser le bras. La main ne passe jamais
 # devant le visage ni au-dessus de la tête.
 MAIN_REPOS = (5.6, 13.6, -4.2)
-COUP = [(0.0, MAIN_REPOS, 0.0), (0.07, (8.6, 26.6, -1.2), 14.0), (0.15, (4.4, 21.6, -9.4), -14.0), (0.22, (-0.6, 15.2, -8.2), -18.0),
-        (0.3, (4.6, 14.0, -5.4), 0.0)]
+# (temps, main, rotation du buste) : armé en 2 à 3 tics, coup en 4, retour en 3 ; la main suit une courbe par ces points
+COUP = [(0.0, MAIN_REPOS, 0.0), (0.12, (9.6, 22.6, -2.2), 13.0), (0.24, (5.4, 21.8, -9.0), -8.0), (0.32, (0.6, 16.0, -8.6), -17.0),
+        (0.45, MAIN_REPOS, 0.0)]
 
 
 def coup(t):
-    for (t0, m0, v0), (t1, m1, v1) in zip(COUP, COUP[1:]):
-        if t <= t1 + 1e-9:
-            u = (t - t0) / (t1 - t0)
-            u = u * u * (3 - 2 * u) if t0 == 0.0 or t1 == 0.3 else u      # départ et arrivée doux, le coup à pleine vitesse
-            return {"buste": (3 * math.sin(math.pi * t / 0.3), v0 + (v1 - v0) * u, 0), "droit": (mix(m0, m1, u), (1, -0.55, 0.45))}
-    return {"buste": (0, 0, 0), "droit": (COUP[-1][1], (1, -0.55, 0.45))}
+    # le temps ralentit au départ et à l'armé (un bref arrêt en haut : l'élan), puis le coup accélère jusqu'à l'impact
+    t = 0.12 * doux(t / 0.12) if t < 0.12 else 0.12 + 0.33 * doux((t - 0.12) / 0.33)
+    main = courbe([(a, m) for a, m, _ in COUP], t)
+    vr = courbe([(a, v) for a, _, v in COUP], t)
+    return {"buste": (3 * math.sin(math.pi * t / 0.45), vr, 0), "droit": (main, (1, -0.55, 0.45))}
 
 
-deux("geste_main", 0.3, "once", geste(0.3, coup, "once"))
+deux("geste_main", 0.45, "once", geste(0.45, coup, "once"))
 
 # manger : la main à la bouche, de petits va-et-vient (une bouchée tous les 4 tics dans le jeu) ; la tête pique un peu
 T = 0.4
-BOUCHE = (0.9, 25.0, -6.2)
+BOUCHE = (0.9, 24.8, -6.7)
 deux("manger", T, "loop", geste(T, lambda t: {
     "tete": (5 + 3 * math.sin(PHI(t, T)), 0, 0),
     "droit": (add(BOUCHE, (0, 0.5 * math.sin(PHI(t, T)), 0.5 * math.cos(PHI(t, T)))), (0.9, -1, 0.1)),
@@ -617,7 +654,7 @@ deux("boire", T, "loop", geste(T, lambda t: {
 # joue en 1 s (la tension complète de l'arc du jeu), puis tient. Le buste s'ouvre pendant la traction, épaule de l'arc devant :
 # la main de l'arc avance, celle de la corde recule de 10 pixels (dans le jeu, les deux bras restent tendus devant).
 ARC_0, ARC_1 = (3.4, 23.2, -9.6), (3.0, 23.4, -12.6)
-CORDE_0, CORDE_1 = (1.4, 23.0, -8.4), (-5.0, 24.4, -2.6)
+CORDE_0, CORDE_1 = (1.4, 23.0, -8.4), (-5.4, 22.8, -3.0)     # sous la mâchoire, hors de la tête
 COUDE_CORDE = (-0.7, 0.25, 1.0)
 
 
@@ -632,18 +669,26 @@ def arc(t):
 
 deux("viser_arc", 1.0, "hold", geste(1.0, arc, "hold"))
 
+# arc bandé (Vorace l'enchaîne après la traction) : la même pose, qui respire ; l'arc bouge à peine
+T = 3.0
+deux("viser_arc_tenu", T, "loop", geste(T, lambda t: {
+    "buste": (0.5 * math.sin(PHI(t, T)), -32, 0),
+    "droit": (add(ARC_1, (0, 0.12 * math.sin(PHI(t, T)), 0)), (0.6, -1, 0.2)),
+    "gauche": (add(CORDE_1, (0, 0.1 * math.sin(PHI(t, T)), 0.12 * math.sin(PHI(t, T) + 1.0))), COUDE_CORDE),
+}, "loop"))
+
 
 # tir à l'arc (au lâcher de la flèche) : la main de corde part en arrière, l'arc tient un instant puis redescend
 def tir(t):
-    part, baisse = entre(t, 0.0, 0.08), entre(t, 0.14, 0.4)
+    part, baisse = entre(t, 0.0, 0.12), entre(t, 0.18, 0.5)
     return {
         "buste": (0, -32 * (1 - baisse), 0),
         "droit": (mix(add(ARC_1, (0, 0.4 * part, 0.5 * part)), MAIN_REPOS, baisse), (0.6, -1, 0.2)),
-        "gauche": (mix(add(CORDE_1, (-1.4 * part, 0.2 * part, 3.0 * part)), (-5.6, 13.4, -2.0), baisse), mix(COUDE_CORDE, (-0.5, -1, 0.35), baisse)),
+        "gauche": (mix(add(CORDE_1, (-1.2 * part, 0.2 * part, 2.4 * part)), (-5.6, 13.4, -2.0), baisse), mix(COUDE_CORDE, (-0.5, -1, 0.35), baisse)),
     }
 
 
-deux("tir_arc", 0.4, "once", geste(0.4, tir, "once"))
+deux("tir_arc", 0.5, "once", geste(0.5, tir, "once"))
 
 
 # charger l'arbalète : celle du jeu (bras de l'arbalète à -56°, tourné de 46° vers le milieu ; l'autre main remonte la corde
@@ -703,16 +748,14 @@ deux("brosse", T, "loop", geste(T, lambda t: {
     "droit": ((3.5 + 1.8 * math.sin(PHI(t, T)), 14.4, -7.2 + 0.4 * math.cos(2 * PHI(t, T))), COUDE_BAS),
 }, "loop"))
 
-# coup reçu : le buste et la tête partent en arrière, les bras s'ouvrent, puis reviennent
+# coup reçu : le bassin, le buste et la tête partent en arrière l'un après l'autre (2 tics), puis reviennent doucement. Pas de
+# clé sur les bras : ils suivent le buste et gardent ce qu'ils faisaient (la main qui tient l'épée ne lâche pas sa pose).
 T = 0.35
 recul_ = lambda t: math.sin(math.pi * min(1.0, t / 0.1) / 2) if t < 0.1 else 1 - entre(t, 0.1, T)
 A.append(animation("degat", T, "once", {
-    "corps_haut": {"rotation": ech(T, lambda t: (-11 * recul_(t), 0, 0), False)},
-    "tete": {"rotation": ech(T, lambda t: (-9 * recul_(t), 0, 0), False)},
-    "bras_droit_haut": {"rotation": ech(T, lambda t: (6 * recul_(t), 0, 14 * recul_(t)), False)},
-    "bras_gauche_haut": {"rotation": ech(T, lambda t: (6 * recul_(t), 0, -14 * recul_(t)), False)},
-    "bras_droit_bas": {"rotation": ech(T, lambda t: (-18 * recul_(t), 0, 0), False)},
-    "bras_gauche_bas": {"rotation": ech(T, lambda t: (-18 * recul_(t), 0, 0), False)},
+    "corps_bas": {"rotation": ech(T, lambda t: (-4 * recul_(t), 0, 0), False)},
+    "corps_haut": {"rotation": ech(T, lambda t: (-9 * recul_(max(0.0, t - 0.025) * T / (T - 0.025)), 0, 0), False)},
+    "tete": {"rotation": ech(T, lambda t: (-10 * recul_(max(0.0, t - 0.05) * T / (T - 0.05)), 0, 0), False)},
 }))
 
 projet = copy.deepcopy(SOURCE)

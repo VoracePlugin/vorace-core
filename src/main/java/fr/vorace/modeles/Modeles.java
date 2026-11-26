@@ -479,6 +479,12 @@ public final class Modeles {
         return i != null && i.posture != null;
     }
 
+    /** Pantin permanent : son modèle (ou celui des mouvements) a-t-il ce geste ? */
+    public boolean aGeste(Player joueur, String geste) {
+        Instance i = instances.get(joueur.getUniqueId());
+        return i != null && i.pantin && i.trouver(geste) != null;
+    }
+
     /** Pantin permanent : arrête le geste en cours (s'il en joue un). */
     public void finGesteJoueur(Player joueur, String geste) {
         Instance i = instances.get(joueur.getUniqueId());
@@ -825,7 +831,8 @@ public final class Modeles {
     }
 
     /** Gestes de visée du pantin : leurs bras suivent le regard vers le haut ou le bas (voir Animateur.posesCompletes). */
-    static final java.util.Set<String> VISEES = java.util.Set.of("viser_arc", "tir_arc", "viser_arbalete", "garde_bouclier", "longue_vue", "cor");
+    static final java.util.Set<String> VISEES = java.util.Set.of("viser_arc", "viser_arc_tenu", "tir_arc", "viser_arbalete", "garde_bouclier",
+        "longue_vue", "cor");
 
     /**
      * Mouvements du pantin des joueurs réglés sur leur vitesse : {nom, vitesse pour laquelle l'animation est écrite (blocs
@@ -1389,6 +1396,40 @@ public final class Modeles {
             return auto("nage") || auto("vol") || auto("vrille") || auto("ramper");
         }
 
+        /**
+         * Pantin permanent : geste tenu qu'on vient de quitter (remplacé ou arrêté), figé sur sa dernière pose. Il sort en
+         * fondu au lieu de disparaître d'un coup : le bras ne retombe plus entre « bander l'arc » et « arc bandé », et la
+         * main de corde part bien de la corde au lâcher de la flèche.
+         */
+        private Animation gesteSortant;
+        private double tempsSortant;
+        private long debutSortie;
+
+        /**
+         * Avant de changer de geste ou de l'arrêter. Seul un geste tenu (en boucle, ou « hold ») est gardé : un geste joué
+         * une fois (coup de bras, coup reçu) sort déjà tout seul. Une animation demandée ({@code dessus} faux) prend tout le
+         * corps : rien n'est gardé.
+         */
+        private void sortir(boolean dessus, String suivant) {
+            if (!dessus) {
+                gesteSortant = null;
+                return;
+            }
+            if (!pantin || !permanent || forcee == null || !forceePartielle || forcee.equals(suivant)) return;
+            Animation av = trouver(forcee);
+            if (av == null || !(forceeBoucle || av.boucle().equals("loop") || av.boucle().equals("hold"))) return;
+            gesteSortant = av;
+            tempsSortant = forceeBoucle ? tempsPiste(av, debutForcee, true) : Math.min(av.duree(), (tic - debutForcee) / 20.0);
+            debutSortie = tic;
+        }
+
+        /** Un geste tenu (manger, viser, garde...) est-il en cours par-dessus les mouvements ? */
+        boolean gesteTenu() {
+            if (forcee == null || !forceePartielle) return false;
+            Animation a = trouver(forcee);
+            return a != null && (forceeBoucle || a.boucle().equals("loop") || a.boucle().equals("hold"));
+        }
+
         /** Pantin permanent : geste de fond (voir gesteDeFond), son début, et le tic où il a commencé à sortir (-1 : en place). */
         private String fond;
         private long debutFond, finFond = -1;
@@ -1761,6 +1802,12 @@ public final class Modeles {
                 if (a == null) return false;
                 boucle = ev.isBoucle();
             }
+            sortir(dessus, a.nom());
+            // le geste quitté à l'instant reste entier sous le nouveau le temps que celui-ci entre, puis il sort
+            if (dessus && gesteSortant != null && debutSortie == tic) {
+                boolean uneFois = !boucle && !a.boucle().equals("loop") && !a.boucle().equals("hold");
+                debutSortie = tic + (uneFois ? Math.min(fonduTics, 2) : fonduTics);
+            }
             forcee = a.nom();
             forceeBoucle = boucle;
             forceePartielle = dessus;
@@ -1772,6 +1819,7 @@ public final class Modeles {
 
         /** Revient aux animations automatiques. */
         public void arreterAnimation() {
+            sortir(true, null);
             forcee = null;
             forceePartielle = false;
             if (!mob) memoriser();
@@ -1824,6 +1872,9 @@ public final class Modeles {
             // le pantin d'un joueur ne joue que l'animation demandée ; permanent, il réagit aux coups (geste par-dessus)
             if (pantin && !(permanent && "degat".equals(role) && !animationDemandee())) return false;
             if (pantin) {
+                // pas pendant un geste tenu (arc bandé, bouclier levé, repas) : le sursaut redresserait le buste et les bras
+                // quitteraient la corde ; le jeu non plus ne bouge pas le corps d'un joueur touché
+                if (gesteTenu()) return false;
                 Animation g = trouver("degat");
                 return g != null && demarrer(g.nom(), false, true);
             }
@@ -2163,6 +2214,13 @@ public final class Modeles {
                 } else if (!animationDemandee() && posture == null) {
                     couches.add(new Animateur.Couche(fa, tempsPiste(fa, debutFond, true), w, true));
                 }
+            }
+
+            // geste qu'on vient de quitter : il sort en fondu sous le suivant
+            if (gesteSortant != null) {
+                float w = fonduTics > 0 ? Math.min(1f, 1f - (tic - debutSortie + 1) / (float) fonduTics) : 0f;
+                if (w <= 0f || animationDemandee() || posture != null) gesteSortant = null;
+                else couches.add(new Animateur.Couche(gesteSortant, tempsSortant, w, true));
             }
 
             // animation par-dessus (dégâts, attaque...) : entre et sort en fondu
@@ -2510,7 +2568,9 @@ public final class Modeles {
         "d41ee45f17054bf74ac955343158f24f6223d6e79c2037b7ebcd036bec5590c8",
         // pantin_mouvements.bbmodel de la 1.6.0 (24 animations) : remplacé par celui de la 1.7.0 s'il n'a pas été retouché.
         // À chaque nouvelle version de ce fichier, ajouter ici l'empreinte SHA-256 de la précédente.
-        "e942599e1e7f3ce3f132d71de326028660feeb941780f9acfcae77e08476ba2a");
+        "e942599e1e7f3ce3f132d71de326028660feeb941780f9acfcae77e08476ba2a",
+        // celui de la 1.7.0 (45 animations)
+        "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e");
 
     static String empreinte(byte[] octets) {
         try {
