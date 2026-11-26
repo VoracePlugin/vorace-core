@@ -34,6 +34,13 @@
     armure) sont effacés quand la caméra est dans sa tête, par le shader du pack (ils portent une marque dans leur teinte,
     deux bits bas des couleurs, que les autres pantins évitent) ; sa copie ne tient rien hors compétence.
   Un pantin permanent a toujours sa copie pour lui-même, même avec `recul-pour-soi: 0`.
+- **La tête du pantin suit le regard, le corps la rattrape** : l'os de tête du pantin (« peau_tete ») n'était pas reconnu,
+  la tête ne tournait donc jamais, ni de côté ni de haut en bas. Elle regarde maintenant où regarde le joueur (jusqu'à 90°
+  vers le haut ou le bas, comme dans le jeu) et le corps la rejoint en un quart de seconde (`pantin.corps-suit-regard`,
+  `pantin.tete-max`), au lieu de tourner d'un bloc avec le regard. Pendant une compétence, le corps est face au regard
+  tout de suite et la tête reste à l'animation.
+- **Pantin à la taille des joueurs du jeu** (`pantin.taille: 0.9375`, 1,875 bloc) : à 1, il faisait 2 blocs et son crâne
+  entrait dans le plafond.
 - **Arc tendu dans la main du pantin** : pendant que le joueur vise, l'arc de son pantin est dessiné bandé (arc du jeu :
   définition du pack ; arcs de vorace-item 0.14.13 et plus : drapeau 5 « tendu »). Un affichage d'objet n'a pas de porteur,
   le jeu l'aurait laissé au repos.
