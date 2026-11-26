@@ -4,6 +4,7 @@
 #   - une main, un avant-bras ou un coude qui entre dans la tête ou dans le buste ;
 #   - un pied sous le sol (mouvements debout) ;
 #   - un os qui tourne de plus de 70° en un tic, 90° pour un coude ou un genou (saut de bras, angle d'Euler qui se retourne) ;
+#   - un tronc qui se tord ou roule (il doit rester d'un bloc) ;
 #   - une boucle qui ne se referme pas (la dernière image diffère de la première).
 # Code de sortie 1 s'il y a un défaut.
 import json, math, sys
@@ -130,6 +131,17 @@ for anim in d["animations"]:
 
     def note(cle, v):
         pb[cle] = max(pb.get(cle, 0), v)
+
+    # tronc rigide : ni torsion ni roulis du haut du tronc sur le bas, ni du bassin sur les jambes (le pantin « se
+    # désassemble » à la taille et aux hanches, surtout en armure) ; le haut ne se penche pas de plus de 6° sur le bas
+    for (os_, canal), cles in p.items():
+        if canal != "rotation" or not (os_.endswith("corps_haut") or os_.endswith("corps_bas")):
+            continue
+        for _, (x, y, z) in cles:
+            if abs(y) > 0.01 or abs(z) > 0.01:
+                note("%s se tord ou roule (tronc rigide)" % os_, max(abs(y), abs(z)))
+            if os_.endswith("corps_haut") and abs(x) > 6.01:
+                note("%s penché de plus de 6° sur le bassin" % os_, abs(x))
 
     avant = None
     for i in range(n + 1):

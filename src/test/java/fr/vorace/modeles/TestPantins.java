@@ -162,6 +162,19 @@ public final class TestPantins {
                 "garde_bouclier", "garde_bouclier_gauche", "viser_trident", "longue_vue", "cor", "brosse", "degat")) {
             tous &= mv.animations().containsKey(n);
         }
+        // tronc rigide : dans aucun mouvement le tronc ne se tord ni ne roule (le haut sur le bas, le bassin sur les jambes) ;
+        // le haut ne se penche pas de plus de 6° sur le bas. Sinon le pantin « se désassemble » à la taille et aux hanches.
+        boolean rigide = true;
+        for (ModeleBB.Animation an : mv.animations().values()) {
+            for (Map.Entry<String, ModeleBB.Canaux> eo : an.os().entrySet()) {
+                String os = eo.getKey().toLowerCase(java.util.Locale.ROOT);
+                if ((!os.endsWith("corps_haut") && !os.endsWith("corps_bas")) || eo.getValue().rotation() == null) continue;
+                for (ModeleBB.Cle cle : eo.getValue().rotation()) {
+                    rigide &= Math.abs(cle.y()) < 0.01 && Math.abs(cle.z()) < 0.01 && (!os.endsWith("corps_haut") || Math.abs(cle.x()) < 6.01);
+                }
+            }
+        }
+        verifier(rigide, "mouvements du pantin : tronc rigide (ni torsion ni roulis, le haut penché de 6° au plus)");
         verifier(tous && mv.animations().get("viser_arc").boucle().equals("hold") && mv.animations().get("marche").boucle().equals("loop")
                 && mv.animations().get("geste_main").boucle().equals("once"), "mouvements du pantin : les 17 mouvements et les gestes, arc tenu (hold)");
         int poingD = -1, poingG = -1;
@@ -169,11 +182,11 @@ public final class TestPantins {
             if ("poing_droit".equals(mv.parties().get(k).nom())) poingD = k;
             if ("poing_gauche".equals(mv.parties().get(k).nom())) poingG = k;
         }
-        // arc bandé : la main de l'arc en (3,0 ; 23,4 ; -12,6) pixels, celle de la corde sous la mâchoire en (-5,4 ; 22,8 ; -3,0) ;
+        // arc bandé : la main de l'arc en (4,4 ; 23,2 ; -9,6) pixels, celle de la corde sous la mâchoire en (-5,4 ; 22,8 ; -3,0) ;
         // un modèle au yaw 0 regarde vers +z : x et z changent de signe
         List<Animateur.Couche> bande = List.of(new Animateur.Couche(mv.animations().get("viser_arc"), 1.0, 1f, true));
         Animateur.Pose[] arc = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f);
-        verifier(arc[poingD].translation().distance(-3.0f / 16, 23.4f / 16, 12.6f / 16) < 0.01f
+        verifier(arc[poingD].translation().distance(-4.4f / 16, 23.2f / 16, 9.6f / 16) < 0.01f
                 && arc[poingG].translation().distance(5.4f / 16, 22.8f / 16, 3.0f / 16) < 0.01f,
             "arc bandé : les mains là où le script les pose (même calcul que Blockbench)");
         // l'arc bandé qui respire (viser_arc_tenu) commence sur la dernière pose de la traction : pas de saut entre les deux,

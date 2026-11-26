@@ -1511,6 +1511,11 @@ public final class Modeles {
 
         /** Pantin d'un joueur : sa vitesse du dernier tic (blocs par tic), à plat et en hauteur. */
         private double vitesseAuto, monteeAuto;
+        /** Sens du dernier déplacement (vecteur unité) et nombre de tics de suite sans bouger. */
+        private double sensX, sensZ;
+        private int arrets;
+        /** Tics de suite au sol (voir locomotion : un tic au sol entre deux bonds n'arrête pas le saut). */
+        private int ticsAuSol;
         /** Avance (secondes d'animation) du mouvement réglé sur la vitesse, et de celui d'avant pendant le fondu. */
         private double phaseAuto, phaseAvant;
         private String phaseDe, phaseAvantDe;
@@ -1544,7 +1549,11 @@ public final class Modeles {
             double[] r = rythme(auto);
             if (r == null) return;
             double v = auto("echelle") ? monteeAuto : vitesseAuto;
-            phaseAuto += Math.max(r[1], Math.min(1.8, v / r[0])) / 20.0;
+            // Plus vite que l'allure pour laquelle l'animation est écrite (potion de vitesse, élan d'une compétence, bonds) :
+            // la cadence ne suit qu'à 40 % et plafonne à 1,3 fois (un coureur allonge sa foulée plus qu'il n'accélère ses
+            // jambes). Avant, elle suivait jusqu'à 1,8 fois : les jambes moulinaient.
+            double part = v / r[0];
+            phaseAuto += Math.max(r[1], part <= 1 ? part : Math.min(1.3, 1 + (part - 1) * 0.4)) / 20.0;
         }
 
         /** Sens du pantin couché dans un lit : la tête vers la tête du lit (le pantin est couché sur le dos, tête derrière lui). */
@@ -2094,6 +2103,10 @@ public final class Modeles {
             double v = Math.sqrt(dx * dx + dz * dz);
             @SuppressWarnings("deprecation")
             boolean sol = p.isOnGround();
+            // en courant par bonds, il ne touche le sol qu'un tic entre deux sauts : il reste en l'air (sinon la course
+            // revenait un instant à chaque bond)
+            ticsAuSol = sol ? ticsAuSol + 1 : 0;
+            if (sol && ticsAuSol < 2 && v > 0.2 && (auto("saut") || auto("chute"))) sol = false;
             if (p.isSleeping()) c.add("dormir");
             else if (p.isInsideVehicle()) c.add("assis");
             else if (p.isRiptiding()) { c.add("vrille"); c.add("vol"); }
@@ -2102,9 +2115,12 @@ public final class Modeles {
             else if (p.getPose() == org.bukkit.entity.Pose.SWIMMING) { c.add("ramper"); c.add("nage"); }   // sous un bloc, hors de l'eau
             else if (p.isClimbing() && !sol) c.add("echelle");
             else if (!sol && !p.isFlying()) c.add(dy < -0.25 ? "chute" : "saut");
-            // sens du déplacement par rapport au CORPS (il s'est tourné vers là où il va, voir corpsJoueur) : en avançant
-            // de biais, il marche droit devant lui ; le pas de côté ne sert plus qu'au tout début d'un déplacement latéral
-            double r = Math.toRadians(pantinCorpsVersMouvement ? yaw : l.getYaw());
+            // Sens du déplacement par rapport au REGARD. Le corps se tourne vers là où il va (corpsJoueur) : quel que soit
+            // le sens (tout droit, de biais, de côté), il joue la même marche, qui ne s'interrompt pas quand il change de
+            // direction ; seule la marche à reculons est un autre mouvement, comme dans le jeu (au-delà de 95° du regard).
+            // Avant, le sens était lu par rapport au corps en train de tourner : la marche, le pas de côté et le recul se
+            // relayaient pendant un quart de seconde à chaque changement de direction, chacun repartant de zéro.
+            double r = Math.toRadians(l.getYaw());
             double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
             // vol en créatif : il plane (penché quand il avance) au lieu de courir dans le vide ; un modèle sans ces
             // mouvements garde ceux d'avant
@@ -2114,9 +2130,16 @@ public final class Modeles {
             }
             if (p.isSneaking()) c.add(v > 0.01 ? "accroupi_marche" : "accroupi");
             if (v > 0.01) {
-                if (avant < -0.5 * v) c.add("recul");
-                else if (Math.abs(cote) > (pantinCorpsVersMouvement ? 0.9 : 0.75) * v) c.add(cote > 0 ? "pas_droite" : "pas_gauche");
-                if (p.isSprinting() || v > 0.24) c.add("course");
+                if (pantinCorpsVersMouvement) {
+                    // à reculons à partir de 100° du regard ; il le reste jusqu'à 85° (un écart, pour ne pas hésiter)
+                    if (avant < (auto("recul") ? 0.09 : -0.17) * v) c.add("recul");
+                } else if (avant < -0.5 * v) {
+                    c.add("recul");
+                } else if (Math.abs(cote) > 0.75 * v) {
+                    c.add(cote > 0 ? "pas_droite" : "pas_gauche");
+                }
+                // de la marche à la course à 0,24 bloc par tic ; il reste en course jusqu'à 0,2 (même raison)
+                if (p.isSprinting() || v > (auto("course") ? 0.2 : 0.24)) c.add("course");
                 c.add("marche");
             }
             c.add("repos");
@@ -2150,11 +2173,16 @@ public final class Modeles {
                 // pantin d'un joueur : la tête regarde où il regarde ; le corps suit comme dans le jeu (corpsJoueur)
                 yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw(), vitesse > 0.01, dx, dz) : corps(le);
                 if (pantin && le instanceof Player pj && ancre == null && pj.isSleeping()) yaw = corpsLisse = sensDuLit(pj, yaw);
-                vitesseAuto = vitesse;
+                // Vitesse lissée : le serveur reçoit les déplacements du joueur par à-coups (aucun pendant un tic, deux au
+                // suivant, surtout quand il va vite ou que sa connexion hésite). Lue telle quelle, la course sautait d'une
+                // allure à l'autre et sa cadence tremblait. Deux tics sans bouger : il est vraiment arrêté.
+                arrets = vitesse < 0.003 ? arrets + 1 : 0;
+                vitesseAuto = arrets >= 2 || !(pantin && le instanceof Player) ? vitesse : vitesseAuto + (vitesse - vitesseAuto) * 0.35;
+                if (vitesse > 0.003) { sensX = dx / vitesse; sensZ = dz / vitesse; }
                 monteeAuto = Math.abs(dy);
                 Animation a;
                 if (pantin && le instanceof Player pj) {
-                    a = locomotion(pj, l, dx, dy, dz);
+                    a = locomotion(pj, l, sensX * vitesseAuto, dy, sensZ * vitesseAuto);
                 } else {
                     String voulue = vitesse > 0.15 && trouver("course") != null ? "course" : vitesse > 0.01 ? "marche" : "repos";
                     a = trouver(voulue);
@@ -2690,8 +2718,9 @@ public final class Modeles {
         "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d",
         "3f7bfc697804da0ee20676b502b437b4667572d0fb0c4008f345d6e29ccc09bc",
         "d00bf14f9069d615b22a4665c0184a596221c74a7819219a242ead8ca6be40cd",
-        // celui de la 1.7.4
-        "2e189b666c60905ea4c0213bc320b5a3059eedb4fe7dc5b82b93b1c5c91769b1");
+        // ceux de la 1.7.4 et de la 1.7.5
+        "2e189b666c60905ea4c0213bc320b5a3059eedb4fe7dc5b82b93b1c5c91769b1",
+        "30515c1d3c6e400128ab773d3f4eda83affbc05a13aeaaa349121b26c065fa5f");
 
     static String empreinte(byte[] octets) {
         try {

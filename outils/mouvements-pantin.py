@@ -273,8 +273,8 @@ T = 8.0
 SOUFFLE = lambda t: math.sin(PHI(t, 4.0))
 POIDS = lambda t: math.sin(PHI(t, 8.0))
 A.append(animation("repos", T, "loop", {
-    "corps_bas": {"rotation": ech(T, lambda t: (0, 1.2 * POIDS(t), 0.9 * POIDS(t)))},
-    "corps_haut": {"rotation": ech(T, lambda t: (0.9 + 0.9 * SOUFFLE(t), 0, -0.5 * POIDS(t)))},
+    # (le tronc reste d'un bloc : voir TRONC RIGIDE plus bas)
+    "corps_haut": {"rotation": ech(T, lambda t: (0.9 + 0.9 * SOUFFLE(t), 0, 0))},
     "tete": {"rotation": ech(T, lambda t: (-0.7 - 0.7 * SOUFFLE(t), -1.2 * POIDS(t) + 1.5 * math.sin(PHI(t, 8.0) + 1.1), -0.4 * POIDS(t)))},
     "bras_droit_haut": {"rotation": ech(T, lambda t: (2.9 * SOUFFLE(t), 0, 2.9 + 2.9 * math.cos(PHI(t, 4.0)) - 0.4 * POIDS(t)))},
     "bras_gauche_haut": {"rotation": ech(T, lambda t: (-2.9 * SOUFFLE(t), 0, -2.9 - 2.9 * math.cos(PHI(t, 4.0)) - 0.4 * POIDS(t)))},
@@ -310,9 +310,13 @@ def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vri
         # l'avant-bras suit le bras avec un peu de retard (0,5 rad) : le coude se plie quand le bras arrive devant
         "bras_droit_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 - math.cos(PHI(t, T) - 0.5)) / 2, 0, 0))},
         "bras_gauche_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 + math.cos(PHI(t, T) - 0.5)) / 2, 0, 0))},
-        "corps_bas": {"rotation": ech(T, lambda t: (penche, -vrille * 0.5 * math.cos(PHI(t, T)), -roulis * math.sin(PHI(t, T))))},
-        "corps_haut": {"rotation": ech(T, lambda t: (0, vrille * 1.5 * math.cos(PHI(t, T)), 0))},
-        "tete": {"rotation": ech(T, lambda t: (tete, -vrille * math.cos(PHI(t, T)), roulis * math.sin(PHI(t, T))))},
+        # TRONC RIGIDE (retour d'Antoine : « des parties de mon pantin se désassemblent, les jambes, la moitié du tronc ») :
+        # le tronc ne se tord plus et ne roule plus. Les jambes tiennent à la racine, pas au bassin, et le tronc est en deux
+        # morceaux : tourner le haut sur le bas (16° à la marche) ou le bassin sur les jambes ouvrait des cassures à la
+        # taille et aux hanches, bien visibles avec une armure. Il se penche d'un bloc, autour des hanches, comme le corps du
+        # jeu. Les paramètres vrille et roulis ne servent plus.
+        "corps_bas": {"rotation": (penche, 0, 0)},
+        "tete": {"rotation": (tete, 0, 0)},
         "racine": {"position": sol(T, hd, kd, hg, kg, lambda t: vol * (0.5 + 0.5 * math.cos(2 * PHI(t, T))))},
     }))
 
@@ -341,8 +345,7 @@ A.append(animation("recul", T, "loop", {
     "bras_gauche_haut": {"rotation": ech(T, lambda t: (14 * math.cos(PHI(t, T)) + 2, 0, -4))},
     "bras_droit_bas": {"rotation": (-18, 0, 0)},
     "bras_gauche_bas": {"rotation": (-18, 0, 0)},
-    "corps_bas": {"rotation": ech(T, lambda t: (-3, 2 * math.cos(PHI(t, T)), 0))},
-    "corps_haut": {"rotation": ech(T, lambda t: (0, -4 * math.cos(PHI(t, T)), 0))},
+    "corps_bas": {"rotation": (-3, 0, 0)},
     "tete": {"rotation": ech(T, lambda t: (3, 2 * math.cos(PHI(t, T)), 0))},
     "racine": {"position": sol(T, hd, kd, hg, kg)},
 }))
@@ -359,7 +362,7 @@ PAS_DROITE = {
     "bras_gauche_haut": {"rotation": ech(T, lambda t: (-4, 0, -6 - 8 * ouvre(t)))},
     "bras_droit_bas": {"rotation": (-16, 0, 0)},
     "bras_gauche_bas": {"rotation": (-16, 0, 0)},
-    "corps_bas": {"rotation": ech(T, lambda t: (2, 0, 2.5 * math.sin(PHI(t, T))))},
+    "corps_bas": {"rotation": (2, 0, 0)},
     "tete": {"rotation": ech(T, lambda t: (-2, 0, -2.5 * math.sin(PHI(t, T))))},
     "racine": {"position": ech(T, lambda t: (0, -(CUISSE + TIBIA) * (1 - math.cos(math.radians(15 * ouvre(t)))) - 0.15, 0))},
 }
@@ -399,7 +402,7 @@ p.update({
     "jambe_gauche_bas": {"rotation": ech(T, lambda t: (kg(t), 0, 0))},
     "bras_droit_haut": {"rotation": ech(T, lambda t: (-22 + 9 * math.cos(PHI(t, T)), 0, 5))},
     "bras_gauche_haut": {"rotation": ech(T, lambda t: (-22 - 9 * math.cos(PHI(t, T)), 0, -5))},
-    "corps_haut": {"rotation": ech(T, lambda t: (5, 4 * math.cos(PHI(t, T)), 0))},
+    "corps_haut": {"rotation": (5, 0, 0)},
     "tete": {"rotation": ech(T, lambda t: (-BUS - 5, -4 * math.cos(PHI(t, T)), 0))},
 })
 ys = sol(T, hd, kd, hg, kg)
@@ -417,8 +420,7 @@ A.append(animation("saut", 0.2, "hold", {
     "bras_gauche_haut": {"rotation": [(0, (4, 0, -5)), (0.2, (18, 0, -12))]},
     "bras_droit_bas": {"rotation": [(0, (-16, 0, 0)), (0.2, (-58, 0, 0))]},
     "bras_gauche_bas": {"rotation": [(0, (-16, 0, 0)), (0.2, (-66, 0, 0))]},
-    "corps_bas": {"rotation": [(0, (3, 0, 0)), (0.2, (9, 0, 0))]},
-    "corps_haut": {"rotation": [(0, (0, 0, 0)), (0.2, (3, -6, 0))]},
+    "corps_bas": {"rotation": [(0, (3, 0, 0)), (0.2, (11, 0, 0))]},
     "tete": {"rotation": [(0, (-2, 0, 0)), (0.2, (-10, 4, 0))]},
 }))
 
@@ -501,7 +503,7 @@ T = 1.3   # le cycle de 26 du jeu
 A.append(animation("nage", T, "loop", {
     "racine": {"rotation": A_PLAT, "position": (0, 5, 28)},
     "tete": {"rotation": (-52, 0, 0)},
-    "corps_haut": {"rotation": ech(T, lambda t: (-4 + 3 * math.sin(PHI(t, T)), 0, 0))},
+    "corps_haut": {"rotation": ech(T, lambda t: (-3 + 3 * math.sin(PHI(t, T)), 0, 0))},
     "bras_droit_haut": {"rotation": ech(T, lambda t: brasse(t, T, 1))},
     "bras_gauche_haut": {"rotation": ech(T, lambda t: brasse(t, T, -1))},
     "bras_droit_bas": {"rotation": ech(T, lambda t: coude_brasse(t, T))},
@@ -518,8 +520,7 @@ T = 1.0
 A.append(animation("ramper", T, "loop", {
     "racine": {"rotation": A_PLAT, "position": (0, 2.6, 28)},
     "tete": {"rotation": (-58, 0, 0)},
-    "corps_bas": {"rotation": ech(T, lambda t: (0, 0, 4 * math.sin(PHI(t, T))))},
-    "corps_haut": {"rotation": ech(T, lambda t: (-8, 0, -6 * math.sin(PHI(t, T))))},
+    "corps_haut": {"rotation": (-6, 0, 0)},
     "bras_droit_haut": {"rotation": ech(T, lambda t: (-18, 0, 122 + 30 * math.cos(PHI(t, T))))},
     "bras_gauche_haut": {"rotation": ech(T, lambda t: (-18, 0, -122 + 30 * math.cos(PHI(t, T))))},
     "bras_droit_bas": {"rotation": ech(T, lambda t: (-78 + 26 * math.cos(PHI(t, T)), 0, 0))},
@@ -616,6 +617,16 @@ def geste(duree, f, boucle):
     f(t) → {"buste": (x, y, z) de corps_haut, "tete": (x, y, z) ajouté à la tête, "droit": (main, coude), "gauche": (main, coude)}.
     La tête annule la rotation du buste (elle continue de regarder devant ; le regard du joueur s'ajoute en jeu).
     """
+    # TRONC RIGIDE : le haut du tronc ne tourne plus sur le bas (ni torsion, ni roulis), il ne fait que se pencher un peu
+    # (6° au plus). Une torsion de 32° pour viser à l'arc cassait le tronc et l'armure en deux à la taille.
+    brut = f
+
+    def f(t):
+        e = dict(brut(t))
+        if "buste" in e:
+            e["buste"] = (max(-6.0, min(6.0, e["buste"][0])), 0.0, 0.0)
+        return e
+
     pistes = {}
     e0 = f(0)
 
@@ -810,7 +821,7 @@ deux("boire", T, "loop", geste(T, lambda t: {
 # viser à l'arc : l'arc dans la main droite, bras tendu vers la cible ; la main gauche prend la corde et la tire jusqu'à la
 # joue en 1 s (la tension complète de l'arc du jeu), puis tient. Le buste s'ouvre pendant la traction, épaule de l'arc devant :
 # la main de l'arc avance, celle de la corde recule de 10 pixels (dans le jeu, les deux bras restent tendus devant).
-ARC_0, ARC_1 = (3.4, 23.2, -9.6), (3.0, 23.4, -12.6)
+ARC_0, ARC_1 = (4.8, 23.0, -8.6), (4.4, 23.2, -9.6)       # bras d'arc tendu devant l'épaule (le tronc ne tourne plus)
 CORDE_0, CORDE_1 = (1.4, 23.0, -8.4), (-5.4, 22.8, -3.0)     # sous la mâchoire, hors de la tête
 COUDE_CORDE = (-0.7, 0.25, 1.0)
 
@@ -911,7 +922,7 @@ T = 0.35
 recul_ = lambda t: math.sin(math.pi * min(1.0, t / 0.1) / 2) if t < 0.1 else 1 - entre(t, 0.1, T)
 A.append(animation("degat", T, "once", {
     "corps_bas": {"rotation": ech(T, lambda t: (-4 * recul_(t), 0, 0), False)},
-    "corps_haut": {"rotation": ech(T, lambda t: (-9 * recul_(max(0.0, t - 0.025) * T / (T - 0.025)), 0, 0), False)},
+    "corps_haut": {"rotation": ech(T, lambda t: (-5 * recul_(max(0.0, t - 0.025) * T / (T - 0.025)), 0, 0), False)},
     "tete": {"rotation": ech(T, lambda t: (-10 * recul_(max(0.0, t - 0.05) * T / (T - 0.05)), 0, 0), False)},
 }))
 

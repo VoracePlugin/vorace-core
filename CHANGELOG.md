@@ -1,5 +1,28 @@
 # Journal des changements
 
+## 1.7.6 (novembre 2026) : tronc d'un bloc, marche qui ne repart plus de zéro, course à grande vitesse
+
+Retours d'Antoine en jeu : « quand je marche, j'ai des parties de mon pantin qui se désassemblent : les jambes, la moitié
+de mon tronc » ; « quand je vais un peu vite ou que je fais tout droit, à gauche, à droite, ça recommence l'animation de
+zéro : je m'arrête, je reprends, je m'arrête, je reprends » ; « quand je vais trop vite, ma course est un peu chelou ».
+
+- **Tronc d'un bloc** dans tous les mouvements et tous les gestes : il ne se tord plus et ne roule plus, il se penche
+  seulement, autour des hanches, comme le corps du jeu. Le tronc est en deux morceaux et les jambes tiennent à la racine,
+  pas au bassin : tourner le haut sur le bas (16° à la marche, 32° pour viser à l'arc) ou le bassin sur les jambes ouvrait
+  des cassures à la taille et aux hanches. Le contrôle (`outils/verifier-mouvements.py`) et les tests le refusent
+  maintenant. Le bras d'arc se tend devant l'épaule au lieu de compter sur la torsion.
+- **La marche ne s'interrompt plus quand on change de direction** : tout droit, de biais ou de côté, c'est le même
+  mouvement (le corps se tourne vers là où il va) ; seule la marche à reculons en est un autre, comme dans le jeu (à partir
+  de 100° du regard, jusqu'à 85° pour en sortir). Avant, le sens était lu par rapport au corps en train de tourner : la
+  marche, le pas de côté et le recul se relayaient à chaque changement de direction, chacun repartant de zéro.
+- **Vitesse lissée** : le serveur reçoit les déplacements par à-coups (aucun pendant un tic, deux au suivant) ; la course
+  sautait d'une allure à l'autre, repassait par le repos, et sa cadence tremblait. De la marche à la course à 0,24 bloc par
+  tic, retour à la marche à 0,2 seulement.
+- **À grande vitesse** (potion, élan d'une compétence) : la cadence de la course ne suit plus qu'à 40 % au-delà de son
+  allure et plafonne à 1,3 fois, au lieu de 1,8 (les jambes moulinaient). En courant par bonds, un seul tic au sol entre
+  deux sauts ne ramène plus la course.
+- Le `pantin_mouvements.bbmodel` de la 1.7.5 est remplacé tout seul s'il n'a pas été retouché.
+
 ## 1.7.5 (novembre 2026) : un coup ne bouge que le bras qui frappe, moins de paquets
 
 Retours d'Antoine en jeu : « pourquoi quand je tape, l'autre main se baisse en même temps ? Normalement il n'y a qu'une
