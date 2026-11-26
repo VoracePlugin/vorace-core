@@ -116,9 +116,10 @@ pantin:
   # Taille du pantin des joueurs. Le jeu dessine ses joueurs à 0,9375 (1,875 bloc de haut) : à 1, le pantin fait 2 blocs et
   # son crâne entre dans le plafond d'un couloir de 2 blocs.
   taille: 0.9375
-  # La tête tourne d'abord, le corps suit (comme dans le jeu) : part de l'écart au regard que le corps rattrape à chaque tic
-  # (0.3 : rejoint en un quart de seconde ; 1 : corps toujours face au regard, sans retard) et écart maximal entre la tête
-  # et le corps, en degrés. Pendant une compétence, le corps est face au regard tout de suite.
+  # Tête et corps comme dans le jeu. À l'arrêt, la tête tourne seule et le corps ne bouge pas, jusqu'à tete-max degrés ;
+  # au-delà, la tête entraîne le corps. En marche, le corps rejoint le regard : corps-suit-regard est la part de l'écart
+  # rattrapée à chaque tic (0.3 comme le jeu ; 1 : corps toujours face au regard, la tête ne tourne plus seule). Pendant
+  # une compétence, le corps est face au regard tout de suite ; pendant un coup de bras ou une visée, en deux ou trois tics.
   corps-suit-regard: 0.3
   tete-max: 50
   # Ultimes : le joueur voit la scène comme un film (caméra qui tourne autour de lui, recule pour montrer le phénix, le
