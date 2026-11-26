@@ -146,13 +146,15 @@ public final class ArmuresPantin {
         j.add("textures", textures);
         JsonArray elements = new JsonArray();
         float g = gonflement(couche);
-        elements.add(element(p, morceau, g, "#0", cuir(asset)));
-        if (cuir(asset)) elements.add(element(p, morceau, g + 0.02f, "#1", false));
+        // teintes : 0 = cuir (dyed_color) ou custom_model_data ; 1 = surcouche du cuir (custom_model_data). Blanches
+        // d'ordinaire ; marquées sur les bras de sa propre copie (MarqueSoi)
+        elements.add(element(p, morceau, g, "#0", 0));
+        if (cuir(asset)) elements.add(element(p, morceau, g + 0.02f, "#1", 1));
         j.add("elements", elements);
         return j;
     }
 
-    private static JsonObject element(ModeleBB.Partie p, String morceau, float g, String texture, boolean teinte) {
+    private static JsonObject element(ModeleBB.Partie p, String morceau, float g, String texture, int teinte) {
         ModeleBB.Cube c = p.cubes().get(0);
         double[] piv = p.pivot();
         JsonObject e = new JsonObject();
@@ -198,7 +200,7 @@ public final class ArmuresPantin {
             t.add(arrondi(w[3] * 16 / 32.0));
             o.add("uv", t);
             o.addProperty("texture", texture);
-            if (teinte) o.addProperty("tintindex", 0);
+            o.addProperty("tintindex", teinte);
             faces.add(f.getKey(), o);
         }
         e.add("faces", faces);

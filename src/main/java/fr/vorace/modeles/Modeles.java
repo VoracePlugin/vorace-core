@@ -1083,16 +1083,17 @@ public final class Modeles {
             if (copieSoi() && proprio != null) {
                 partiesSoi = new ItemDisplay[n];
                 envoyeesSoi = new Transformation[n];
+                marqueSoi = marqueVoulue();
                 for (int k = 0; k < n; k++) {
                     if (parties[k] == null) continue;
                     String nomOs = modele.parties().get(k).nom();
-                    partiesSoi[k] = afficher(l, objets[k], vue, nomOs != null && nomOs.toLowerCase(Locale.ROOT).startsWith("lum_"), proprio);
+                    partiesSoi[k] = afficher(l, objetSoi(k), vue, nomOs != null && nomOs.toLowerCase(Locale.ROOT).startsWith("lum_"), proprio);
                     proprio.hideEntity(plugin, parties[k]);
                 }
                 armuresSoi = new ItemDisplay[armures.length];
                 armuresEnvoyeesSoi = new Transformation[armures.length];
                 for (int a = 0; a < armures.length; a++) {
-                    armuresSoi[a] = afficher(l, armureObjets.get(a), vue, false, proprio);
+                    armuresSoi[a] = afficher(l, armureSoi(a), vue, false, proprio);
                     if (main(a) != 0) armuresSoi[a].setItemDisplayTransform(tenue(a));
                     proprio.hideEntity(plugin, armures[a]);
                 }
@@ -1165,8 +1166,46 @@ public final class Modeles {
         private ItemDisplay[] partiesSoi = new ItemDisplay[0], armuresSoi = new ItemDisplay[0];
         private Transformation[] envoyeesSoi = new Transformation[0], armuresEnvoyeesSoi = new Transformation[0];
 
+        /** Bras de sa copie marqués (effacés à la première personne, voir MarqueSoi) : état envoyé. */
+        private boolean marqueSoi;
+
+        /**
+         * Pantin permanent hors animation demandée : bras de sa copie marqués (à la première personne, la main du jeu
+         * tient l'arme ; en F5, le pantin entier). Pendant une compétence, ses bras restent visibles à la première personne.
+         */
+        private boolean marqueVoulue() {
+            return permanent && !animationDemandee();
+        }
+
+        private ItemStack objetSoi(int k) {
+            ItemStack o = objets[k];
+            return marqueSoi && o != null && MarqueSoi.bras(modele, k) ? MarqueSoi.marquer(o) : o;
+        }
+
+        /** Objet de sa copie pour une couche : couche d'armure d'un bras marquée comme le bras (pas les objets tenus). */
+        private ItemStack armureSoi(int a) {
+            ItemStack o = armureObjets.get(a);
+            return marqueSoi && main(a) == 0 && MarqueSoi.bras(modele, armureOs.get(a)) ? MarqueSoi.marquer(o) : o;
+        }
+
+        /** Change la marque des bras de sa copie (début ou fin d'une compétence). */
+        private void majMarqueSoi() {
+            boolean voulu = marqueVoulue();
+            if (voulu == marqueSoi || partiesSoi.length == 0) return;
+            marqueSoi = voulu;
+            for (int k = 0; k < partiesSoi.length; k++) {
+                if (partiesSoi[k] != null && partiesSoi[k].isValid() && MarqueSoi.bras(modele, k)) partiesSoi[k].setItemStack(objetSoi(k));
+            }
+            for (int a = 0; a < armuresSoi.length && a < armureObjets.size(); a++) {
+                if (armuresSoi[a] != null && armuresSoi[a].isValid() && main(a) == 0 && MarqueSoi.bras(modele, armureOs.get(a))) {
+                    armuresSoi[a].setItemStack(armureSoi(a));
+                }
+            }
+        }
+
         boolean copieSoi() {
-            return pantin && mob && proprietaire != null && pantinRecul > 0 && !pantinCacherTete;
+            // pantin permanent : toujours une copie (ses bras y sont marqués pour la première personne), même sans recul
+            return pantin && mob && proprietaire != null && (pantinRecul > 0 || permanent) && !pantinCacherTete;
         }
 
         /** Entité d'affichage d'un objet, montrée seulement au joueur {@code seul} s'il n'est pas null. */
@@ -1701,7 +1740,7 @@ public final class Modeles {
                 for (int a = 0; a < armureObjets.size(); a++) {
                     if (armureObjets.get(a).isSimilar(avantObjets.get(a))) continue;
                     if (armures[a] != null && armures[a].isValid()) armures[a].setItemStack(armureObjets.get(a));
-                    if (a < armuresSoi.length && armuresSoi[a] != null && armuresSoi[a].isValid()) armuresSoi[a].setItemStack(armureObjets.get(a));
+                    if (a < armuresSoi.length && armuresSoi[a] != null && armuresSoi[a].isValid()) armuresSoi[a].setItemStack(armureSoi(a));
                 }
                 return;
             }
@@ -1921,6 +1960,7 @@ public final class Modeles {
             // pantin permanent sans personne d'autre tout près : ses morceaux (pas la copie pour soi) moins souvent
             imageAutres = !permanent || ivAutres <= 1 || tic % ivAutres == 0;
             dernieresPoses = poses;
+            majMarqueSoi();
             teteProprietaire(poses);
             majCamera();
             Quaternionf droite = Animateur.demiTour();
