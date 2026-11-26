@@ -214,6 +214,19 @@ public final class PeauUV {
      * modèle par pixel de seconde couche, et la définition d'objet qui les assemble.
      */
     public static Map<String, byte[]> generer(ModeleBB squelette) {
+        return generer(squelette, List.of());
+    }
+
+    /** Nombre de couches d'armure qu'un morceau peut porter fondues dans son objet (plastron et jambières, jambières et bottes). */
+    public static final int RANGS_ARMURE = 2;
+
+    /**
+     * @param armures armures que le pantin sait porter (« minecraft:iron », voir Modeles.armuresPantin). La définition de
+     *     chaque morceau reconnaît alors jusqu'à deux couches d'armure fondues dans son objet : les chaînes 0 et 1 de
+     *     custom_model_data (ArmuresPantin.cle) choisissent leur modèle, les teintes qui suivent celles des pixels (deux par
+     *     couche : la pièce, puis la surcouche du cuir) leur couleur. Une chaîne absente : pas d'armure.
+     */
+    public static Map<String, byte[]> generer(ModeleBB squelette, List<String> armures) {
         Map<String, byte[]> sortie = new TreeMap<>(genererBrasTenu());
         if (squelette == null) return sortie;
         sortie.put("assets/" + GenerateurPack.NS + "/textures/item/pantin_pixel.png", pixelBlanc());
@@ -255,6 +268,38 @@ public final class PeauUV {
                 cond.add("on_true", oui);
                 cond.add("on_false", non);
                 composite.add(cond);
+            }
+            // couches d'armure fondues dans le morceau (même repère : pivot en 8, 8, 8, échelle 1)
+            String os = m.nom().replace("_fin", "");
+            int pixels = base.size() + couche.size();
+            for (int rang = 0; rang < RANGS_ARMURE; rang++) {
+                JsonArray cas = new JsonArray();
+                for (String asset : armures) {
+                    for (String c : List.of(ArmuresPantin.HUMANOID, ArmuresPantin.JAMBIERES)) {
+                        if (!ArmuresPantin.existe(os, asset, c)) continue;
+                        JsonObject un = new JsonObject();
+                        un.addProperty("when", ArmuresPantin.cle(asset, c));
+                        JsonObject mo = new JsonObject();
+                        mo.addProperty("type", "minecraft:model");
+                        mo.addProperty("model", GenerateurPack.NS + ":" + ArmuresPantin.id(asset, c, os));
+                        JsonArray ta = new JsonArray();
+                        ta.add(teinte(pixels + 2 * rang));
+                        if (ArmuresPantin.cuir(asset)) ta.add(teinte(pixels + 2 * rang + 1));
+                        mo.add("tints", ta);
+                        un.add("model", mo);
+                        cas.add(un);
+                    }
+                }
+                if (cas.isEmpty()) continue;
+                JsonObject choix = new JsonObject();
+                choix.addProperty("type", "minecraft:select");
+                choix.addProperty("property", "minecraft:custom_model_data");
+                choix.addProperty("index", rang);
+                choix.add("cases", cas);
+                JsonObject rien = new JsonObject();
+                rien.addProperty("type", "minecraft:empty");
+                choix.add("fallback", rien);
+                composite.add(choix);
             }
             JsonObject modele = new JsonObject();
             modele.addProperty("type", "minecraft:composite");

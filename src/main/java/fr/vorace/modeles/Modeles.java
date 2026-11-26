@@ -101,6 +101,8 @@ public final class Modeles {
     private float pantinTaille = 0.9375f;
     /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic en marche (1 : toujours face au regard), et écart maximal tête-corps. */
     private float pantinCorpsSuit = 0.3f, pantinTeteMax = 50f;
+    /** Couches d'armure du pantin fondues dans ses morceaux de peau (voir fondre) ; faux : un affichage par couche. */
+    private boolean armuresFondues = true;
     /** Images presque identiques non renvoyées (voir Animateur.memeImage). */
     private boolean economieImages = true;
     /** Pantin permanent : au-delà de ce nombre d'autres joueurs à moins de 32 blocs, ses images partent tous les 2 tics (0 : jamais). */
@@ -251,7 +253,7 @@ public final class Modeles {
         Map<String, byte[]> f = new java.util.TreeMap<>();
         for (ModeleBB m : modeles.values()) f.putAll(GenerateurModeles.generer(m));
         f.putAll(ArmuresPantin.generer(modele(Pantins.SQUELETTE), armuresPantin()));
-        f.putAll(PeauUV.generer(modele(Pantins.SQUELETTE)));
+        f.putAll(PeauUV.generer(modele(Pantins.SQUELETTE), armuresPantin()));
         // objets du jeu tenus pendant une animation du pantin : rien en main, leur icône dans l'inventaire (ObjetsCaches)
         for (org.bukkit.Material t : org.bukkit.Material.values()) {
             if (ObjetsCaches.objetDuJeu(t)) {
@@ -622,11 +624,13 @@ public final class Modeles {
     }
 
     /** Pose les morceaux de skin (os « peau_… ») et les couches d'armure ou objets tenus d'un pantin. */
-    private static void habiller(Instance i, ModeleBB m, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure) {
+    private void habiller(Instance i, ModeleBB m, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure) {
         for (int k = 0; k < m.parties().size(); k++) {
             String n = m.parties().get(k).nom() == null ? "" : m.parties().get(k).nom().toLowerCase(Locale.ROOT);
             if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
         }
+        // couches d'armure déjà fondues dans chaque morceau de peau : {nombre de pixels du morceau, couches fondues}
+        Map<Integer, int[]> fondues = new HashMap<>();
         for (Map.Entry<String, ItemStack> c : armure) {
             String os = c.getKey();
             int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : os.startsWith(TETE) ? 3 : 0;
@@ -635,6 +639,7 @@ public final class Modeles {
             else if (main == 3) os = os.substring(TETE.length());
             for (int k = 0; k < m.parties().size(); k++) {
                 if (!os.equalsIgnoreCase(m.parties().get(k).nom())) continue;
+                if (main == 0 && armuresFondues && fondre(i, k, c.getValue(), fondues)) break;
                 i.armureOs.add(k);
                 i.armureObjets.add(c.getValue());
                 i.armureMain.add(main);
@@ -645,6 +650,46 @@ public final class Modeles {
                 break;
             }
         }
+    }
+
+    /**
+     * Fond une couche d'armure dans le morceau de peau qui la porte : l'objet du morceau reçoit la clé de la couche (chaîne
+     * de custom_model_data) et sa couleur ; sa définition dessine l'armure par-dessus la peau (PeauUV.generer). Un seul
+     * affichage au lieu de deux : un pantin en armure complète passe de 26 morceaux à 11, donc de 26 paquets par image et
+     * par spectateur à 11.
+     *
+     * @return faux si la couche doit garder son propre affichage : ce n'est pas une couche d'armure du pack, le morceau n'a
+     *     pas de peau du pack, la pièce brille (enchantée : le reflet couvrirait aussi la peau), ou le morceau porte déjà
+     *     deux couches
+     */
+    private boolean fondre(Instance i, int k, ItemStack couche, Map<Integer, int[]> fondues) {
+        ItemStack peau = i.peaux.get(k);
+        if (peau == null || couche == null || !peau.hasItemMeta() || !couche.hasItemMeta()) return false;
+        org.bukkit.inventory.meta.ItemMeta mc = couche.getItemMeta(), mp = peau.getItemMeta();
+        if (!mc.hasItemModel() || !mp.hasItemModel() || !mp.getItemModel().getKey().startsWith("pantin_peau/")) return false;
+        String cle = ArmuresPantin.cleDepuisId(mc.getItemModel().getKey());
+        if (cle == null || (mc.hasEnchantmentGlintOverride() && mc.getEnchantmentGlintOverride())) return false;
+        org.bukkit.inventory.meta.components.CustomModelDataComponent cmd = mp.getCustomModelDataComponent();
+        int[] etat = fondues.computeIfAbsent(k, x -> new int[]{cmd.getColors().size(), 0});
+        if (etat[1] >= PeauUV.RANGS_ARMURE) return false;
+        int rang = etat[1]++;
+        List<String> chaines = new ArrayList<>(cmd.getStrings());
+        while (chaines.size() <= rang) chaines.add("");
+        chaines.set(rang, cle);
+        cmd.setStrings(chaines);
+        // deux teintes par couche après celles des pixels : la pièce (couleur du cuir, blanc sinon) et la surcouche du cuir
+        List<org.bukkit.Color> couleurs = new ArrayList<>(cmd.getColors());
+        org.bukkit.Color blanc = org.bukkit.Color.fromRGB(MarqueSoi.eviter(0xFFFFFF));
+        while (couleurs.size() < etat[0] + 2 * PeauUV.RANGS_ARMURE) couleurs.add(blanc);
+        if (mc instanceof org.bukkit.inventory.meta.LeatherArmorMeta cuir) {
+            couleurs.set(etat[0] + 2 * rang, org.bukkit.Color.fromRGB(MarqueSoi.eviter(cuir.getColor().asRGB())));
+        }
+        cmd.setColors(couleurs);
+        ItemStack fondu = peau.clone();
+        mp.setCustomModelDataComponent(cmd);
+        fondu.setItemMeta(mp);
+        i.peaux.put(k, fondu);
+        return true;
     }
 
     /**
@@ -822,6 +867,7 @@ public final class Modeles {
             pantinReculBas = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-regard-bas", 5)));
             pantinCorpsVersMouvement = plugin.getConfig().getBoolean("pantin.corps-vers-le-mouvement", true);
             economieImages = plugin.getConfig().getBoolean("modeles.economie-images", true);
+            armuresFondues = plugin.getConfig().getBoolean("pantin.armures-fondues", true);
             pantinFoule = Math.max(0, plugin.getConfig().getInt("pantin.permanent.foule", 8));
             pantinTaille = (float) Math.max(0.25, Math.min(4, plugin.getConfig().getDouble("pantin.taille", 0.9375)));
             pantinCorpsSuit = (float) Math.max(0.05, Math.min(1, plugin.getConfig().getDouble("pantin.corps-suit-regard", 0.3)));
@@ -2079,10 +2125,20 @@ public final class Modeles {
             armureEchelle.clear();
             habiller(this, modele, nouvellesPeaux, armure);
             boolean memesPeaux = avantPeaux.keySet().equals(peaux.keySet());
-            if (memesPeaux) for (Map.Entry<Integer, ItemStack> e : peaux.entrySet()) if (!e.getValue().isSimilar(avantPeaux.get(e.getKey()))) memesPeaux = false;
             if (endormi) return;
-            if (memesPeaux && avantOs.equals(armureOs) && avantMain.equals(armureMain) && armures.length == armureObjets.size()) {
+            if (memesPeaux && avantOs.equals(armureOs) && avantMain.equals(armureMain) && armures.length == armureObjets.size()
+                    && objets.length == modele.parties().size()) {
                 // mêmes os : seuls les objets changent (arme en main, pièce d'armure), sans refaire le pantin
+                // (une armure fondue dans la peau change l'objet du morceau : lui aussi sur place)
+                for (Map.Entry<Integer, ItemStack> e : peaux.entrySet()) {
+                    int k = e.getKey();
+                    if (e.getValue().isSimilar(avantPeaux.get(k)) || k >= parties.length || parties[k] == null) continue;
+                    objets[k] = e.getValue();
+                    rouges = null;
+                    boolean rouge = finTeinte >= 0;
+                    if (parties[k].isValid()) parties[k].setItemStack(rouge ? Teinte.teinter(objets[k], COULEUR_DEGATS) : objets[k]);
+                    if (k < partiesSoi.length && partiesSoi[k] != null && partiesSoi[k].isValid()) partiesSoi[k].setItemStack(objetSoi(k));
+                }
                 for (int a = 0; a < armureObjets.size(); a++) {
                     if (armureObjets.get(a).isSimilar(avantObjets.get(a))) continue;
                     if (armures[a] != null && armures[a].isValid()) armures[a].setItemStack(armureObjets.get(a));

@@ -68,6 +68,28 @@ public final class ArmuresPantin {
         return "pantin_armure/" + chemin(asset) + "/" + couche + "/" + morceau;
     }
 
+    /**
+     * Couche d'armure fondue dans le morceau de peau qui la porte (un seul affichage, donc un seul paquet par image, au
+     * lieu de deux) : la clé que l'objet du morceau porte dans custom_model_data (chaîne 0 ou 1) et que sa définition
+     * reconnaît (PeauUV.generer). « minecraft/iron/humanoid ».
+     */
+    public static String cle(String asset, String couche) {
+        return chemin(asset) + "/" + couche;
+    }
+
+    /** Clé d'après l'identifiant de l'objet d'une couche (« pantin_armure/minecraft/iron/humanoid/corps_haut ») ; null sinon. */
+    public static String cleDepuisId(String id) {
+        if (id == null || !id.startsWith("pantin_armure/")) return null;
+        int fin = id.lastIndexOf('/');
+        return fin <= "pantin_armure/".length() ? null : id.substring("pantin_armure/".length(), fin);
+    }
+
+    /** Cette couche existe-t-elle pour ce morceau ? (carapace de tortue : la tête seule ; jambières : ni tête ni bras) */
+    static boolean existe(String morceau, String asset, String couche) {
+        if (asset.endsWith("turtle_scute") && (couche.equals(JAMBIERES) || !morceau.equals("tete"))) return false;
+        return !(couche.equals(JAMBIERES) && (morceau.equals("tete") || morceau.startsWith("bras")));
+    }
+
     public static boolean cuir(String asset) {
         return chemin(asset).equals("minecraft/leather");
     }

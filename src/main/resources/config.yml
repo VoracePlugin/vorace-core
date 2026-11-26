@@ -229,6 +229,10 @@ pantin:
   # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
   # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
   armures-perso: []
+  # Chaque couche d'armure est fondue dans le morceau de peau qui la porte : un seul affichage au lieu de deux, donc deux
+  # fois moins de paquets pour un pantin en armure (26 morceaux deviennent 11). Une pièce enchantée garde son propre
+  # affichage (son reflet couvrirait la peau). false : un affichage par couche, comme avant la 1.7.7.
+  armures-fondues: true
   # Armures d'un pack dont la manche s'arrête au-dessus du coude, comme toutes celles du jeu (leur plastron ne couvre que
   # le haut du bras) : le pantin ne leur met rien sur l'avant-bras. Sans cela, le bord de la manche part avec l'avant-bras
   # dès que le coude plie. Exemple : [babel:fer]

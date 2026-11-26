@@ -1,5 +1,22 @@
 # Journal des changements
 
+## 1.7.7 (novembre 2026) : armure fondue dans la peau, deux fois moins de paquets en armure
+
+Chantier réseau validé par Antoine (« j'ai peur qu'avec beaucoup de gens, ça lag »).
+
+- **Chaque couche d'armure est fondue dans le morceau de peau qui la porte** (`pantin.armures-fondues`) : un seul affichage
+  au lieu de deux. Un pantin en armure complète passe de 26 morceaux (11 de corps, 15 d'armure) à 11, donc de 26 paquets
+  par image et par spectateur à 11 ; sa copie pour lui-même aussi. L'objet du morceau porte la clé de l'armure
+  (custom_model_data, chaînes 0 et 1 : plastron et jambières sur le tronc, jambières et bottes sur les jambes) et sa
+  couleur (cuir teint) ; la définition du morceau dans le pack dessine l'armure par-dessus la peau, avec les mêmes modèles
+  qu'avant, au même endroit.
+- Mettre ou retirer une pièce d'armure ne refait plus le pantin : seul l'objet des morceaux concernés change.
+- Gardent leur propre affichage : une pièce enchantée (son reflet couvrirait la peau), les armures en 3D et les objets
+  portés sur la tête, et tout pantin dont la peau n'est pas celle du pack.
+- **Le pack de ressources change** (définitions des morceaux de peau) : il est régénéré au démarrage. Avec l'ancien pack,
+  l'armure du pantin ne s'afficherait pas.
+- `pantin.armures-fondues: false` remet un affichage par couche, comme avant.
+
 ## 1.7.6 (novembre 2026) : tronc d'un bloc, marche qui ne repart plus de zéro, course à grande vitesse
 
 Retours d'Antoine en jeu : « quand je marche, j'ai des parties de mon pantin qui se désassemblent : les jambes, la moitié

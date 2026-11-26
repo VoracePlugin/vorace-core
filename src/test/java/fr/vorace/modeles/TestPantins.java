@@ -234,6 +234,41 @@ public final class TestPantins {
         PeauUV.Donnees bf = PeauUV.donnees(j, skin, true).get("bras_droit_haut");
         verifier(bf != null && PeauUV.morceauObjet("bras_droit_haut", true).equals("bras_droit_haut_fin") && bf.couleurs().length < dd.get("bras_droit_haut").couleurs().length,
             "skin UV : bras fins (3 pixels) pour les skins « slim »");
+
+        // armure fondue dans la peau : la définition de chaque morceau choisit jusqu'à deux couches d'armure par les chaînes
+        // 0 et 1 de custom_model_data ; leurs teintes suivent celles des pixels ; le modèle choisi existe dans le pack
+        java.util.Map<String, byte[]> uvA = PeauUV.generer(j, ArmuresPantin.VANILLE);
+        boolean fonduOk = uvA.size() == uv.size();
+        for (String morceau : List.of("tete", "corps_haut", "corps_bas", "bras_droit_haut", "bras_droit_haut_fin", "jambe_gauche_bas")) {
+            com.google.gson.JsonArray mods = com.google.gson.JsonParser.parseString(new String(uvA.get("assets/vorace/items/pantin_peau/" + morceau + ".json"),
+                java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("model").getAsJsonArray("models");
+            String os = morceau.replace("_fin", "");
+            int pixels = PeauUV.donnees(j, skin, morceau.endsWith("_fin")).get(os).couleurs().length;
+            int rang = 0;
+            for (com.google.gson.JsonElement me : mods) {
+                com.google.gson.JsonObject mo = me.getAsJsonObject();
+                if (!mo.get("type").getAsString().equals("minecraft:select")) continue;
+                fonduOk &= mo.get("property").getAsString().equals("minecraft:custom_model_data") && mo.get("index").getAsInt() == rang
+                    && mo.getAsJsonObject("fallback").get("type").getAsString().equals("minecraft:empty");
+                boolean fer2 = false, jamb = false;
+                for (com.google.gson.JsonElement ce : mo.getAsJsonArray("cases")) {
+                    com.google.gson.JsonObject cas = ce.getAsJsonObject(), mdl = cas.getAsJsonObject("model");
+                    String quand = cas.get("when").getAsString(), chemin = mdl.get("model").getAsString();
+                    fonduOk &= chemin.equals("vorace:pantin_armure/" + quand + "/" + os) && arm.containsKey("assets/vorace/models/" + chemin.substring(7) + ".json")
+                        && quand.equals(ArmuresPantin.cleDepuisId(chemin.substring(7)))
+                        && mdl.getAsJsonArray("tints").get(0).getAsJsonObject().get("index").getAsInt() == pixels + 2 * rang
+                        && mdl.getAsJsonArray("tints").size() == (quand.startsWith("minecraft/leather/") ? 2 : 1);
+                    fer2 |= quand.equals("minecraft/iron/humanoid");
+                    jamb |= quand.endsWith("/humanoid_leggings");
+                }
+                fonduOk &= fer2 && jamb == (os.startsWith("corps") || os.startsWith("jambe"));
+                rang++;
+            }
+            fonduOk &= rang == PeauUV.RANGS_ARMURE;
+        }
+        verifier(fonduOk && ArmuresPantin.cle("minecraft:iron", "humanoid").equals("minecraft/iron/humanoid")
+                && ArmuresPantin.cleDepuisId("pantin_peau/tete") == null,
+            "armure fondue : deux choix d'armure par morceau, teintes après les pixels, modèles présents dans le pack");
         if (echecs > 0) System.exit(1);
     }
 }
