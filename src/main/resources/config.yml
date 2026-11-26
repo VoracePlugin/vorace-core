@@ -134,6 +134,10 @@ pantin:
     shader: true
     # l'armure reste envoyée au joueur pendant une animation (visible dans son inventaire, effacée en F5 par le shader)
     armure-inventaire: true
+    # aucune armure portée dessinée dans le monde (armures du jeu comprises, dont les dessins ne sont pas dans le pack et ne
+    # peuvent pas être marqués) : le vrai joueur n'en porte plus en F5, le pantin porte la sienne. Effet de bord : les
+    # porte-armures et les monstres du jeu n'en montrent plus. false : seulement les armures du pack.
+    cacher-toutes-armures: true
   # Morceaux du pantin montés sur le joueur seulement chez les clients (le serveur ne voit aucun passager) : le corps suit
   # le joueur sans retard ET les téléportations des plugins marchent (Paper refuse de téléporter un joueur qui porte de
   # vrais passagers). false : vrais passagers (il faut alors arrêter le pantin avant de téléporter le joueur).

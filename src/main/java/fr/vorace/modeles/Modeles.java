@@ -247,7 +247,15 @@ public final class Modeles {
         if (plugin.getConfig().getBoolean("pantin.fantome.actif", true) && plugin.getConfig().getBoolean("pantin.fantome.shader", true)) {
             for (String n : MarqueArmures.SHADERS) {
                 try (InputStream in = plugin.getResource("pack-fantome/" + n)) {
-                    if (in != null) f.put(n, in.readAllBytes());
+                    if (in == null) continue;
+                    byte[] o = in.readAllBytes();
+                    // armures du jeu (diamant...) : leurs dessins ne sont pas dans le pack, donc pas marqués ; on n'en dessine
+                    // alors aucune dans le monde (le pantin porte la sienne, les autres joueurs n'envoient plus la leur)
+                    if (n.endsWith("vorace_armure.fsh") && plugin.getConfig().getBoolean("pantin.fantome.cacher-toutes-armures", true)) {
+                        o = new String(o, java.nio.charset.StandardCharsets.UTF_8).replace("#define VORACE_PARTOUT 0", "#define VORACE_PARTOUT 1")
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                    f.put(n, o);
                 } catch (IOException e) {
                     plugin.getLogger().warning("Shader du corps fantôme illisible : " + n);
                 }

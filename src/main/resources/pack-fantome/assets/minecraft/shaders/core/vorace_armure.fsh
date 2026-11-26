@@ -1,6 +1,9 @@
 #version 150
 
 // Vorace : copie de core/entity pour les armures portées (rendertype_armor_cutout_no_cull).
+// 1 : aucune armure portée n'est dessinée dans le monde, armures du jeu comprises (réglé par Vorace à la construction du
+// pack : pantin.fantome.cacher-toutes-armures) ; 0 : seulement les dessins du pack marqués à l'opacité 253.
+#define VORACE_PARTOUT 0
 
 #moj_import <minecraft:fog.glsl>
 
@@ -22,9 +25,9 @@ out vec4 fragColor;
 
 void main() {
     vec4 color = texture(Sampler0, texCoord0);
-    // Vorace : les textures d'armure du pack ont leurs pixels à l'opacité 253. Hors des menus, elles sont portées par le
+    // Vorace : les textures d'armure du pack ont leurs pixels à l'opacité 253 (ou toutes les armures, voir VORACE_PARTOUT). Hors des menus, elles sont portées par le
     // pantin du joueur : on n'en dessine aucune sur son vrai corps (il la voit seulement dans son inventaire).
-    if (voraceMenu < 0.5 && abs(color.a * 255.0 - 253.0) < 0.5) {
+    if (voraceMenu < 0.5 && (VORACE_PARTOUT == 1 || abs(color.a * 255.0 - 253.0) < 0.5)) {
         discard;
     }
 #ifdef ALPHA_CUTOUT
