@@ -611,6 +611,23 @@ public final class Commande implements CommandExecutor, TabCompleter {
                 pa.forcerPermanent(on);
                 s.sendMessage(Messages.brut(on ? "<green>Pantin permanent activé pour tous (jusqu'au redémarrage du serveur)."
                     : "<yellow>Pantin permanent coupé pour tous."));
+                if (!pa.packAJour()) {
+                    s.sendMessage(Messages.brut(on ? "<yellow>Le pack actuel n'efface pas l'armure du vrai corps (elle se verra en F5 autour du pantin). "
+                        + "Pour l'effacer : <white>/vorace reload</white> puis <white>/vorace envoyer tous</white>, ou <white>pantin.permanent.actif: true</white> dans config.yml."
+                        : "<yellow>Le pack actuel efface encore les armures portées dans le monde : <white>/vorace reload</white> puis <white>/vorace envoyer tous</white> pour les revoir."));
+                }
+            }
+            case "vue" -> {
+                // /vorace pantin vue <pantin|main-du-jeu> : qui tient l'objet à la première personne, jusqu'au redémarrage
+                if (a.length < 3 || !List.of(fr.vorace.modeles.Pantins.VUE_PANTIN, fr.vorace.modeles.Pantins.VUE_MAIN_DU_JEU).contains(a[2].toLowerCase(Locale.ROOT))) {
+                    s.sendMessage(Messages.brut("<gray>Vue des pantins permanents : <white>" + pa.vue() + "</white>. <gray>/vorace pantin vue <white>pantin|main-du-jeu"
+                        + "</white> <gray>(pantin : il tient l'objet, la main du jeu est cachée ; main-du-jeu : la main du jeu, bras du pantin effacés)"));
+                    return;
+                }
+                pa.forcerVue(a[2]);
+                boolean voulue = pa.vue().equalsIgnoreCase(a[2]);
+                s.sendMessage(Messages.brut(voulue ? "<green>Vue des pantins permanents : " + pa.vue() + " (jusqu'au redémarrage du serveur)."
+                    : "<yellow>Vue « pantin » impossible ici (pantin.cacher-joueur ou cacher-objets-soi coupé, ou couche paquets absente) : main-du-jeu."));
             }
             case "posture" -> {
                 if (a.length < 3) { s.sendMessage(Messages.brut("<red>Utilisation : /vorace pantin posture <posture|aucune> [joueur]")); return; }
@@ -628,7 +645,7 @@ public final class Commande implements CommandExecutor, TabCompleter {
                 pa.modelePermanent(p, a[2]);
                 s.sendMessage(Messages.brut("<green>Pantin permanent de " + Messages.echapper(p.getName()) + " : modèle " + Messages.echapper(a[2]) + "."));
             }
-            default -> s.sendMessage(Messages.brut("<gray>/vorace pantin <white>preparer|etat [joueur]</white>, <white>jouer <joueur> <animation> [modèle]</white>, <white>essai [animation]</white>, <white>visible [joueur]</white>, <white>permanent on|off</white>, <white>posture <posture|aucune> [joueur]</white>, <white>modele <modèle> [joueur]"));
+            default -> s.sendMessage(Messages.brut("<gray>/vorace pantin <white>preparer|etat [joueur]</white>, <white>jouer <joueur> <animation> [modèle]</white>, <white>essai [animation]</white>, <white>visible [joueur]</white>, <white>permanent on|off</white>, <white>vue pantin|main-du-jeu</white>, <white>posture <posture|aucune> [joueur]</white>, <white>modele <modèle> [joueur]"));
         }
     }
 
@@ -677,9 +694,11 @@ public final class Commande implements CommandExecutor, TabCompleter {
         } else if (a.length == 3 && a[0].equalsIgnoreCase("modele") && a[1].equalsIgnoreCase("reaction") && s.hasPermission("vorace.admin")) {
             for (String o : Modeles.REACTIONS) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
         } else if (a.length == 2 && a[0].equalsIgnoreCase("pantin") && s.hasPermission("vorace.admin")) {
-            for (String o : List.of("preparer", "etat", "jouer", "essai", "visible", "permanent", "posture", "modele")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
+            for (String o : List.of("preparer", "etat", "jouer", "essai", "visible", "permanent", "vue", "posture", "modele")) if (o.startsWith(a[1].toLowerCase(Locale.ROOT))) r.add(o);
         } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("permanent") && s.hasPermission("vorace.admin")) {
             for (String o : List.of("on", "off")) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
+        } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("vue") && s.hasPermission("vorace.admin")) {
+            for (String o : List.of(fr.vorace.modeles.Pantins.VUE_PANTIN, fr.vorace.modeles.Pantins.VUE_MAIN_DU_JEU)) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
         } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("posture") && s.hasPermission("vorace.admin")) {
             for (String o : List.of("aucune", "combat", "blesse")) if (o.startsWith(a[2].toLowerCase(Locale.ROOT))) r.add(o);
         } else if (a.length == 3 && a[0].equalsIgnoreCase("pantin") && a[1].equalsIgnoreCase("modele") && s.hasPermission("vorace.admin") && plugin.modeles() != null) {

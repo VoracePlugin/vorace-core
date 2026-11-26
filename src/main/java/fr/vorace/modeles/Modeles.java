@@ -246,9 +246,17 @@ public final class Modeles {
                     ObjetsCaches.definitionCachee(t, true));
             }
         }
+        // arc du jeu bandé, dans la main du pantin d'un joueur qui vise
+        f.put("assets/" + fr.vorace.objets.GenerateurPack.NS + "/items/" + ObjetsCaches.ARC_TENDU + ".json",
+            "{\"model\":{\"type\":\"minecraft:model\",\"model\":\"minecraft:item/bow_pulling_2\"}}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         // corps fantôme : shaders qui montrent le vrai joueur dans les menus seulement (Fantomes, MarqueArmures)
         if (plugin.getConfig().getBoolean("pantin.fantome.actif", true) && plugin.getConfig().getBoolean("pantin.fantome.shader", true)) {
+            // shader des armures (effacées dans le monde) : seulement avec le pantin permanent, où chaque joueur a son pantin
+            // qui porte la sienne ; sans lui, les joueurs dessinés par le jeu n'auraient plus d'armure
+            boolean armures = plugin.pantins() != null && plugin.pantins().armuresVoulues();
             for (String n : MarqueArmures.SHADERS) {
+                if (!armures && n.contains("armor")) continue;
+                if (!armures && n.contains("vorace_armure")) continue;
                 try (InputStream in = plugin.getResource("pack-fantome/" + n)) {
                     if (in == null) continue;
                     byte[] o = in.readAllBytes();
@@ -1174,7 +1182,13 @@ public final class Modeles {
          * tient l'arme ; en F5, le pantin entier). Pendant une compétence, ses bras restent visibles à la première personne.
          */
         private boolean marqueVoulue() {
-            return permanent && !animationDemandee();
+            return permanent && !animationDemandee() && mainDuJeu();
+        }
+
+        /** Vue « main-du-jeu » (Pantins) : la main du jeu tient l'objet ; sinon c'est le pantin, à la première personne aussi. */
+        private boolean mainDuJeu() {
+            Pantins pa = plugin.pantins();
+            return pa != null && pa.vueMainDuJeu();
         }
 
         private ItemStack objetSoi(int k) {
@@ -1293,8 +1307,12 @@ public final class Modeles {
             return p == null ? null : p.montures();
         }
 
+        /** Pantin monté par paquets : place de ses morceaux sur le serveur (ils ne suivent le joueur que de loin en loin). */
+        private Location posMorceaux;
+
         /** Monte les morceaux sur le joueur : chez les clients seulement (Montures), à défaut pour de vrai. */
         private void monter() {
+            posMorceaux = null;
             Montures mo = montures();
             if (mo != null && mo.actif() && base instanceof Player pj) mo.monter(pj, affichages());
             else for (Display d : affichages()) base.addPassenger(d);
@@ -1353,7 +1371,7 @@ public final class Modeles {
             modeAvant = p.getGameMode();
             base.eject();   // les morceaux descendent du joueur : le pantin reste à sa place
             Montures mo = montures();
-            if (mo != null && mo.actif()) mo.descendre(p);
+            if (mo != null && mo.actif()) mo.descendre(p, affichages());
             derniere = null;
             // le joueur voit le vrai pantin (pas sa copie reculée)
             for (ItemDisplay d : parties) if (d != null) p.showEntity(plugin, d);
@@ -1833,12 +1851,19 @@ public final class Modeles {
                 // montées chez les clients seulement : le serveur les garde près du joueur pour qu'elles restent suivies,
                 // leurs déplacements ne sont pas envoyés (Montures)
                 List<Display> aff = affichages();
-                if (base instanceof Player pj && !aff.isEmpty() && !mo.enregistre(aff.get(0))) mo.monter(pj, aff);   // après une caméra
-                if (derniere == null || !derniere.getWorld().equals(l.getWorld()) || derniere.distanceSquared(l) > 1e-6) {
+                if (base instanceof Player pj && !aff.isEmpty() && !mo.enregistre(aff.get(0))) {
+                    mo.monter(pj, aff);   // après une caméra
+                    posMorceaux = null;
+                }
+                // seulement quand le joueur s'est éloigné de 2 blocs de leur place sur le serveur : leur position exacte ne
+                // sert à rien (les clients les placent sur le joueur), et les déplacer toutes à chaque tic coûtait une
+                // téléportation par morceau et par tic (des dizaines de milliers à 400 joueurs)
+                if (posMorceaux == null || !posMorceaux.getWorld().equals(l.getWorld()) || posMorceaux.distanceSquared(l) > 4.0) {
                     Location c = l.clone();
                     c.setYaw(0);
                     c.setPitch(0);
-                    for (Display d : affichages()) d.teleport(c);
+                    for (Display d : aff) d.teleport(c);
+                    posMorceaux = c;
                 }
                 derniere = l;
             } else if (monte()) {
@@ -2034,9 +2059,9 @@ public final class Modeles {
                 if (attente) ech = new Vector3f();
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
-                    // pantin permanent, hors animation demandée : l'arme de sa copie disparaît (il garde celle du jeu à la
-                    // première personne ; un seul objet pour les deux vues, choix d'Antoine du 26 nov.)
-                    boolean sansArme = permanent && !animationDemandee() && (main(a) == 1 || main(a) == 2);
+                    // vue « main-du-jeu », hors animation demandée : l'arme de sa copie disparaît (il garde celle du jeu à la
+                    // première personne). Vue « pantin » (défaut) : sa copie tient l'arme, la main du jeu est cachée.
+                    boolean sansArme = (main(a) == 1 || main(a) == 2) && marqueVoulue();
                     envoyer(armuresSoi[a], repereSoi(new Transformation(new Vector3f(tr).add(recul), rot, sansArme ? new Vector3f() : ech, droite)),
                         armuresEnvoyeesSoi, a, intervalle);
                 }

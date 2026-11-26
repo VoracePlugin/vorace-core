@@ -12,9 +12,11 @@ import org.bukkit.event.Listener;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +46,10 @@ public final class Montures implements Listener {
 
     private Constructor<?> paquetPassagers;
     private Method handle;
+    /** Paquet « position exacte d'une entité » (ClientboundEntityPositionSyncPacket.of, 1.21.2 et plus), ou null. */
+    private Method paquetPosition;
+    /** Annonces déjà prévues au tic suivant (porteur, spectateur) : un pantin fait des dizaines de morceaux, une seule suffit. */
+    private final Set<Long> prevues = ConcurrentHashMap.newKeySet();
 
     public Montures(Vorace plugin) {
         this.plugin = plugin;
@@ -56,6 +62,11 @@ public final class Montures implements Listener {
             Class<?> entite = Class.forName("net.minecraft.world.entity.Entity", false, cl);
             paquetPassagers = Class.forName("net.minecraft.network.protocol.game.ClientboundSetPassengersPacket", false, cl).getConstructor(entite);
             handle = Class.forName(Bukkit.getServer().getClass().getPackageName() + ".entity.CraftEntity", false, cl).getMethod("getHandle");
+            try {
+                paquetPosition = Class.forName("net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket", false, cl).getMethod("of", entite);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                paquetPosition = null;   // version du jeu sans ce paquet : pas de remise en place à la descente (voir descendre)
+            }
         } catch (ReflectiveOperationException | RuntimeException e) {
             plugin.getLogger().log(Level.WARNING, "Montures par paquets indisponibles : le pantin sera monté pour de vrai (téléportations bloquées pendant une animation)", e);
             return false;
@@ -118,8 +129,39 @@ public final class Montures implements Listener {
         }
     }
 
-    /** Tous les morceaux descendent du joueur chez les clients (caméra de cinéma : le pantin reste sur place). */
-    public void descendre(Player porteur) {
+    /**
+     * Tous les morceaux descendent du joueur chez les clients (caméra de cinéma : le pantin reste sur place).
+     *
+     * <p>Tant qu'ils étaient montés, leurs déplacements n'étaient pas envoyés : chaque client les croit encore là où ils
+     * sont apparus, et le jeu n'envoie ensuite que des écarts (une position exacte toutes les 20 secondes au mieux). Sans
+     * rien faire, le pantin d'un ultime serait dessiné chez les autres joueurs décalé de tout le chemin parcouru depuis.
+     * Leur position exacte est donc renvoyée, maintenant puis après les deux prochains passages du suivi des entités.</p>
+     */
+    public void descendre(Player porteur, Collection<? extends Entity> morceaux) {
+        List<Entity> remis = new ArrayList<>();
+        for (Entity e : morceaux) if (e != null && porteurDe.containsKey(e.getEntityId())) remis.add(e);
+        descendre(porteur);
+        if (remis.isEmpty() || paquetPosition == null) return;
+        positions(remis);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> positions(remis), 1L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> positions(remis), 2L);
+    }
+
+    /** Position exacte de ces morceaux, envoyée à tous ceux qui les voient (sauf s'ils ont été remontés entre-temps). */
+    private void positions(List<Entity> morceaux) {
+        for (Entity e : morceaux) {
+            if (!e.isValid() || porteurDe.containsKey(e.getEntityId())) continue;
+            try {
+                Object paquet = paquetPosition.invoke(null, handle.invoke(e));
+                for (Player c : e.getTrackedBy()) plugin.paquets().envoyer(c, paquet, false);
+            } catch (Throwable t) {
+                plugin.getLogger().log(Level.FINE, "Montures : position d'un morceau", t);
+                return;
+            }
+        }
+    }
+
+    private void descendre(Player porteur) {
         Set<Integer> ids = parPorteur.remove(porteur.getEntityId());
         joueurs.remove(porteur.getEntityId());
         if (ids == null) return;
@@ -196,7 +238,11 @@ public final class Montures implements Listener {
         if (porteur == null) return;
         UUID u = joueurs.get(porteur);
         Player a = e.getPlayer();
+        // un joueur qui arrive voit apparaître tous les morceaux du pantin dans le même tic : une seule annonce pour tous
+        long cle = ((long) porteur << 32) | (a.getEntityId() & 0xFFFFFFFFL);
+        if (!prevues.add(cle)) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            prevues.remove(cle);
             Player p = u == null ? null : Bukkit.getPlayer(u);
             if (p != null && a.isOnline()) annoncer(p, a);
         }, 1L);
