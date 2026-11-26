@@ -43,9 +43,25 @@ public final class ObjetsCaches {
 
     /** Drapeaux de custom_model_data lus par les définitions d'objets de vorace-item. */
     public static final int CACHE_EN_MAIN = 0, PAIRE = 1, BRAS_FIN = 2, ARMURE_CACHEE = 3;
+    /**
+     * Drapeau 4, « caché à la troisième personne » (pantin permanent, hors animation) : l'objet reste en main à la première
+     * personne et dans l'inventaire, mais n'est plus dessiné dans la main de son corps invisible en F5 (c'est le pantin qui
+     * le tient). Lu par les définitions de vorace-item (0.14.12 et plus) et par celles de Vorace pour les objets du jeu.
+     */
+    public static final int CACHE_TIERS = 4;
+    /** Dossier des définitions « caché à la troisième personne » des objets du jeu (assets/vorace/items/cache_tiers/). */
+    public static final String CACHE_TIERS_DU_JEU = "cache_tiers/";
 
     private final Vorace plugin;
     private final Set<UUID> cachesSoi = ConcurrentHashMap.newKeySet();
+    /** Pantin permanent : objets en main cachés à la troisième personne seulement (le joueur garde son arme à la 1re personne). */
+    private final Set<UUID> tiersSoi = ConcurrentHashMap.newKeySet();
+
+    /** Pantin permanent mis ou retiré : ses objets en main ne se dessinent plus (ou de nouveau) sur son corps invisible en F5. */
+    public void cacherTiers(Player p, boolean oui) {
+        boolean change = oui ? tiersSoi.add(p.getUniqueId()) : tiersSoi.remove(p.getUniqueId());
+        if (change && p.isOnline()) p.updateInventory();
+    }
     private final Set<Integer> entitesCachees = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Object> pairesSoi = new ConcurrentHashMap<>();
     private final Map<Integer, Object> pairesEntites = new ConcurrentHashMap<>();
@@ -194,6 +210,7 @@ public final class ObjetsCaches {
 
     public void oublier(Player p) {
         brasSoi.remove(p.getUniqueId());
+        tiersSoi.remove(p.getUniqueId());
         cachesSoi.remove(p.getUniqueId());
         entitesCachees.remove(p.getEntityId());
         pairesSoi.remove(p.getUniqueId());
@@ -307,6 +324,7 @@ public final class ObjetsCaches {
     private Object caseMenu(Player j, int slot, Object o) throws ReflectiveOperationException {
         boolean vid = (boolean) estVide.invoke(o);
         boolean cache = cachesSoi.contains(j.getUniqueId());
+        boolean tiers = !cache && tiersSoi.contains(j.getUniqueId());
         if (vid) {
             if (!cache && slot == 45) {
                 Object paire = pairesSoi.get(j.getUniqueId());
@@ -317,7 +335,7 @@ public final class ObjetsCaches {
         if (cache && slot >= 5 && slot <= 8) return garderArmureSoi ? o : armure(o, PLACES_MENU[slot - 5]);
         boolean barre = slot >= 36 && slot <= 44;
         Bras bras = barre ? brasSoi.get(j.getUniqueId()) : null;
-        if (!cache && bras == null) return o;
+        if (!cache && !tiers && bras == null) return o;
         if (!barre && slot != 45) return o;
         ItemStack b = (ItemStack) versBukkit.invoke(null, o);
         boolean change = false;
@@ -327,6 +345,9 @@ public final class ObjetsCaches {
         }
         if (cache) {
             b = sansModeleDuJeu(avecDrapeau(b, CACHE_EN_MAIN));
+            change = true;
+        } else if (tiers) {
+            b = sansModeleDuJeu(avecDrapeau(b, CACHE_TIERS), CACHE_TIERS_DU_JEU);
             change = true;
         }
         return change ? versJeu.invoke(null, b) : o;
@@ -348,6 +369,11 @@ public final class ObjetsCaches {
      * Sa copie prend la définition « caché en main » de Vorace (rien en main, l'icône du jeu dans l'inventaire).
      */
     static ItemStack sansModeleDuJeu(ItemStack o) {
+        return sansModeleDuJeu(o, CACHE_DU_JEU);
+    }
+
+    /** Comme {@link #sansModeleDuJeu(ItemStack)}, avec les définitions de ce dossier (cache_en_main/ ou cache_tiers/). */
+    static ItemStack sansModeleDuJeu(ItemStack o, String dossier) {
         ItemMeta m = o.getItemMeta();
         if (m == null) return o;
         org.bukkit.NamespacedKey modele = m.hasItemModel() ? m.getItemModel() : o.getType().getKey();
@@ -357,7 +383,7 @@ public final class ObjetsCaches {
         if (!objetDuJeu(type)) return o;
         ItemStack c = o.clone();
         ItemMeta cm = c.getItemMeta();
-        cm.setItemModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, CACHE_DU_JEU + type.getKey().getKey()));
+        cm.setItemModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, dossier + type.getKey().getKey()));
         c.setItemMeta(cm);
         return c;
     }
@@ -370,6 +396,14 @@ public final class ObjetsCaches {
 
     /** Définition « caché en main » d'un objet du jeu : son dessin dans l'inventaire, au sol, dans un cadre ; rien en main. */
     public static byte[] definitionCachee(org.bukkit.Material t) {
+        return definitionCachee(t, false);
+    }
+
+    /**
+     * Définition « caché en main » ({@code premiere} faux) ou « caché à la troisième personne » ({@code premiere} vrai :
+     * l'objet reste aussi dessiné à la première personne) d'un objet du jeu.
+     */
+    public static byte[] definitionCachee(org.bukkit.Material t, boolean premiere) {
         String id = t.getKey().getKey();
         String icone = switch (id) {
             case "shield" -> "{\"type\":\"minecraft:special\",\"base\":\"minecraft:item/shield\",\"model\":{\"type\":\"minecraft:shield\"}}";
@@ -379,8 +413,35 @@ public final class ObjetsCaches {
             default -> modeleJeu(id);
         };
         String json = "{\"model\":{\"type\":\"minecraft:select\",\"property\":\"minecraft:display_context\",\"cases\":[{\"when\":"
-            + "[\"gui\",\"ground\",\"fixed\",\"head\"],\"model\":" + icone + "}],\"fallback\":{\"type\":\"minecraft:empty\"}}}";
+            + (premiere ? "[\"gui\",\"ground\",\"fixed\",\"head\",\"firstperson_righthand\",\"firstperson_lefthand\"]"
+                : "[\"gui\",\"ground\",\"fixed\",\"head\"]")
+            + ",\"model\":" + (premiere ? definitionDuJeu(id, icone) : icone) + "}],\"fallback\":{\"type\":\"minecraft:empty\"}}}";
         return json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** Définitions des objets du jeu qui ne sont pas un simple modèle (arc qui se bande, trident, teintes...), en 1.21.4. */
+    private static volatile Map<String, String> definitionsJeu;
+
+    /**
+     * La définition du jeu de cet objet (l'arc se bande à la première personne, le trident est en 3D...), lue dans
+     * pack-fantome/definitions-jeu-1.21.4.json (tirée des fichiers du jeu) ; à défaut, {@code icone}.
+     */
+    static String definitionDuJeu(String id, String icone) {
+        Map<String, String> d = definitionsJeu;
+        if (d == null) {
+            Map<String, String> l = new java.util.HashMap<>();
+            try (java.io.InputStream in = ObjetsCaches.class.getResourceAsStream("/pack-fantome/definitions-jeu-1.21.4.json")) {
+                if (in != null) {
+                    com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(new String(in.readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+                    for (Map.Entry<String, com.google.gson.JsonElement> e : o.entrySet()) l.put(e.getKey(), e.getValue().toString());
+                }
+            } catch (java.io.IOException | RuntimeException ignore) {
+                // sans le fichier : les icônes simples
+            }
+            definitionsJeu = d = l;
+        }
+        return d.getOrDefault(id, icone);
     }
 
     private static String modeleJeu(String id) {
@@ -431,7 +492,8 @@ public final class ObjetsCaches {
 
     private void contenu(Paquet p, Player j) throws ReflectiveOperationException {
         if ((int) p.lire("containerId") != 0) return;
-        if (!cachesSoi.contains(j.getUniqueId()) && !pairesSoi.containsKey(j.getUniqueId()) && !brasSoi.containsKey(j.getUniqueId())) return;
+        if (!cachesSoi.contains(j.getUniqueId()) && !tiersSoi.contains(j.getUniqueId()) && !pairesSoi.containsKey(j.getUniqueId())
+            && !brasSoi.containsKey(j.getUniqueId())) return;
         @SuppressWarnings("unchecked")
         List<Object> objets = (List<Object>) p.lire("items");
         List<Object> nouveaux = new ArrayList<>(objets);

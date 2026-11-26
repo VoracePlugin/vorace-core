@@ -153,6 +153,11 @@ pantin:
     actif: false
     # modèle des mouvements prêtés
     mouvements: pantin_mouvements
+    # Au-delà de cette distance (blocs), un joueur voit le joueur du jeu (sans animations) à la place du pantin, pour
+    # économiser le réseau. 0 : jamais, le pantin est vu aussi loin que le jeu montre le joueur (ses images sont alors
+    # envoyées moins souvent quand personne n'est près : 1 tic sur 2 au-delà de 16 blocs, 1 sur 3 au-delà de 32, 1 sur 4
+    # au-delà de 64 ; le jeu adoucit entre deux). Avec cacher-toutes-armures, le joueur du jeu vu de loin n'a pas d'armure.
+    distance: 0
   # Essai : la copie que le joueur voit de lui-même tourne avec sa caméra à chaque image (affichages « billboard »), sans
   # attendre le serveur : plus de retard du corps quand il tourne vite à la première personne. Limite : en vue F5 de face,
   # la caméra est retournée et la copie aussi. Le décalage (degrés) corrige l'orientation si elle est fausse en jeu.

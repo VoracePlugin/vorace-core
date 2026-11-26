@@ -241,6 +241,9 @@ public final class Modeles {
             if (ObjetsCaches.objetDuJeu(t)) {
                 f.put("assets/" + fr.vorace.objets.GenerateurPack.NS + "/items/" + ObjetsCaches.CACHE_DU_JEU + t.getKey().getKey() + ".json",
                     ObjetsCaches.definitionCachee(t));
+                // pantin permanent : rien dans la main de son corps invisible en F5, l'objet reste à la première personne
+                f.put("assets/" + fr.vorace.objets.GenerateurPack.NS + "/items/" + ObjetsCaches.CACHE_TIERS_DU_JEU + t.getKey().getKey() + ".json",
+                    ObjetsCaches.definitionCachee(t, true));
             }
         }
         // corps fantôme : shaders qui montrent le vrai joueur dans les menus seulement (Fantomes, MarqueArmures)
@@ -859,7 +862,7 @@ public final class Modeles {
             if (soi == null) return;
             if (refait) loinDe.clear();   // morceaux refaits : visibles de tous par défaut
             Location l = position();
-            double seuil = plugin.getConfig().getDouble("pantin.permanent.distance", 48);
+            double seuil = plugin.getConfig().getDouble("pantin.permanent.distance", 0);
             double plusPres = Double.MAX_VALUE;
             List<Display> morceaux = null;
             Pantins pa = plugin.pantins();
@@ -879,7 +882,7 @@ public final class Modeles {
                 }
                 if (pa != null) pa.lointain(soi, j, loin);
             }
-            ivAutres = plusPres < 16 ? 1 : plusPres < 32 ? 2 : 3;
+            ivAutres = plusPres < 16 ? 1 : plusPres < 32 ? 2 : plusPres < 64 ? 3 : 4;
         }
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
@@ -1019,6 +1022,8 @@ public final class Modeles {
 
         private float porteeVue() {
             // view_range 1 = 64 blocs (réglage « distance des entités » du joueur à 100 %)
+            // pantin permanent : vu aussi loin que le joueur lui-même (pas de trou dans la vue entre 56 blocs et la portée du jeu)
+            if (permanent) return 2.5f;
             return distance <= 0 ? 2f : (float) Math.max(0.5, (distance + 8) / 64.0);
         }
 

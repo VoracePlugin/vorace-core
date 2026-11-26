@@ -459,6 +459,7 @@ public final class Pantins implements Listener {
         if (!deja) {
             permanents.add(p.getUniqueId());
             cacherCorps(p);
+            if (caches != null && caches.actif()) caches.cacherTiers(p, true);
             // une animation non permanente a pu être remplacée : ce qu'il voit sur lui revient
             montrerSoi(p);
         }
@@ -469,6 +470,7 @@ public final class Pantins implements Listener {
     public void lacher(Player p) {
         if (!permanents.remove(p.getUniqueId())) return;
         lointains.remove(p.getEntityId());
+        if (caches != null) caches.cacherTiers(p, false);
         gestes.remove(p.getUniqueId());
         if (plugin.modeles() != null) plugin.modeles().arreterJoueur(p);
         montrerTout(p);
