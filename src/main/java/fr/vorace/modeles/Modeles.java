@@ -93,7 +93,7 @@ public final class Modeles {
     private float pantinRecul = 4f;
     /** Taille du pantin d'un joueur : le jeu dessine ses joueurs à 0,9375 (30 pixels de haut, 1,875 bloc), pas à 1 (2 blocs). */
     private float pantinTaille = 0.9375f;
-    /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic (1 : toujours face au regard), et écart maximal tête-corps. */
+    /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic en marche (1 : toujours face au regard), et écart maximal tête-corps. */
     private float pantinCorpsSuit = 0.3f, pantinTeteMax = 50f;
     /**
      * Essai : la copie pour soi tourne avec la caméra du joueur, à chaque image, sans attendre le serveur (affichages en
@@ -1334,20 +1334,21 @@ public final class Modeles {
         }
 
         /**
-         * Lacet du corps du pantin d'un joueur, appelé une fois par tic. Comme dans le jeu, la tête tourne d'abord et le corps
-         * suit : il rattrape à chaque tic une part de son écart au regard (pantin.corps-suit-regard) et la tête ne s'en
-         * écarte jamais de plus de pantin.tete-max degrés. Contrairement au jeu, il finit toujours face au regard, même à
-         * l'arrêt. Pendant une compétence, il est face au regard tout de suite (ses effets partent dans l'axe du pantin) ;
-         * pendant un geste (les bras visent où regarde le joueur) et dans les mouvements où l'animation tourne le corps
-         * entier, il s'aligne en deux ou trois tics.
+         * Lacet du corps du pantin d'un joueur, appelé une fois par tic. Comme dans le jeu : à l'arrêt, la tête tourne seule
+         * et le corps ne bouge pas, jusqu'à pantin.tete-max degrés (50 dans le jeu) ; au-delà, la tête entraîne le corps. En
+         * marche, le corps rejoint le regard (une part de l'écart par tic : pantin.corps-suit-regard). Pendant une compétence,
+         * il est face au regard tout de suite (ses effets partent dans l'axe du pantin) ; pendant un geste (coup de bras,
+         * visée : les bras visent où regarde le joueur, comme le jeu aligne le corps sur un coup) et dans les mouvements où
+         * l'animation tourne le corps entier, il s'aligne en deux ou trois tics.
          */
-        private float corpsJoueur(float regard) {
+        private float corpsJoueur(float regard, boolean marche) {
             if (Float.isNaN(corpsLisse) || pantinCorpsSuit >= 1f || animationDemandee()) return corpsLisse = enDegres(regard);
             float ecart = enDegres(regard - corpsLisse);
-            corpsLisse += ecart * (corpsAligne() ? Math.max(pantinCorpsSuit, 0.6f) : pantinCorpsSuit);
+            if (corpsAligne()) corpsLisse += ecart * Math.max(pantinCorpsSuit, 0.6f);
+            else if (marche) corpsLisse += ecart * pantinCorpsSuit;
             ecart = enDegres(regard - corpsLisse);
             if (Math.abs(ecart) > pantinTeteMax) corpsLisse += ecart - Math.signum(ecart) * pantinTeteMax;
-            if (Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
+            if ((marche || corpsAligne()) && Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
             return corpsLisse = enDegres(corpsLisse);
         }
 
@@ -1855,13 +1856,12 @@ public final class Modeles {
             float teteYaw = 0, tetePitch = 0;
             if (mob && !mort) {
                 LivingEntity le = (LivingEntity) base;
-                // pantin d'un joueur : la tête regarde où il regarde, le corps la rattrape (corpsJoueur). Pas le corps du jeu :
-                // à l'arrêt, il reste jusqu'à 50° de travers sans jamais rejoindre le regard (essai du 26 nov.)
-                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw()) : corps(le);
                 boolean memeMonde = derniere != null && derniere.getWorld().equals(l.getWorld());
                 double dx = !memeMonde ? 0 : l.getX() - derniere.getX(), dz = !memeMonde ? 0 : l.getZ() - derniere.getZ();
                 double dy = !memeMonde ? 0 : l.getY() - derniere.getY();
                 double vitesse = Math.sqrt(dx * dx + dz * dz);
+                // pantin d'un joueur : la tête regarde où il regarde ; le corps suit comme dans le jeu (corpsJoueur)
+                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw(), vitesse > 0.01) : corps(le);
                 Animation a;
                 if (pantin && le instanceof Player pj) {
                     a = locomotion(pj, l, dx, dy, dz);
@@ -2008,7 +2008,9 @@ public final class Modeles {
                 td = tempsPiste(da, debutForcee, forceeBoucle);
                 float w = 1f;
                 if (fonduTics > 0 && da != null) {
-                    w = Math.min(1f, (float) (td * 20 / fonduTics));
+                    // entrée en fondu sur le temps écoulé depuis le début, pas sur le temps dans la boucle : un geste en
+                    // boucle (viser à l'arc, manger) retombait et remontait à chaque tour de son animation
+                    w = Math.min(1f, (tic - debutForcee) / (float) fonduTics);
                     if (!forceeBoucle && !da.boucle().equals("loop") && !da.boucle().equals("hold")) w = Math.min(w, (float) ((da.duree() - td) * 20 / fonduTics));
                 }
                 couches.add(new Animateur.Couche(da, td, Math.max(0f, w), true));
