@@ -1,5 +1,15 @@
 # Journal des changements
 
+## 1.7.9 (novembre 2026) : l'instant où un coup porte, pour les plugins de combat
+
+Retour d'Antoine en jeu : « quand tu tapes avec une arme dans les animations basiques, le dégât se fait pas quand la lame
+tombe, il se fait quand la lame monte. Il faut faire le dégât au moment où l'arme est censée taper. »
+
+- `VoraceAPI.ticsAvantImpact(joueur)` : le nombre de tics entre le clic et l'instant où le coup de bras du pantin permanent
+  porte (poing 4, épée 5, hache 6, autre objet 5 ; 0 sans pantin permanent ou sans coup à venir). Vorace n'applique aucun
+  dégât lui-même : c'est le plugin de combat qui retarde les siens de ce délai (Matsuri Cœur 0.43.1 le fait pour
+  l'attaque de base).
+
 ## 1.7.8 (novembre 2026) : genoux et coudes fermés
 
 Retour d'Antoine en jeu : « ça se décale plus, mais quand je marche mon genou disparaît ».

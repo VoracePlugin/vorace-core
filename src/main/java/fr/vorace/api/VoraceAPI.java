@@ -248,6 +248,16 @@ public final class VoraceAPI {
         return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation);
     }
 
+    /**
+     * Tics à attendre avant que le coup de bras du pantin permanent de ce joueur porte (la lame tombée, le poing tendu) :
+     * un plugin de combat applique les dégâts d'un coup normal à cet instant plutôt qu'au clic, quand l'arme monte encore.
+     * À appeler pendant l'événement de dégâts du clic. 0 : pas de pantin permanent ou pas de coup à venir, dégâts tout de
+     * suite. Poing 4, épée 5, hache 6, autre objet 5.
+     */
+    public static int ticsAvantImpact(Player joueur) {
+        return plugin == null || plugin.pantins() == null ? 0 : plugin.pantins().ticsAvantImpact(joueur);
+    }
+
     /** Comme {@link #animerJoueur(Player, String, String)}, en boucle jusqu'à {@link #arreterJoueur(Player)}. */
     public static boolean animerJoueurEnBoucle(Player joueur, String modele, String animation) {
         return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation, true);

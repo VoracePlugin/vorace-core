@@ -524,6 +524,24 @@ public final class Modeles {
         return i != null && i.pantin && i.trouver(geste) != null;
     }
 
+    /**
+     * Pantin permanent : tics avant que ce coup porte s'il est demandé maintenant. Déjà en cours et pas encore porté : ce
+     * qu'il lui reste ; déjà porté mais trop tôt pour être relancé (gesteJoueur ne le relance qu'à 60 % de sa durée) : 0 ;
+     * pendant une animation demandée (compétence), qui a son propre instant d'impact : 0.
+     */
+    public int ticsAvantImpact(Player joueur, String coup, int impact) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin || i.animationDemandee()) return 0;
+        Animation a = i.trouver(coup);
+        if (a == null) return 0;
+        if (coup.equals(i.forcee) && i.forceePartielle) {
+            long depuis = tic - i.debutForcee;
+            if (depuis < impact) return (int) Math.max(1, impact - depuis);
+            if (depuis < Math.round(a.duree() * 20 * 0.6)) return 0;
+        }
+        return impact;
+    }
+
     /** Pantin permanent : arrête le geste en cours (s'il en joue un). */
     public void finGesteJoueur(Player joueur, String geste) {
         Instance i = instances.get(joueur.getUniqueId());

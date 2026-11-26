@@ -695,6 +695,25 @@ public final class Pantins implements Listener {
         for (EquipmentSlot e : EMPLACEMENTS) voit.sendEquipmentChange(p, e, loin ? p.getEquipment().getItem(e) : vide);
     }
 
+    /** Tics entre le début d'un coup et l'instant où il porte (la lame tombée, le poing tendu), par geste. */
+    static final Map<String, Integer> IMPACTS = Map.of("coup_arme", 5, "coup_hache", 6, "coup_poing", 4, "geste_main", 5);
+
+    /**
+     * Tics à attendre, à partir de maintenant, avant que le coup de bras du pantin de ce joueur porte : l'instant où un
+     * plugin de combat doit appliquer les dégâts pour qu'ils tombent avec la lame et non au clic, quand elle monte encore
+     * (retour d'Antoine du 26 nov.). À appeler au moment du clic (l'événement de dégâts du jeu arrive juste avant celui du
+     * bras levé). 0 : pas de pantin permanent, pas de coup à venir (geste d'utilisation ou animation en cours), ou le coup
+     * en cours a déjà porté et ne sera pas relancé.
+     */
+    public int ticsAvantImpact(Player p) {
+        Modeles m = plugin.modeles();
+        if (p == null || m == null || !permanent(p) || gestes.containsKey(p.getUniqueId())) return 0;
+        String coup = coup(p.getInventory().getItemInMainHand());
+        if (!m.aGeste(p, coup)) coup = "geste_main";
+        if (!m.aGeste(p, coup)) return 0;
+        return m.ticsAvantImpact(p, coup, IMPACTS.getOrDefault(coup, 0));
+    }
+
     /** Coup de bras (frapper, poser, miner) : le geste par-dessus les mouvements. */
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
     public void brasLeve(org.bukkit.event.player.PlayerAnimationEvent e) {
