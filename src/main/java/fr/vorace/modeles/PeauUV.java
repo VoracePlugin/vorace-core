@@ -49,6 +49,18 @@ public final class PeauUV {
         return f;
     }
 
+    /**
+     * Bouchon d'une articulation (genou, coude) : la face qui ferme le bout d'une moitié de membre du côté de la jointure
+     * (le dessous d'une cuisse ou d'un bras, le dessus d'un tibia ou d'un avant-bras). Le skin n'a pas de pixels pour elle :
+     * chaque colonne prend la couleur du pixel de la face avant qui la touche, étirée sur toute la profondeur. Sans elle,
+     * les deux moitiés étaient des tubes ouverts : quand le genou pliait, le haut du tibia sortait devant la cuisse et l'on
+     * voyait au travers (retour d'Antoine : « quand je marche, mon genou disparaît »).
+     */
+    static Face bouchon(int[] z, int r0, int rh, boolean bas) {
+        int u = z[0], v = z[1], l = z[2], p = z[3];
+        return bas ? new Face("up", u + p, v + p + r0, l, 1) : new Face("down", u + p, v + p + r0 + rh - 1, l, 1);
+    }
+
     /** Morceaux d'après le squelette (os « peau_... ») ; bras fins : 3 pixels de large, côté extérieur retiré. */
     public static List<Morceau> morceaux(ModeleBB squelette, boolean fin) {
         List<Morceau> l = new ArrayList<>();
@@ -77,9 +89,13 @@ public final class PeauUV {
             int rh = tete ? 8 : bas ? h / 2 + Peau.recouvrement(nom) : h / 2;
             // le bas du torse a un dessus : si le buste se penche, on voit le haut d'un torse, pas le vide
             boolean dessus = tete || !bas || nom.equals("corps_bas"), dessous = tete || bas;
-            l.add(new Morceau(nom + (fin ? "_fin" : ""), p.nom(), de, a,
-                faces(zb[0], zb[1], zb[2], zb[3], r0, rh, dessus, dessous),
-                faces(zc[0], zc[1], zc[2], zc[3], r0, rh, dessus, dessous), tete ? CHAPEAU : VESTE));
+            List<Face> fb = faces(zb[0], zb[1], zb[2], zb[3], r0, rh, dessus, dessous);
+            List<Face> fc = faces(zc[0], zc[1], zc[2], zc[3], r0, rh, dessus, dessous);
+            if (bras || nom.startsWith("jambe")) {
+                fb.add(bouchon(zb, r0, rh, bas));
+                fc.add(bouchon(zc, r0, rh, bas));
+            }
+            l.add(new Morceau(nom + (fin ? "_fin" : ""), p.nom(), de, a, fb, fc, tete ? CHAPEAU : VESTE));
         }
         return l;
     }

@@ -103,8 +103,9 @@ public final class TestPantins {
             "armure : plastron sur le haut du tronc (qui descend d'un demi-pixel sur le bas), gonflé d'un pixel, avant = zone avant du tronc lignes 0 à 5");
         com.google.gson.JsonObject jb = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/iron/humanoid_leggings/jambe_gauche_bas.json"),
             java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonArray("elements").get(0).getAsJsonObject();
-        verifier(jb.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[2.0,12.0,1.0,16.0]") && !jb.getAsJsonObject("faces").has("up"),
-            "armure : jambière gauche en miroir, moitié basse avec recouvrement (lignes 4 à 11)");
+        verifier(jb.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[2.0,12.0,1.0,16.0]")
+                && jb.getAsJsonObject("faces").getAsJsonObject("up").get("uv").toString().equals("[2.0,12.0,1.0,12.5]"),
+            "armure : jambière gauche en miroir, moitié basse avec recouvrement (lignes 4 à 11), genou fermé par la ligne du haut");
         com.google.gson.JsonObject cuir = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/leather/humanoid/tete.json"),
             java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
         verifier(cuir.getAsJsonArray("elements").size() == 2 && cuir.getAsJsonObject("textures").get("1").getAsString().endsWith("leather_overlay")
@@ -234,6 +235,16 @@ public final class TestPantins {
         PeauUV.Donnees bf = PeauUV.donnees(j, skin, true).get("bras_droit_haut");
         verifier(bf != null && PeauUV.morceauObjet("bras_droit_haut", true).equals("bras_droit_haut_fin") && bf.couleurs().length < dd.get("bras_droit_haut").couleurs().length,
             "skin UV : bras fins (3 pixels) pour les skins « slim »");
+        // genoux et coudes fermés : chaque moitié de membre a un bouchon du côté de la jointure (une ligne de la face avant)
+        boolean bouchons = true;
+        for (PeauUV.Morceau mo : PeauUV.morceaux(j, false)) {
+            boolean membre = mo.nom().startsWith("bras") || mo.nom().startsWith("jambe");
+            String cote = mo.nom().endsWith("_bas") ? "up" : "down";
+            long n = mo.base().stream().filter(fa -> fa.nom().equals(cote) && fa.h() == 1).count();
+            bouchons &= n == (membre ? 1 : 0) && mo.couche().size() == mo.base().size();
+        }
+        verifier(bouchons && dd.get("jambe_droite_bas").couleurs().length == 2 * (2 * 4 * 8 + 2 * 4 * 8 + 4 * 4 + 4),
+            "skin UV : un bouchon par moitié de membre (genou, coude), aucun sur la tête ni le tronc");
 
         // armure fondue dans la peau : la définition de chaque morceau choisit jusqu'à deux couches d'armure par les chaînes
         // 0 et 1 de custom_model_data ; leurs teintes suivent celles des pixels ; le modèle choisi existe dans le pack

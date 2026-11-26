@@ -1,5 +1,16 @@
 # Journal des changements
 
+## 1.7.8 (novembre 2026) : genoux et coudes fermés
+
+Retour d'Antoine en jeu : « ça se décale plus, mais quand je marche mon genou disparaît ».
+
+- **Genoux et coudes fermés** : chaque moitié de membre (cuisse, tibia, bras, avant-bras) a maintenant une face qui ferme son
+  bout du côté de l'articulation, pour la peau et pour l'armure. C'étaient des tubes ouverts : quand le genou pliait, le
+  haut du tibia sortait devant la cuisse et l'on voyait au travers, surtout en regardant ses jambes à la première
+  personne. Le skin n'a pas de pixels pour cette face : chaque colonne prend la couleur du pixel de la face avant qui la
+  touche.
+- **Le pack de ressources change** (modèles des morceaux de peau et d'armure) : il est régénéré au démarrage.
+
 ## 1.7.7 (novembre 2026) : armure fondue dans la peau, deux fois moins de paquets en armure
 
 Chantier réseau validé par Antoine (« j'ai peur qu'avec beaucoup de gens, ça lag »).

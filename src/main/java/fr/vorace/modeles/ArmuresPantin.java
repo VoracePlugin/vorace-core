@@ -203,6 +203,11 @@ public final class ArmuresPantin {
         uv.put("west", new double[]{u + d + l, haut, u + 2 * d + l, fond});
         uv.put("up", new double[]{u + d + l, v + d, u + d, v});
         uv.put("down", new double[]{u + d + 2 * l, v, u + d + l, v + d});
+        // bouchon de l'articulation d'un membre (genou, coude) : la face de jointure prend la ligne de la face avant qui la
+        // touche, étirée. Sans elle, la pièce était un tube ouvert et l'on voyait au travers d'un genou plié (PeauUV.bouchon).
+        boolean membre = morceau.startsWith("bras") || morceau.startsWith("jambe");
+        if (membre && bas) uv.put("up", new double[]{u + d, haut, u + d + l, haut + 1});
+        if (membre && !bas) uv.put("down", new double[]{u + d, fond - 1, u + d + l, fond});
         if (gauche) {
             double[] est = uv.get("east"), ouest = uv.get("west");
             uv.put("east", ouest);
@@ -211,8 +216,8 @@ public final class ArmuresPantin {
         }
         JsonObject faces = new JsonObject();
         for (Map.Entry<String, double[]> f : uv.entrySet()) {
-            // la face de jointure (dessous d'une moitié haute, dessus d'une moitié basse) reste vide
-            if (!tete && ((!bas && f.getKey().equals("down")) || (bas && f.getKey().equals("up") && !morceau.startsWith("corps_bas")))) continue;
+            // la face de jointure du tronc (dessous du haut) reste vide ; celle d'un membre est son bouchon (ci-dessus)
+            if (!tete && !membre && ((!bas && f.getKey().equals("down")) || (bas && f.getKey().equals("up") && !morceau.startsWith("corps_bas")))) continue;
             JsonObject o = new JsonObject();
             JsonArray t = new JsonArray();
             double[] w = f.getValue();
