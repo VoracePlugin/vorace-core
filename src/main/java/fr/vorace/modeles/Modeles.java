@@ -1987,7 +1987,11 @@ public final class Modeles {
                 }
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
-                    envoyer(armuresSoi[a], repereSoi(new Transformation(new Vector3f(tr).add(recul), rot, ech, droite)), armuresEnvoyeesSoi, a, intervalle);
+                    // pantin permanent, hors animation demandée : l'arme de sa copie disparaît (il garde celle du jeu à la
+                    // première personne ; un seul objet pour les deux vues, choix d'Antoine du 26 nov.)
+                    boolean sansArme = permanent && !animationDemandee() && (main(a) == 1 || main(a) == 2);
+                    envoyer(armuresSoi[a], repereSoi(new Transformation(new Vector3f(tr).add(recul), rot, sansArme ? new Vector3f() : ech, droite)),
+                        armuresEnvoyeesSoi, a, intervalle);
                 }
                 if (!imageAutres || t.equals(armuresEnvoyees[a])) continue;
                 armuresEnvoyees[a] = t;
