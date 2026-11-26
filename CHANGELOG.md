@@ -1,5 +1,22 @@
 # Journal des changements
 
+## 1.7.5 (novembre 2026) : un coup ne bouge que le bras qui frappe, moins de paquets
+
+Retours d'Antoine en jeu : « pourquoi quand je tape, l'autre main se baisse en même temps ? Normalement il n'y a qu'une
+main » ; « quand je tape, il y a la moitié de mon corps qui bouge, la moitié de l'armure qui ne devrait pas bouger » ;
+« vérifie au niveau des paquets si on a fait le maximum pour pas que ça lag avec beaucoup de gens ».
+
+- **Un coup ne bouge que le bras qui frappe** (`coup_poing`, `coup_arme`, `coup_hache`, `geste_main`) : plus de contrepoids
+  de l'autre bras, plus de rotation du buste (la moitié haute du corps et de l'armure tournait sur la moitié basse, la cassure
+  se voyait à la taille). Les tailles restent en diagonale, d'en haut à droite vers le bas à gauche.
+- **Images presque identiques non renvoyées** (`modeles.economie-images`) : un morceau dont l'image a bougé de moins d'un
+  quarantième de pixel et de 0,3° depuis la dernière envoyée n'est pas renvoyé. Avant, un pantin au repos envoyait un paquet
+  par morceau à chaque tic (il respire : chaque image différait d'un cheveu). Vaut aussi pour les mobs animés.
+- **Foule** (`pantin.permanent.foule`, 8) : quand plus de 8 autres joueurs sont à moins de 32 blocs d'un pantin, ses images
+  partent tous les 2 tics au lieu de chaque tic (3 tics au-delà de 24 joueurs) ; le jeu adoucit entre deux. Sa propre copie
+  reste à chaque tic.
+- Le `pantin_mouvements.bbmodel` de la 1.7.4 est remplacé tout seul s'il n'a pas été retouché.
+
 ## 1.7.4 (novembre 2026) : tailles en diagonale, corps tourné vers là où il va, course et saut de combattant
 
 Retours d'Antoine en jeu : « quand je cours en F1, je vois trop les bras » ; « le saut, c'est pas un saut normal : toute

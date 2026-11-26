@@ -230,4 +230,16 @@ public final class Animateur {
         if (e != null) for (int k = 0; k < 3; k++) if (e[k] != null) v[k] = e[k].evaluer(t);
         return v;
     }
+
+    /**
+     * Deux images d'un morceau si proches que l'écart ne se voit pas : moins de 0,0015 bloc (un quarantième de pixel) et de
+     * 0,3° (un huitième de pixel au bout d'une épée). Vorace ne renvoie pas une telle image : un pantin au repos, qui ne
+     * fait que respirer, n'envoie presque plus rien au lieu d'un paquet par morceau à chaque tic. L'écart est mesuré depuis
+     * la dernière image ENVOYÉE : un mouvement lent finit toujours par être envoyé, par petits pas.
+     */
+    static boolean memeImage(Vector3f t1, Quaternionf r1, Vector3f t2, Quaternionf r2) {
+        if (t1.distanceSquared(t2) > 0.0015f * 0.0015f) return false;
+        double p = Math.abs((double) r1.x * r2.x + (double) r1.y * r2.y + (double) r1.z * r2.z + (double) r1.w * r2.w);
+        return p > 0.9999965731;   // cos(0,15°) : la moitié de l'angle entre les deux rotations
+    }
 }

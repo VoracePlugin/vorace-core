@@ -101,6 +101,10 @@ public final class Modeles {
     private float pantinTaille = 0.9375f;
     /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic en marche (1 : toujours face au regard), et écart maximal tête-corps. */
     private float pantinCorpsSuit = 0.3f, pantinTeteMax = 50f;
+    /** Images presque identiques non renvoyées (voir Animateur.memeImage). */
+    private boolean economieImages = true;
+    /** Pantin permanent : au-delà de ce nombre d'autres joueurs à moins de 32 blocs, ses images partent tous les 2 tics (0 : jamais). */
+    private int pantinFoule = 8;
     /** En marche, le corps se tourne vers là où il va (comme le jeu) ; faux : vers là où il regarde. */
     private boolean pantinCorpsVersMouvement = true;
     /**
@@ -817,6 +821,8 @@ public final class Modeles {
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
             pantinReculBas = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-regard-bas", 5)));
             pantinCorpsVersMouvement = plugin.getConfig().getBoolean("pantin.corps-vers-le-mouvement", true);
+            economieImages = plugin.getConfig().getBoolean("modeles.economie-images", true);
+            pantinFoule = Math.max(0, plugin.getConfig().getInt("pantin.permanent.foule", 8));
             pantinTaille = (float) Math.max(0.25, Math.min(4, plugin.getConfig().getDouble("pantin.taille", 0.9375)));
             pantinCorpsSuit = (float) Math.max(0.05, Math.min(1, plugin.getConfig().getDouble("pantin.corps-suit-regard", 0.3)));
             pantinTeteMax = (float) Math.max(0, Math.min(75, plugin.getConfig().getDouble("pantin.tete-max", 50)));
@@ -975,12 +981,14 @@ public final class Modeles {
             Location l = position();
             double seuil = plugin.getConfig().getDouble("pantin.permanent.distance", 0);
             double plusPres = Double.MAX_VALUE;
+            int autour = 0;
             List<Display> morceaux = null;
             Pantins pa = plugin.pantins();
             for (Player j : l.getWorld().getPlayers()) {
                 if (j.getUniqueId().equals(proprietaire)) continue;
                 double d = j.getLocation().distance(l);
                 plusPres = Math.min(plusPres, d);
+                if (d < 32) autour++;
                 boolean loin = seuil > 0 && d > seuil + (loinDe.contains(j.getUniqueId()) ? -4 : 0);
                 if (loin == loinDe.contains(j.getUniqueId())) continue;
                 if (morceaux == null) morceaux = morceauxAutres();
@@ -994,6 +1002,9 @@ public final class Modeles {
                 if (pa != null) pa.lointain(soi, j, loin);
             }
             ivAutres = plusPres < 16 ? 1 : plusPres < 32 ? 2 : plusPres < 64 ? 3 : 4;
+            // dans une foule, chacun reçoit les images de tous les autres : une image tous les 2 tics (3 dans une très grosse
+            // foule), le jeu adoucit entre deux. Le nombre de paquets croît comme le carré du nombre de joueurs réunis.
+            if (pantinFoule > 0 && autour > pantinFoule) ivAutres = Math.max(ivAutres, autour > pantinFoule * 3 ? 3 : 2);
         }
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
@@ -1359,8 +1370,16 @@ public final class Modeles {
                 t.getScale(), t.getRightRotation());
         }
 
+        /** Image à ne pas renvoyer : la même, ou si proche de la dernière envoyée que l'écart ne se voit pas (Animateur.memeImage). */
+        private boolean dejaEnvoyee(Transformation t, Transformation avant) {
+            if (avant == null) return false;
+            if (t.equals(avant)) return true;
+            return economieImages && t.getScale().equals(avant.getScale()) && t.getRightRotation().equals(avant.getRightRotation())
+                && Animateur.memeImage(t.getTranslation(), t.getLeftRotation(), avant.getTranslation(), avant.getLeftRotation());
+        }
+
         private void envoyer(ItemDisplay d, Transformation t, Transformation[] cache, int i, int intervalle) {
-            if (d == null || !d.isValid() || t.equals(cache[i])) return;
+            if (d == null || !d.isValid() || dejaEnvoyee(t, cache[i])) return;
             cache[i] = t;
             d.setInterpolationDelay(0);
             d.setInterpolationDuration(intervalle);
@@ -2399,7 +2418,7 @@ public final class Modeles {
                     envoyer(partiesSoi[k], repereSoi(new Transformation(new Vector3f(tr.getTranslation()).add(recul), tr.getLeftRotation(), tr.getScale(),
                         tr.getRightRotation())), envoyeesSoi, k, intervalle);
                 }
-                if (!imageAutres || tr.equals(envoyees[k])) continue;
+                if (!imageAutres || dejaEnvoyee(tr, envoyees[k])) continue;
                 envoyees[k] = tr;
                 d.setInterpolationDelay(0);
                 d.setInterpolationDuration(ivAutres(intervalle));
@@ -2449,7 +2468,7 @@ public final class Modeles {
                     envoyer(armuresSoi[a], repereSoi(new Transformation(new Vector3f(tr).add(recul), rot, sansArme ? new Vector3f() : ech, droite)),
                         armuresEnvoyeesSoi, a, intervalle);
                 }
-                if (!imageAutres || t.equals(armuresEnvoyees[a])) continue;
+                if (!imageAutres || dejaEnvoyee(t, armuresEnvoyees[a])) continue;
                 armuresEnvoyees[a] = t;
                 d.setInterpolationDelay(0);
                 d.setInterpolationDuration(ivAutres(intervalle));
@@ -2670,7 +2689,9 @@ public final class Modeles {
         "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e",
         "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d",
         "3f7bfc697804da0ee20676b502b437b4667572d0fb0c4008f345d6e29ccc09bc",
-        "d00bf14f9069d615b22a4665c0184a596221c74a7819219a242ead8ca6be40cd");
+        "d00bf14f9069d615b22a4665c0184a596221c74a7819219a242ead8ca6be40cd",
+        // celui de la 1.7.4
+        "2e189b666c60905ea4c0213bc320b5a3059eedb4fe7dc5b82b93b1c5c91769b1");
 
     static String empreinte(byte[] octets) {
         try {

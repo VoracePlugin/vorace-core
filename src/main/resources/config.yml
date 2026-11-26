@@ -83,6 +83,9 @@ modeles:
   # Modèles animés (plugins/Vorace/modeles-animes/*.bbmodel) : nombre de tics entre deux images de l'animation.
   # 1 = le plus fluide, 2 = deux fois moins de données envoyées aux joueurs (le jeu adoucit entre les images).
   intervalle-tics: 2
+  # Une image presque identique à la dernière envoyée (moins d'un quarantième de pixel et de 0,3°) n'est pas renvoyée : un
+  # modèle au repos, qui ne fait que respirer, n'envoie presque plus rien. false : tout est envoyé, comme avant la 1.7.5.
+  economie-images: true
   # Les parties d'un modèle n'existent que si un joueur est à moins de tant de blocs (0 = toujours).
   # Au-delà de la moitié de cette distance, les images sont envoyées deux fois moins souvent.
   distance-affichage: 48
@@ -178,6 +181,10 @@ pantin:
     # envoyées moins souvent quand personne n'est près : 1 tic sur 2 au-delà de 16 blocs, 1 sur 3 au-delà de 32, 1 sur 4
     # au-delà de 64 ; le jeu adoucit entre deux). Avec cacher-toutes-armures, le joueur du jeu vu de loin n'a pas d'armure.
     distance: 0
+    # Foule : quand plus de ce nombre d'autres joueurs sont à moins de 32 blocs, les images du pantin partent tous les 2 tics
+    # au lieu de chaque tic (3 tics au-delà du triple) ; le jeu adoucit entre deux. Sa propre copie reste à chaque tic.
+    # 0 : jamais. Avec beaucoup de joueurs, régler aussi « distance » ci-dessus (48 par exemple).
+    foule: 8
     # Qui tient l'objet à la première personne (essai en jeu : /vorace pantin vue pantin|main-du-jeu) :
     #   pantin       comme le mod First-person Model : le pantin tient l'objet dans ses mains, à la première personne comme
     #                en F5 ; la main du jeu est cachée (l'objet garde son icône dans la barre). Le joueur voit ses bras et

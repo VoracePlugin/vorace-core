@@ -701,7 +701,8 @@ def coup(t):
     main = (x, 22 - rayon * math.cos(a), -rayon * math.sin(a))
     # le coude plie toujours dans le plan du bras (comme une charnière) : derrière quand la main est en bas, devant et en
     # dessous quand elle est levée
-    return {"buste": (5 * pos(math.sin(math.pi * (t - 0.12) / 0.33)), vr, 0), "droit": (main, (0.2, main[2], 22 - main[1]))}
+    # (ni le buste ni l'autre bras ne bougent : seul le bras qui frappe, voir les tailles plus bas)
+    return {"droit": (main, (0.2, main[2], 22 - main[1]))}
 
 
 COUP_PISTES = geste(0.45, coup, "once")
@@ -709,11 +710,12 @@ COUP_PISTES["poing_droit"] = {"rotation": ech(0.45, lambda t: (max(-10.0, min(45
 deux("geste_main", 0.45, "once", COUP_PISTES)
 
 # Tailles en diagonale (épée, hache), comme celles des compétences (Lame du vent, Taille croisée) : d'en haut à droite vers
-# le bas à gauche, avec tout le haut du corps. L'arme part du côté (la pose tenir_arme) et monte par devant jusqu'au-dessus
-# de l'épaule, à l'extérieur, pendant que le buste se tourne et se redresse (l'élan) ; le buste revient et plonge, le bras se
-# tend, le poignet se casse : la lame traverse devant lui et finit basse devant l'autre hanche, puis retourne sur le côté.
-# L'autre bras fait contrepoids. Le coude plie dans le plan de la taille (plan), donc la lame y reste : elle tranche sur son
-# fil, jamais à plat.
+# le bas à gauche. L'arme part du côté (la pose tenir_arme) et monte par devant jusqu'au-dessus de l'épaule, à l'extérieur
+# (l'élan) ; le bras se tend, le poignet se casse : la lame traverse devant lui et finit basse devant le ventre, puis
+# retourne sur le côté. Le coude plie dans le plan de la taille (plan), donc la lame y reste : elle tranche sur son fil,
+# jamais à plat.
+# SEUL LE BRAS QUI FRAPPE BOUGE (retour d'Antoine) : ni l'autre bras (il « se baissait en même temps »), ni le buste (la
+# moitié haute du corps et de l'armure tournait sur la moitié basse, la cassure se voyait à la taille).
 def norm3(v):
     n = math.sqrt(sum(c * c for c in v))
     return tuple(c / n for c in v)
@@ -725,84 +727,70 @@ def croix3(a, b):
 
 def taille_diagonale(nom, duree, cles, t_elan, t_coup, t_fin):
     """
-    cles : (temps, main, rotation du buste (x, y, z), poignet (x, y), main de l'autre bras). t_elan : sommet de l'élan ;
-    t_coup : la lame a porté ; t_fin : fin de la traversée (ensuite le bras revient sur le côté).
+    cles : (temps, main, poignet (x, y)). t_elan : sommet de l'élan ; t_coup : la lame a porté ; t_fin : fin de la
+    traversée (ensuite le bras revient sur le côté).
     """
     epaule = (6.0, 22.0, 0.0)
-    main_ = lambda t: courbe([(a, m) for a, m, _, _, _ in cles], t)
+    main_ = lambda t: courbe([(a, m) for a, m, _ in cles], t)
     # plan de la taille : par l'épaule, la main au sommet de l'élan et la main au moment où la lame porte
     plan = norm3(croix3(sub(main_(t_coup), epaule), sub(main_(t_elan), epaule)))
 
     def f(t):
         main = main_(t)
-        bx, by, bz = courbe([(a, b) for a, _, b, _, _ in cles], t)
-        autre = courbe([(a, g) for a, _, _, _, g in cles], t)
         # hors du coup, le bras plie d'avant en arrière (plan de l'épaule) ; il passe dans le plan de la taille pendant l'élan
         part = entre(t, 0.0, t_elan) * (1 - entre(t, t_fin, duree))
         n = norm3(mix((1.0, 0.0, 0.0), plan, part))
         coude = croix3(sub(main, epaule), n)
-        return {"buste": (bx, by, bz), "droit": (main, add(coude, mul(n, 0.1))), "gauche": (autre, (-0.6, -0.4, 1.0))}
+        return {"droit": (main, add(coude, mul(n, 0.1)))}
 
     pistes = geste(duree, f, "once")
-    pistes["poing_droit"] = {"rotation": ech(duree, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, _, q, _ in cles], t))),
-                                                               courbe([(a, q[1]) for a, _, _, q, _ in cles], t), 0), False)}
+    pistes["poing_droit"] = {"rotation": ech(duree, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, q in cles], t))),
+                                                               courbe([(a, q[1]) for a, _, q in cles], t), 0), False)}
     deux(nom, duree, "once", pistes)
 
 
 # coup d'arme (épée, trident, lance ; 11 tics) : élan en 3 tics, la lame porte au 5e, traversée jusqu'au 7e
-AUTRE_REPOS = (-6.6, 12.6, -0.6)
 taille_diagonale("coup_arme", 0.55, [
-    (0.00, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
-    (0.05, (8.8, 15.8, -4.4), (-1.0, 6.0, 0.0), (20.0, 10.0), (-6.4, 13.6, -2.6)),
-    (0.10, (9.6, 21.6, -5.2), (-3.0, 15.0, 1.0), (2.0, 4.0), (-5.8, 15.6, -5.4)),
-    (0.15, (9.0, 26.0, -1.8), (-5.0, 24.0, 2.0), (-10.0, 0.0), (-5.4, 17.0, -6.8)),
-    (0.20, (6.4, 22.8, -9.0), (2.0, 4.0, 0.0), (12.0, 0.0), (-6.4, 15.0, -3.0)),
-    (0.25, (0.6, 16.4, -11.2), (9.0, -22.0, -3.0), (42.0, 0.0), (-7.4, 13.6, 1.4)),
-    (0.30, (-3.2, 13.6, -8.2), (13.0, -36.0, -4.0), (45.0, -14.0), (-7.6, 13.4, 2.4)),
-    (0.40, (2.4, 12.6, -6.2), (7.0, -18.0, -2.0), (40.0, 0.0), (-7.2, 13.0, 1.2)),
-    (0.55, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
+    (0.00, MAIN_ARME, (33.0, 14.0)),
+    (0.05, (8.8, 15.8, -4.4), (20.0, 10.0)),
+    (0.10, (9.8, 21.6, -5.2), (2.0, 4.0)),
+    (0.15, (9.6, 26.4, -1.6), (-10.0, 0.0)),
+    (0.20, (7.4, 23.6, -8.4), (12.0, 0.0)),
+    (0.25, (2.2, 17.4, -8.8), (42.0, 0.0)),
+    (0.30, (1.6, 14.8, -8.0), (45.0, -14.0)),
+    (0.40, (4.6, 12.8, -5.8), (40.0, 0.0)),
+    (0.55, MAIN_ARME, (33.0, 14.0)),
 ], 0.15, 0.25, 0.30)
 
-# coup de hache (hache, masse ; 13 tics) : plus lourd. L'élan est plus long (4 tics, le buste se cambre et tourne davantage),
-# la hache tombe de plus haut, le buste plonge avec elle ; elle finit plus bas et remonte lentement. En coupant du bois,
-# Vorace n'en relance un que quand celui-ci a porté.
+# coup de hache (hache, masse ; 13 tics) : plus lourd. L'élan est plus long (4 tics), la hache monte plus haut et finit plus
+# bas, elle remonte lentement. En coupant du bois, Vorace n'en relance un que quand celui-ci a porté.
 taille_diagonale("coup_hache", 0.65, [
-    (0.00, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
-    (0.05, (8.6, 15.2, -4.2), (-1.0, 5.0, 0.0), (22.0, 10.0), (-6.4, 13.4, -2.4)),
-    (0.10, (9.4, 20.4, -6.0), (-4.0, 13.0, 1.0), (8.0, 4.0), (-6.0, 15.0, -4.6)),
-    (0.15, (9.4, 25.2, -3.6), (-8.0, 22.0, 2.0), (-6.0, 0.0), (-5.4, 16.8, -6.4)),
-    (0.20, (8.4, 27.6, -0.6), (-10.0, 28.0, 3.0), (-10.0, 0.0), (-5.2, 17.4, -7.0)),
-    (0.25, (6.6, 24.0, -8.8), (0.0, 8.0, 0.0), (10.0, 0.0), (-6.2, 15.4, -3.4)),
-    (0.30, (1.2, 15.4, -11.2), (13.0, -22.0, -4.0), (42.0, 0.0), (-7.4, 13.4, 1.6)),
-    (0.35, (-2.6, 11.8, -7.8), (17.0, -36.0, -5.0), (45.0, -14.0), (-7.6, 13.0, 2.6)),
-    (0.45, (2.2, 11.8, -6.4), (11.0, -20.0, -3.0), (42.0, 0.0), (-7.2, 12.8, 1.4)),
-    (0.65, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
+    (0.00, MAIN_ARME, (33.0, 14.0)),
+    (0.05, (8.6, 15.2, -4.2), (22.0, 10.0)),
+    (0.10, (9.6, 20.4, -6.0), (8.0, 4.0)),
+    (0.15, (10.0, 25.4, -3.4), (-6.0, 0.0)),
+    (0.20, (9.6, 28.0, -0.4), (-10.0, 0.0)),
+    (0.25, (7.6, 24.8, -8.0), (10.0, 0.0)),
+    (0.30, (2.4, 16.6, -9.0), (42.0, 0.0)),
+    (0.35, (1.8, 13.4, -7.8), (45.0, -14.0)),
+    (0.45, (4.6, 12.2, -5.8), (42.0, 0.0)),
+    (0.65, MAIN_ARME, (33.0, 14.0)),
 ], 0.20, 0.30, 0.35)
 
-# coup de poing (main vide ; 9 tics) : un direct. Le poing se ramène contre les côtes, l'épaule recule (2 tics), puis
-# part droit devant à hauteur de poitrine, le buste tourne avec lui et l'autre main monte en garde ; il revient aussitôt.
-# (temps, poing, rotation du buste (x, y), autre main)
+# coup de poing (main vide ; 9 tics) : un direct. Le poing se ramène contre les côtes (2 tics), part droit devant à hauteur
+# de poitrine, bras tendu, et revient aussitôt. Seul ce bras bouge.
 DIRECT = [
-    (0.00, (6.4, 12.6, -1.0), (0.0, 0.0), (-6.4, 12.6, -1.0)),
-    (0.05, (7.0, 16.8, -2.0), (-1.0, 9.0), (-5.8, 15.4, -3.8)),
-    (0.10, (6.8, 19.4, -4.4), (-1.0, 13.0), (-5.0, 18.0, -5.6)),
-    (0.15, (5.6, 20.9, -9.4), (2.0, -4.0), (-4.8, 18.8, -5.8)),
-    (0.20, (4.6, 21.4, -13.8), (4.0, -18.0), (-4.6, 19.2, -5.8)),
-    (0.25, (4.8, 21.0, -12.2), (4.0, -15.0), (-4.6, 19.0, -5.8)),
-    (0.30, (5.4, 20.2, -9.6), (3.0, -9.0), (-5.0, 17.6, -5.2)),
-    (0.35, (6.2, 17.6, -6.0), (1.0, -4.0), (-5.8, 15.0, -3.4)),
-    (0.45, (6.4, 12.6, -1.0), (0.0, 0.0), (-6.4, 12.6, -1.0)),
+    (0.00, (6.4, 12.6, -1.0)),
+    (0.05, (7.0, 16.8, -2.0)),
+    (0.10, (6.8, 19.4, -3.6)),
+    (0.15, (6.0, 20.8, -7.6)),
+    (0.20, (5.4, 21.4, -10.6)),
+    (0.25, (5.4, 21.2, -9.8)),
+    (0.30, (6.0, 20.2, -7.0)),
+    (0.35, (6.4, 17.6, -4.0)),
+    (0.45, (6.4, 12.6, -1.0)),
 ]
-
-
-def direct(t):
-    main = courbe([(a, m) for a, m, _, _ in DIRECT], t)
-    bx, by = courbe([(a, b) for a, _, b, _ in DIRECT], t)
-    autre = courbe([(a, g) for a, _, _, g in DIRECT], t)
-    return {"buste": (bx, by, 0), "droit": (main, (0.5, -1, 0.6)), "gauche": (autre, (-0.5, -1, 0.5))}
-
-
-deux("coup_poing", 0.45, "once", geste(0.45, direct, "once"))
+deux("coup_poing", 0.45, "once", geste(0.45, lambda t: {"droit": (courbe(DIRECT, t), (0.5, -1, 0.6))}, "once"))
 
 # manger : la main à la bouche, de petits va-et-vient (une bouchée tous les 4 tics dans le jeu) ; la tête pique un peu
 T = 0.4

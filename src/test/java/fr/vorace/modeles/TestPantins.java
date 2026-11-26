@@ -134,6 +134,15 @@ public final class TestPantins {
         }
         verifier(teteOk, "marque : la tête (et ce qu'elle porte), pas le tronc ni les membres");
 
+        // images presque identiques : pas renvoyées (0,1° et un centième de pixel) ; un vrai mouvement l'est (1°, ou un pixel)
+        org.joml.Vector3f v0 = new org.joml.Vector3f(0.5f, 1f, 0.25f);
+        org.joml.Quaternionf q0 = new org.joml.Quaternionf().rotateXYZ(0.4f, 1.2f, -0.3f);
+        org.joml.Quaternionf q1 = new org.joml.Quaternionf(q0).rotateX((float) Math.toRadians(0.1)), q2 = new org.joml.Quaternionf(q0).rotateX((float) Math.toRadians(1));
+        verifier(Animateur.memeImage(v0, q0, new org.joml.Vector3f(v0).add(0.0006f, 0, 0), q1)
+                && Animateur.memeImage(v0, q0, v0, new org.joml.Quaternionf(-q0.x, -q0.y, -q0.z, -q0.w))
+                && !Animateur.memeImage(v0, q0, v0, q2) && !Animateur.memeImage(v0, q0, new org.joml.Vector3f(v0).add(0.0625f, 0, 0), q0),
+            "économie d'images : un écart invisible n'est pas renvoyé, un vrai mouvement l'est");
+
         // tête du pantin : l'os « peau_tete » suit le regard (il n'était pas reconnu : la tête ne tournait jamais)
         boolean[] tetes = Animateur.tetes(j);
         int nTetes = 0, osTete = -1;
