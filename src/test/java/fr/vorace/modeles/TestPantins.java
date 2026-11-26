@@ -122,8 +122,8 @@ public final class TestPantins {
         boolean brasOk = true, autresOk = true;
         for (int k = 0; k < j.parties().size(); k++) {
             String n = String.valueOf(j.parties().get(k).nom()).toLowerCase(java.util.Locale.ROOT);
-            boolean b = MarqueSoi.bras(j, k);
-            if (n.contains("bras") || n.startsWith("poing")) brasOk &= b; else autresOk &= !b;
+            boolean estBras = MarqueSoi.bras(j, k);
+            if (n.contains("bras") || n.startsWith("poing")) brasOk &= estBras; else autresOk &= !estBras;
         }
         verifier(brasOk && autresOk, "marque : bras, avant-bras et poings, rien d'autre (tête, tronc, jambes)");
         verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
