@@ -113,6 +113,14 @@ pantin:
   # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
   # lui sans avoir les épaules dans la caméra. Les autres voient le pantin à sa vraie place. 0 : pas de recul.
   recul-pour-soi: 4
+  # Taille du pantin des joueurs. Le jeu dessine ses joueurs à 0,9375 (1,875 bloc de haut) : à 1, le pantin fait 2 blocs et
+  # son crâne entre dans le plafond d'un couloir de 2 blocs.
+  taille: 0.9375
+  # La tête tourne d'abord, le corps suit (comme dans le jeu) : part de l'écart au regard que le corps rattrape à chaque tic
+  # (0.3 : rejoint en un quart de seconde ; 1 : corps toujours face au regard, sans retard) et écart maximal entre la tête
+  # et le corps, en degrés. Pendant une compétence, le corps est face au regard tout de suite.
+  corps-suit-regard: 0.3
+  tete-max: 50
   # Ultimes : le joueur voit la scène comme un film (caméra qui tourne autour de lui, recule pour montrer le phénix, le
   # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
   # ces quelques secondes, comme les plugins de cinématiques ; seulement pour les animations qui ont un os « camera ».

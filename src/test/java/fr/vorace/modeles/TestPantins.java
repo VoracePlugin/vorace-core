@@ -126,6 +126,16 @@ public final class TestPantins {
             if (n.contains("bras") || n.startsWith("poing")) brasOk &= estBras; else autresOk &= !estBras;
         }
         verifier(brasOk && autresOk, "marque : bras, avant-bras et poings, rien d'autre (tête, tronc, jambes)");
+
+        // tête du pantin : l'os « peau_tete » suit le regard (il n'était pas reconnu : la tête ne tournait jamais)
+        boolean[] tetes = Animateur.tetes(j);
+        int nTetes = 0, osTete = -1;
+        for (int k = 0; k < tetes.length; k++) if (tetes[k]) { nTetes++; osTete = k; }
+        verifier(nTetes == 1 && "peau_tete".equals(j.parties().get(osTete).nom()), "tête : un seul os suit le regard, « peau_tete »");
+        Animateur.Pose[] droit = Animateur.posesCompletes(j, java.util.List.of(), 0f, 1f, 0f, 0f), tourne = Animateur.posesCompletes(j, java.util.List.of(), 0f, 1f, 40f, 30f);
+        boolean seule = !droit[osTete].rotation().equals(tourne[osTete].rotation(), 1e-4f);
+        for (int k = 0; k < droit.length; k++) if (k != osTete && droit[k] != null && !droit[k].rotation().equals(tourne[k].rotation(), 1e-4f)) seule = false;
+        verifier(seule, "tête : le regard tourne la tête et rien d'autre");
         verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
             "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
 

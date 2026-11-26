@@ -29,9 +29,14 @@ public record ModeleBB(String id, List<Partie> parties, List<Texture> textures, 
     public record Partie(String nom, String uuid, int parent, double[] pivot, double[] rotation, List<Cube> cubes, double echelle) {
         public boolean visible() { return !cubes.isEmpty(); }
 
-        /** Os de tête (convention de ModelEngine : nom commençant par « h_ », ou « head », « tete ») : suit le regard du mob. */
+        /**
+         * Os de tête (convention de ModelEngine : nom commençant par « h_ », ou « head », « tete ») : suit le regard du mob.
+         * Celui du pantin des joueurs aussi (« peau_tete » : le préfixe « peau_ » ne compte pas ; jusqu'à la 1.6.0 il n'était
+         * pas reconnu et la tête du pantin ne suivait jamais le regard).
+         */
         public boolean tete() {
             String n = nom == null ? "" : nom.toLowerCase(java.util.Locale.ROOT);
+            if (n.startsWith("peau_")) n = n.substring(5);
             return n.startsWith("h_") || n.equals("head") || n.equals("tete") || n.equals("tête");
         }
 

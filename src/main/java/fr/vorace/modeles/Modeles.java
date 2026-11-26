@@ -91,6 +91,10 @@ public final class Modeles {
      * voient le pantin à sa vraie place. 0 : pas de copie.
      */
     private float pantinRecul = 4f;
+    /** Taille du pantin d'un joueur : le jeu dessine ses joueurs à 0,9375 (30 pixels de haut, 1,875 bloc), pas à 1 (2 blocs). */
+    private float pantinTaille = 0.9375f;
+    /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic (1 : toujours face au regard), et écart maximal tête-corps. */
+    private float pantinCorpsSuit = 0.3f, pantinTeteMax = 50f;
     /**
      * Essai : la copie pour soi tourne avec la caméra du joueur, à chaque image, sans attendre le serveur (affichages en
      * « billboard » vertical) ; plus de retard du corps quand on tourne vite. Le serveur envoie alors ses poses sans
@@ -411,6 +415,7 @@ public final class Modeles {
         }
         Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
         i.pantin = true;
+        i.taille = pantinTaille;
         i.permanent = true;
         i.proprietaire = joueur.getUniqueId();
         habiller(i, m, peaux, armure);
@@ -512,6 +517,7 @@ public final class Modeles {
         Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
         if (i.trouver(animation) == null) return false;
         i.pantin = true;
+        i.taille = pantinTaille;
         i.proprietaire = joueur.getUniqueId();
         i.fin = fin;
         habiller(i, m, peaux, armure);
@@ -532,6 +538,7 @@ public final class Modeles {
         if (ancien != null) ancien.supprimerParties();
         mob.setInvisible(true);
         Instance i = new Instance(m, mob, true, mob.getLocation().getYaw());
+        i.taille = pantinTaille;   // double d'un joueur : à sa taille
         habiller(i, m, peaux, armure);
         instances.put(mob.getUniqueId(), i);
         i.reconstruire();
@@ -737,6 +744,9 @@ public final class Modeles {
             sortieTics = (int) Math.round(Math.max(0, Math.min(1, plugin.getConfig().getDouble("pantin.retour-secondes", 0.25))) * 20);
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
+            pantinTaille = (float) Math.max(0.25, Math.min(4, plugin.getConfig().getDouble("pantin.taille", 0.9375)));
+            pantinCorpsSuit = (float) Math.max(0.05, Math.min(1, plugin.getConfig().getDouble("pantin.corps-suit-regard", 0.3)));
+            pantinTeteMax = (float) Math.max(0, Math.min(75, plugin.getConfig().getDouble("pantin.tete-max", 50)));
             billboardSoi = plugin.getConfig().getBoolean("pantin.soi-tourne-avec-la-camera", false);
             billboardYaw = (float) plugin.getConfig().getDouble("pantin.soi-tourne-avec-la-camera-decalage", 0);
             cameraCinema = plugin.getConfig().getBoolean("pantin.camera-ultimes", true);
@@ -1310,6 +1320,37 @@ public final class Modeles {
         /** Pantin monté par paquets : place de ses morceaux sur le serveur (ils ne suivent le joueur que de loin en loin). */
         private Location posMorceaux;
 
+        /** Lacet du corps du pantin d'un joueur (voir corpsJoueur) ; NaN avant le premier tic. */
+        private float corpsLisse = Float.NaN;
+
+        /** Une animation demandée (compétence) ou un geste (coup de bras, visée, bouclier) est en cours. */
+        private boolean animationOuGeste() {
+            return forcee != null;
+        }
+
+        /** Mouvements où le corps entier est tourné par l'animation : il reste dans l'axe du regard. */
+        private boolean corpsAligne() {
+            return animationOuGeste() || "nage".equals(auto) || "vol".equals(auto) || "dormir".equals(auto) || "echelle".equals(auto);
+        }
+
+        /**
+         * Lacet du corps du pantin d'un joueur, appelé une fois par tic. Comme dans le jeu, la tête tourne d'abord et le corps
+         * suit : il rattrape à chaque tic une part de son écart au regard (pantin.corps-suit-regard) et la tête ne s'en
+         * écarte jamais de plus de pantin.tete-max degrés. Contrairement au jeu, il finit toujours face au regard, même à
+         * l'arrêt. Pendant une compétence, il est face au regard tout de suite (ses effets partent dans l'axe du pantin) ;
+         * pendant un geste (les bras visent où regarde le joueur) et dans les mouvements où l'animation tourne le corps
+         * entier, il s'aligne en deux ou trois tics.
+         */
+        private float corpsJoueur(float regard) {
+            if (Float.isNaN(corpsLisse) || pantinCorpsSuit >= 1f || animationDemandee()) return corpsLisse = enDegres(regard);
+            float ecart = enDegres(regard - corpsLisse);
+            corpsLisse += ecart * (corpsAligne() ? Math.max(pantinCorpsSuit, 0.6f) : pantinCorpsSuit);
+            ecart = enDegres(regard - corpsLisse);
+            if (Math.abs(ecart) > pantinTeteMax) corpsLisse += ecart - Math.signum(ecart) * pantinTeteMax;
+            if (Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
+            return corpsLisse = enDegres(corpsLisse);
+        }
+
         /** Monte les morceaux sur le joueur : chez les clients seulement (Montures), à défaut pour de vrai. */
         private void monter() {
             posMorceaux = null;
@@ -1814,10 +1855,9 @@ public final class Modeles {
             float teteYaw = 0, tetePitch = 0;
             if (mob && !mort) {
                 LivingEntity le = (LivingEntity) base;
-                // pantin : le corps regarde où regarde le joueur (pas le corps du jeu, qui tourne en retard)
-                // pantin d'un joueur (permanent compris) : il fait toujours face au regard, sans retard (le corps « en retard
-                // sur le regard » du jeu ne suivait pas assez : essai du 26 nov.)
-                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? l.getYaw() : corps(le);
+                // pantin d'un joueur : la tête regarde où il regarde, le corps la rattrape (corpsJoueur). Pas le corps du jeu :
+                // à l'arrêt, il reste jusqu'à 50° de travers sans jamais rejoindre le regard (essai du 26 nov.)
+                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw()) : corps(le);
                 boolean memeMonde = derniere != null && derniere.getWorld().equals(l.getWorld());
                 double dx = !memeMonde ? 0 : l.getX() - derniere.getX(), dz = !memeMonde ? 0 : l.getZ() - derniere.getZ();
                 double dy = !memeMonde ? 0 : l.getY() - derniere.getY();
@@ -1832,9 +1872,15 @@ public final class Modeles {
                 String nom = a == null ? null : a.nom();
                 if (nom != null && !nom.equals(auto)) { auto = nom; debutAuto = tic; }
                 if (nom == null) auto = null;
-                if (suiviTete && Float.isNaN(regardYaw)) {
+                // pantin d'un joueur pendant une compétence ou couché : la tête reste à l'animation
+                boolean teteFigee = pantin && le instanceof Player && (animationDemandee() || "dormir".equals(auto));
+                if (suiviTete && Float.isNaN(regardYaw) && !teteFigee) {
                     teteYaw = limiter(enDegres(tete(le) - yaw), 75);
-                    tetePitch = limiter(l.getPitch(), 45);
+                    // pantin d'un joueur debout : la tête se penche autant que dans le jeu (pas à la nage, en vol ou couché :
+                    // le corps est déjà penché par l'animation)
+                    boolean libre = pantin && le instanceof Player && !animationDemandee()
+                        && !"nage".equals(auto) && !"vol".equals(auto) && !"dormir".equals(auto);
+                    tetePitch = limiter(l.getPitch(), libre ? 90 : 45);
                 }
             } else if (auto == null && forcee == null) {
                 Animation a = trouver("repos");
