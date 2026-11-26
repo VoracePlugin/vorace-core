@@ -101,6 +101,8 @@ public final class Modeles {
     private float pantinTaille = 0.9375f;
     /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic en marche (1 : toujours face au regard), et écart maximal tête-corps. */
     private float pantinCorpsSuit = 0.3f, pantinTeteMax = 50f;
+    /** En marche, le corps se tourne vers là où il va (comme le jeu) ; faux : vers là où il regarde. */
+    private boolean pantinCorpsVersMouvement = true;
     /**
      * Essai : la copie pour soi tourne avec la caméra du joueur, à chaque image, sans attendre le serveur (affichages en
      * « billboard » vertical) ; plus de retard du corps quand on tourne vite. Le serveur envoie alors ses poses sans
@@ -814,6 +816,7 @@ public final class Modeles {
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
             pantinReculBas = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-regard-bas", 5)));
+            pantinCorpsVersMouvement = plugin.getConfig().getBoolean("pantin.corps-vers-le-mouvement", true);
             pantinTaille = (float) Math.max(0.25, Math.min(4, plugin.getConfig().getDouble("pantin.taille", 0.9375)));
             pantinCorpsSuit = (float) Math.max(0.05, Math.min(1, plugin.getConfig().getDouble("pantin.corps-suit-regard", 0.3)));
             pantinTeteMax = (float) Math.max(0, Math.min(75, plugin.getConfig().getDouble("pantin.tete-max", 50)));
@@ -1575,14 +1578,25 @@ public final class Modeles {
          * visée : les bras visent où regarde le joueur, comme le jeu aligne le corps sur un coup) et dans les mouvements où
          * l'animation tourne le corps entier, il s'aligne en deux ou trois tics.
          */
-        private float corpsJoueur(float regard, boolean marche) {
+        private float corpsJoueur(float regard, boolean marche, double dx, double dz) {
             if (Float.isNaN(corpsLisse) || pantinCorpsSuit >= 1f || animationDemandee()) return corpsLisse = enDegres(regard);
             float ecart = enDegres(regard - corpsLisse);
-            if (corpsAligne()) corpsLisse += ecart * Math.max(pantinCorpsSuit, 0.6f);
-            else if (marche) corpsLisse += ecart * pantinCorpsSuit;
+            if (corpsAligne()) {
+                corpsLisse += ecart * Math.max(pantinCorpsSuit, 0.6f);
+            } else if (marche) {
+                // Comme le jeu (LivingEntity.tick) : le corps se tourne vers là où il VA, pas vers là où il regarde. En
+                // avançant de biais sans tourner la tête, le corps part de biais et la tête continue de regarder devant.
+                // À plus de 95° du regard, il marche à reculons : le corps tourne le dos au déplacement.
+                float cible = regard;
+                if (pantinCorpsVersMouvement && dx * dx + dz * dz > 0.03 * 0.03) {
+                    cible = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
+                    if (Math.abs(enDegres(regard - cible)) > 95f) cible -= 180f;
+                }
+                corpsLisse += enDegres(cible - corpsLisse) * pantinCorpsSuit;
+            }
             ecart = enDegres(regard - corpsLisse);
             if (Math.abs(ecart) > pantinTeteMax) corpsLisse += ecart - Math.signum(ecart) * pantinTeteMax;
-            if ((marche || corpsAligne()) && Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
+            if (corpsAligne() && Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
             return corpsLisse = enDegres(corpsLisse);
         }
 
@@ -2069,7 +2083,9 @@ public final class Modeles {
             else if (p.getPose() == org.bukkit.entity.Pose.SWIMMING) { c.add("ramper"); c.add("nage"); }   // sous un bloc, hors de l'eau
             else if (p.isClimbing() && !sol) c.add("echelle");
             else if (!sol && !p.isFlying()) c.add(dy < -0.25 ? "chute" : "saut");
-            double r = Math.toRadians(l.getYaw());
+            // sens du déplacement par rapport au CORPS (il s'est tourné vers là où il va, voir corpsJoueur) : en avançant
+            // de biais, il marche droit devant lui ; le pas de côté ne sert plus qu'au tout début d'un déplacement latéral
+            double r = Math.toRadians(pantinCorpsVersMouvement ? yaw : l.getYaw());
             double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
             // vol en créatif : il plane (penché quand il avance) au lieu de courir dans le vide ; un modèle sans ces
             // mouvements garde ceux d'avant
@@ -2080,7 +2096,7 @@ public final class Modeles {
             if (p.isSneaking()) c.add(v > 0.01 ? "accroupi_marche" : "accroupi");
             if (v > 0.01) {
                 if (avant < -0.5 * v) c.add("recul");
-                else if (Math.abs(cote) > 0.75 * v) c.add(cote > 0 ? "pas_droite" : "pas_gauche");
+                else if (Math.abs(cote) > (pantinCorpsVersMouvement ? 0.9 : 0.75) * v) c.add(cote > 0 ? "pas_droite" : "pas_gauche");
                 if (p.isSprinting() || v > 0.24) c.add("course");
                 c.add("marche");
             }
@@ -2113,7 +2129,7 @@ public final class Modeles {
                 double dy = !memeMonde ? 0 : l.getY() - derniere.getY();
                 double vitesse = Math.sqrt(dx * dx + dz * dz);
                 // pantin d'un joueur : la tête regarde où il regarde ; le corps suit comme dans le jeu (corpsJoueur)
-                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw(), vitesse > 0.01) : corps(le);
+                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw(), vitesse > 0.01, dx, dz) : corps(le);
                 if (pantin && le instanceof Player pj && ancre == null && pj.isSleeping()) yaw = corpsLisse = sensDuLit(pj, yaw);
                 vitesseAuto = vitesse;
                 monteeAuto = Math.abs(dy);
@@ -2361,8 +2377,10 @@ public final class Modeles {
             }
             reculBas += (bas - reculBas) * 0.5f;
             if (Math.abs(bas - reculBas) < 0.01f) reculBas = bas;
+            // (pantin permanent : dans l'axe du regard, pas du corps, qui peut être tourné de 50° vers là où il va)
+            float axeRecul = permanent && base instanceof Player && ancre == null && !animationDemandee() ? base.getLocation().getYaw() : yaw;
             Vector3f recul = partiesSoi.length == 0 ? new Vector3f()
-                : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw))).transform(
+                : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(axeRecul))).transform(
                     new Vector3f(0, 0, (pantinRecul + pantinReculBas * reculBas) / 16f * taille));
             for (int k = 0; k < parties.length; k++) {
                 ItemDisplay d = parties[k];
@@ -2648,10 +2666,11 @@ public final class Modeles {
         // pantin_mouvements.bbmodel de la 1.6.0 (24 animations) : remplacé par celui de la 1.7.0 s'il n'a pas été retouché.
         // À chaque nouvelle version de ce fichier, ajouter ici l'empreinte SHA-256 de la précédente.
         "e942599e1e7f3ce3f132d71de326028660feeb941780f9acfcae77e08476ba2a",
-        // ceux de la 1.7.0 (45 animations), de la 1.7.1 (47) et de la 1.7.2 (49)
+        // ceux de la 1.7.0 (45 animations), de la 1.7.1 (47), de la 1.7.2 (49) et de la 1.7.3 (60)
         "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e",
         "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d",
-        "3f7bfc697804da0ee20676b502b437b4667572d0fb0c4008f345d6e29ccc09bc");
+        "3f7bfc697804da0ee20676b502b437b4667572d0fb0c4008f345d6e29ccc09bc",
+        "d00bf14f9069d615b22a4665c0184a596221c74a7819219a242ead8ca6be40cd");
 
     static String empreinte(byte[] octets) {
         try {

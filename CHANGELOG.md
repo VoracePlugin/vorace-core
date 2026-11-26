@@ -1,5 +1,30 @@
 # Journal des changements
 
+## 1.7.4 (novembre 2026) : tailles en diagonale, corps tourné vers là où il va, course et saut de combattant
+
+Retours d'Antoine en jeu : « quand je cours en F1, je vois trop les bras » ; « le saut, c'est pas un saut normal : toute
+l'animation doit être réaliste, mais stylée, un mec qui sait se battre » ; « pour les coups, regarde les compétences et fais
+un coup en diagonale, d'en haut vers le bas, de droite à gauche » ; « quand tu avances et que tu vas vers la droite en même
+temps sans bouger ton regard, ça fait un truc bizarre : le corps doit se décaler vers là où tu vas, la tête reste à regarder
+au même endroit ».
+
+- **Le corps se tourne vers là où il va**, comme le jeu (mesuré dans LivingEntity.tick de Minecraft 1.21.4) : en marche, il
+  rejoint la direction du déplacement (30 % de l'écart par tic), sans s'écarter de plus de 50° du regard ; à plus de 95° du
+  regard, il marche à reculons. En avançant de biais sans tourner la tête, le corps part de biais et marche droit devant
+  lui, la tête regarde toujours devant. Pendant un coup ou une visée, il revient face au regard. Le mouvement joué (marche,
+  recul, pas de côté) est choisi par rapport au corps. `pantin.corps-vers-le-mouvement: false` pour l'ancien réglage.
+- **Tailles en diagonale** (`coup_arme`, `coup_hache`), sur le modèle de celles des compétences (Lame du vent, Taille
+  croisée) : d'en haut à droite vers le bas à gauche. L'arme monte au-dessus de l'épaule, à l'extérieur, le buste se tourne
+  (24°) ; il revient (jusqu'à -36°) et plonge, la lame traverse devant lui et finit basse devant l'autre hanche. Le coude
+  plie dans le plan de la taille : la lame tranche sur son fil.
+- **Course** : les bras restent bas et tirés vers l'arrière, un peu écartés (ils balancent de 23° devant à 37° derrière), le
+  buste en avant. À la première personne, les mains restent à 60° sous le regard, hors du champ.
+- **Saut** : un bond d'athlète (un genou haut, l'autre jambe repliée dessous, le buste en avant, les coudes tirés en
+  arrière) au lieu des bras ouverts. **Chute** : maîtrisée, genoux pliés prêts à amortir, bras à peine ouverts au lieu
+  d'être levés en croix.
+- Le recul de sa copie à la première personne suit l'axe du regard (le corps peut maintenant être tourné de 50°).
+- Le `pantin_mouvements.bbmodel` de la 1.7.3 est remplacé tout seul s'il n'a pas été retouché.
+
 ## 1.7.3 (novembre 2026) : arme portée sur le côté, un vrai coup par arme, tête et épaules à la première personne
 
 Retours d'Antoine en jeu : « quand on marche, il faudrait que l'épée soit pas aussi devant nous, elle devrait être sur le

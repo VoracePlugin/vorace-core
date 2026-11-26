@@ -287,7 +287,7 @@ A.append(animation("repos", T, "loop", {
 }))
 
 
-def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vrille, vol=0.0, biais=0.0, ecart=3.0, roulis=0.0):
+def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vrille, vol=0.0, biais=0.0, ecart=3.0, roulis=0.0, bras_biais=0.0):
     """
     Cycle de marche ou de course vers l'avant. Jambes en opposition (hanche = biais ∓ amp · cos φ, comme le cos du jeu), le
     genou se plie quand la jambe revient vers l'avant ; bras opposés aux jambes, coude plus plié quand le bras est devant ;
@@ -304,8 +304,9 @@ def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vri
         "jambe_gauche_haut": {"rotation": ech(T, lambda t: (hg(t), 0, 0))},
         "jambe_droite_bas": {"rotation": ech(T, lambda t: (kd(t), 0, 0))},
         "jambe_gauche_bas": {"rotation": ech(T, lambda t: (kg(t), 0, 0))},
-        "bras_droit_haut": {"rotation": ech(T, lambda t: (bras_amp * math.cos(PHI(t, T)) - penche * 0.5, 0, ecart))},
-        "bras_gauche_haut": {"rotation": ech(T, lambda t: (-bras_amp * math.cos(PHI(t, T)) - penche * 0.5, 0, -ecart))},
+        # (bras_biais : les bras balancent autour d'un point reculé, ils ne montent pas devant)
+        "bras_droit_haut": {"rotation": ech(T, lambda t: (bras_biais + bras_amp * math.cos(PHI(t, T)) - penche * 0.5, 0, ecart))},
+        "bras_gauche_haut": {"rotation": ech(T, lambda t: (bras_biais - bras_amp * math.cos(PHI(t, T)) - penche * 0.5, 0, -ecart))},
         # l'avant-bras suit le bras avec un peu de retard (0,5 rad) : le coude se plie quand le bras arrive devant
         "bras_droit_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 - math.cos(PHI(t, T) - 0.5)) / 2, 0, 0))},
         "bras_gauche_bas": {"rotation": ech(T, lambda t: (-coude0 - coude1 * (1 + math.cos(PHI(t, T) - 0.5)) / 2, 0, 0))},
@@ -319,10 +320,11 @@ def pas(nom, T, amp, genou0, genou1, bras_amp, coude0, coude1, penche, tete, vri
 # marche : le jeu balance les jambes de ±69° à 4,3 blocs par seconde (cos · 1,4 · 0,86) sans plier le genou ; avec un genou,
 # ±40° couvrent presque la même foulée. Un cycle en 0,5 s à cette vitesse (Vorace règle la cadence sur la vitesse réelle).
 pas("marche", 0.5, 40, 8, 52, 30, 14, 22, 4, -4, 11, roulis=1.5)
-# course : 5,6 blocs par seconde, ±80° dans le jeu ; buste penché, un temps en l'air entre deux appuis. Les bras restent
-# longs, comme ceux du jeu (Mo' Bends : avant-bras plié de 10 à 45°) : des coudes pliés à 90° qui pompent font monter les
-# deux mains dans le champ à la première personne, et le buste ne tourne que de ±15° (les mains ne balaient pas le corps).
-pas("course", 0.42, 50, 14, 88, 40, 20, 26, 14, -12, 10, vol=1.6, biais=-8, ecart=4.0, roulis=3)
+# course : 5,6 blocs par seconde, ±80° dans le jeu ; buste penché, un temps en l'air entre deux appuis. La course de quelqu'un
+# qui sait se battre : le buste en avant (17°), les bras bas et tirés vers l'arrière, un peu écartés, qui balancent peu
+# (de 23° devant à 37° derrière) ; les mains ne montent jamais devant lui. À la première personne, elles restent à 60° sous
+# le regard, hors du champ (avec des bras qui pompent, elles y entraient à chaque foulée).
+pas("course", 0.42, 50, 14, 88, 30, 22, 22, 17, -14, 10, vol=1.6, biais=-8, ecart=7.0, roulis=3, bras_biais=15.5)
 
 # recul : la jambe part vers l'arrière, genou plié quand elle recule
 T = 0.5
@@ -404,34 +406,38 @@ ys = sol(T, hd, kd, hg, kg)
 p["racine"] = {"position": Lin((t, (0, v[1], 1.2)) for t, v in ys)}
 A.append(animation("accroupi_marche", T, "loop", p))
 
-# saut : la pose en l'air (tenue), une jambe remontée, les bras ouverts
+# saut : un bond d'athlète, pas des bras qui s'ouvrent. Un genou monte haut, l'autre jambe pousse puis se replie dessous, le
+# buste part en avant, les coudes sont pliés et tirés en arrière, les poings aux hanches (prêt à frapper en retombant).
 A.append(animation("saut", 0.2, "hold", {
-    "jambe_droite_haut": {"rotation": [(0, (-8, 0, 0)), (0.2, (-38, 0, 2))]},
-    "jambe_droite_bas": {"rotation": [(0, (14, 0, 0)), (0.2, (58, 0, 0))]},
-    "jambe_gauche_haut": {"rotation": [(0, (4, 0, 0)), (0.2, (10, 0, -2))]},
-    "jambe_gauche_bas": {"rotation": [(0, (10, 0, 0)), (0.2, (26, 0, 0))]},
-    "bras_droit_haut": {"rotation": [(0, (6, 0, 6)), (0.2, (22, 0, 20))]},
-    "bras_gauche_haut": {"rotation": [(0, (-6, 0, -6)), (0.2, (-26, 0, -18))]},
-    "bras_droit_bas": {"rotation": [(0, (-14, 0, 0)), (0.2, (-34, 0, 0))]},
-    "bras_gauche_bas": {"rotation": [(0, (-14, 0, 0)), (0.2, (-40, 0, 0))]},
-    "corps_bas": {"rotation": [(0, (2, 0, 0)), (0.2, (5, 0, 0))]},
-    "tete": {"rotation": [(0, (-2, 0, 0)), (0.2, (-5, 0, 0))]},
+    "jambe_droite_haut": {"rotation": [(0, (-10, 0, 0)), (0.1, (-36, 0, 2)), (0.2, (-52, 0, 2))]},
+    "jambe_droite_bas": {"rotation": [(0, (18, 0, 0)), (0.1, (56, 0, 0)), (0.2, (74, 0, 0))]},
+    "jambe_gauche_haut": {"rotation": [(0, (6, 0, 0)), (0.1, (16, 0, -2)), (0.2, (8, 0, -2))]},
+    "jambe_gauche_bas": {"rotation": [(0, (12, 0, 0)), (0.1, (14, 0, 0)), (0.2, (36, 0, 0))]},
+    "bras_droit_haut": {"rotation": [(0, (4, 0, 5)), (0.2, (26, 0, 12))]},
+    "bras_gauche_haut": {"rotation": [(0, (4, 0, -5)), (0.2, (18, 0, -12))]},
+    "bras_droit_bas": {"rotation": [(0, (-16, 0, 0)), (0.2, (-58, 0, 0))]},
+    "bras_gauche_bas": {"rotation": [(0, (-16, 0, 0)), (0.2, (-66, 0, 0))]},
+    "corps_bas": {"rotation": [(0, (3, 0, 0)), (0.2, (9, 0, 0))]},
+    "corps_haut": {"rotation": [(0, (0, 0, 0)), (0.2, (3, -6, 0))]},
+    "tete": {"rotation": [(0, (-2, 0, 0)), (0.2, (-10, 4, 0))]},
 }))
 
-# chute : bras levés sur les côtés, jambes écartées qui battent un peu, le corps un peu basculé vers l'avant (Mo' Bends)
-T = 0.6
+# chute : une chute maîtrisée. Le corps un peu basculé vers l'avant, les genoux pliés prêts à amortir, les bras à peine
+# ouverts et en arrière qui stabilisent (pas levés en croix) ; le tout bouge peu.
+T = 0.8
 A.append(animation("chute", T, "loop", {
-    "racine": {"rotation": (10, 0, 0)},
-    "bras_droit_haut": {"rotation": ech(T, lambda t: (-12, 0, 68 + 7 * math.sin(PHI(t, T))))},
-    "bras_gauche_haut": {"rotation": ech(T, lambda t: (-12, 0, -68 + 7 * math.sin(PHI(t, T))))},
-    "bras_droit_bas": {"rotation": ech(T, lambda t: (-26 - 6 * math.cos(PHI(t, T)), 0, 0))},
-    "bras_gauche_bas": {"rotation": ech(T, lambda t: (-26 + 6 * math.cos(PHI(t, T)), 0, 0))},
-    "jambe_droite_haut": {"rotation": ech(T, lambda t: (-14 + 9 * math.sin(PHI(t, T)), 0, 11))},
-    "jambe_gauche_haut": {"rotation": ech(T, lambda t: (-6 - 9 * math.sin(PHI(t, T)), 0, -11))},
-    "jambe_droite_bas": {"rotation": ech(T, lambda t: (30 - 10 * math.sin(PHI(t, T)), 0, 0))},
-    "jambe_gauche_bas": {"rotation": ech(T, lambda t: (22 + 10 * math.sin(PHI(t, T)), 0, 0))},
-    "corps_bas": {"rotation": (4, 0, 0)},
-    "tete": {"rotation": (-10, 0, 0)},
+    "racine": {"rotation": (7, 0, 0)},
+    "bras_droit_haut": {"rotation": ech(T, lambda t: (16 + 3 * math.sin(PHI(t, T)), 0, 26 + 4 * math.sin(PHI(t, T) - 0.7)))},
+    "bras_gauche_haut": {"rotation": ech(T, lambda t: (12 - 3 * math.sin(PHI(t, T)), 0, -26 - 4 * math.sin(PHI(t, T) - 0.7)))},
+    "bras_droit_bas": {"rotation": ech(T, lambda t: (-34 - 4 * math.cos(PHI(t, T)), 0, 0))},
+    "bras_gauche_bas": {"rotation": ech(T, lambda t: (-40 + 4 * math.cos(PHI(t, T)), 0, 0))},
+    "jambe_droite_haut": {"rotation": ech(T, lambda t: (-30 + 4 * math.sin(PHI(t, T)), 0, 5))},
+    "jambe_gauche_haut": {"rotation": ech(T, lambda t: (-12 - 4 * math.sin(PHI(t, T)), 0, -5))},
+    "jambe_droite_bas": {"rotation": ech(T, lambda t: (52 - 5 * math.sin(PHI(t, T) - 0.6), 0, 0))},
+    "jambe_gauche_bas": {"rotation": ech(T, lambda t: (34 + 5 * math.sin(PHI(t, T) - 0.6), 0, 0))},
+    "corps_bas": {"rotation": (5, 0, 0)},
+    "corps_haut": {"rotation": (2, 0, 0)},
+    "tete": {"rotation": (-12, 0, 0)},
 }))
 
 # planer (vol en créatif, sur place ou en reculant) : le corps flotte, bras un peu ouverts, une jambe pliée et l'autre
@@ -702,37 +708,76 @@ COUP_PISTES = geste(0.45, coup, "once")
 COUP_PISTES["poing_droit"] = {"rotation": ech(0.45, lambda t: (max(-10.0, min(45.0, courbe(COUP, t)[4])), 0, 0), False)}
 deux("geste_main", 0.45, "once", COUP_PISTES)
 
-# coup d'arme (épée, masse ; 11 tics) : une vraie taille de haut en bas, avec tout le haut du corps. L'arme part du côté
-# (la pose tenir_arme), monte par devant jusqu'au-dessus de l'épaule pendant que le buste se tourne et se redresse
-# (l'élan, 3 tics) ; le buste revient et plonge, le bras se tend, le poignet se casse : la lame tombe droit
-# devant sur son tranchant (2 tics), continue jusque devant la cuisse, puis l'arme retourne sur le côté. L'autre bras fait
-# contrepoids : devant pendant l'élan, ramené à la hanche pendant le coup.
-# (temps, main, rotation du buste (x, y), poignet (x, y), main de l'autre bras)
-TAILLE = [
-    (0.00, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
-    (0.05, (8.2, 15.6, -4.6), (-1.0, 5.0), (20.0, 10.0), (-6.4, 13.6, -2.6)),
-    (0.10, (8.0, 22.5, -6.0), (-4.0, 12.0), (2.0, 4.0), (-5.8, 15.6, -5.4)),
-    (0.15, (7.1, 28.4, -2.2), (-6.0, 18.0), (-10.0, 0.0), (-5.4, 17.0, -6.8)),
-    (0.20, (6.6, 24.4, -8.8), (2.0, 2.0), (12.0, 0.0), (-6.4, 15.0, -3.0)),
-    (0.25, (6.0, 15.6, -11.0), (9.0, -12.0), (42.0, 0.0), (-7.4, 13.6, 1.4)),
-    (0.30, (5.4, 12.6, -6.0), (11.0, -15.0), (45.0, 0.0), (-7.6, 13.4, 2.4)),
-    (0.40, (6.6, 12.2, -2.6), (6.0, -8.0), (40.0, 8.0), (-7.2, 13.0, 1.2)),
-    (0.55, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
-]
+# Tailles en diagonale (épée, hache), comme celles des compétences (Lame du vent, Taille croisée) : d'en haut à droite vers
+# le bas à gauche, avec tout le haut du corps. L'arme part du côté (la pose tenir_arme) et monte par devant jusqu'au-dessus
+# de l'épaule, à l'extérieur, pendant que le buste se tourne et se redresse (l'élan) ; le buste revient et plonge, le bras se
+# tend, le poignet se casse : la lame traverse devant lui et finit basse devant l'autre hanche, puis retourne sur le côté.
+# L'autre bras fait contrepoids. Le coude plie dans le plan de la taille (plan), donc la lame y reste : elle tranche sur son
+# fil, jamais à plat.
+def norm3(v):
+    n = math.sqrt(sum(c * c for c in v))
+    return tuple(c / n for c in v)
 
 
-def taille(t):
-    main = courbe([(a, m) for a, m, _, _, _ in TAILLE], t)
-    bx, by = courbe([(a, b) for a, _, b, _, _ in TAILLE], t)
-    autre = courbe([(a, g) for a, _, _, _, g in TAILLE], t)
-    # le coude plie dans le plan du bras (une charnière) : la lame reste dans ce plan, elle tombe sur son tranchant
-    return {"buste": (bx, by, 0), "droit": (main, (0.1, main[2], 22 - main[1])), "gauche": (autre, (-0.6, -0.4, 1.0))}
+def croix3(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
 
 
-TAILLE_PISTES = geste(0.55, taille, "once")
-TAILLE_PISTES["poing_droit"] = {"rotation": ech(0.55, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, _, q, _ in TAILLE], t))),
-                                                                 courbe([(a, q[1]) for a, _, _, q, _ in TAILLE], t), 0), False)}
-deux("coup_arme", 0.55, "once", TAILLE_PISTES)
+def taille_diagonale(nom, duree, cles, t_elan, t_coup, t_fin):
+    """
+    cles : (temps, main, rotation du buste (x, y, z), poignet (x, y), main de l'autre bras). t_elan : sommet de l'élan ;
+    t_coup : la lame a porté ; t_fin : fin de la traversée (ensuite le bras revient sur le côté).
+    """
+    epaule = (6.0, 22.0, 0.0)
+    main_ = lambda t: courbe([(a, m) for a, m, _, _, _ in cles], t)
+    # plan de la taille : par l'épaule, la main au sommet de l'élan et la main au moment où la lame porte
+    plan = norm3(croix3(sub(main_(t_coup), epaule), sub(main_(t_elan), epaule)))
+
+    def f(t):
+        main = main_(t)
+        bx, by, bz = courbe([(a, b) for a, _, b, _, _ in cles], t)
+        autre = courbe([(a, g) for a, _, _, _, g in cles], t)
+        # hors du coup, le bras plie d'avant en arrière (plan de l'épaule) ; il passe dans le plan de la taille pendant l'élan
+        part = entre(t, 0.0, t_elan) * (1 - entre(t, t_fin, duree))
+        n = norm3(mix((1.0, 0.0, 0.0), plan, part))
+        coude = croix3(sub(main, epaule), n)
+        return {"buste": (bx, by, bz), "droit": (main, add(coude, mul(n, 0.1))), "gauche": (autre, (-0.6, -0.4, 1.0))}
+
+    pistes = geste(duree, f, "once")
+    pistes["poing_droit"] = {"rotation": ech(duree, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, _, q, _ in cles], t))),
+                                                               courbe([(a, q[1]) for a, _, _, q, _ in cles], t), 0), False)}
+    deux(nom, duree, "once", pistes)
+
+
+# coup d'arme (épée, trident, lance ; 11 tics) : élan en 3 tics, la lame porte au 5e, traversée jusqu'au 7e
+AUTRE_REPOS = (-6.6, 12.6, -0.6)
+taille_diagonale("coup_arme", 0.55, [
+    (0.00, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
+    (0.05, (8.8, 15.8, -4.4), (-1.0, 6.0, 0.0), (20.0, 10.0), (-6.4, 13.6, -2.6)),
+    (0.10, (9.6, 21.6, -5.2), (-3.0, 15.0, 1.0), (2.0, 4.0), (-5.8, 15.6, -5.4)),
+    (0.15, (9.0, 26.0, -1.8), (-5.0, 24.0, 2.0), (-10.0, 0.0), (-5.4, 17.0, -6.8)),
+    (0.20, (6.4, 22.8, -9.0), (2.0, 4.0, 0.0), (12.0, 0.0), (-6.4, 15.0, -3.0)),
+    (0.25, (0.6, 16.4, -11.2), (9.0, -22.0, -3.0), (42.0, 0.0), (-7.4, 13.6, 1.4)),
+    (0.30, (-3.2, 13.6, -8.2), (13.0, -36.0, -4.0), (45.0, -14.0), (-7.6, 13.4, 2.4)),
+    (0.40, (2.4, 12.6, -6.2), (7.0, -18.0, -2.0), (40.0, 0.0), (-7.2, 13.0, 1.2)),
+    (0.55, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
+], 0.15, 0.25, 0.30)
+
+# coup de hache (hache, masse ; 13 tics) : plus lourd. L'élan est plus long (4 tics, le buste se cambre et tourne davantage),
+# la hache tombe de plus haut, le buste plonge avec elle ; elle finit plus bas et remonte lentement. En coupant du bois,
+# Vorace n'en relance un que quand celui-ci a porté.
+taille_diagonale("coup_hache", 0.65, [
+    (0.00, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
+    (0.05, (8.6, 15.2, -4.2), (-1.0, 5.0, 0.0), (22.0, 10.0), (-6.4, 13.4, -2.4)),
+    (0.10, (9.4, 20.4, -6.0), (-4.0, 13.0, 1.0), (8.0, 4.0), (-6.0, 15.0, -4.6)),
+    (0.15, (9.4, 25.2, -3.6), (-8.0, 22.0, 2.0), (-6.0, 0.0), (-5.4, 16.8, -6.4)),
+    (0.20, (8.4, 27.6, -0.6), (-10.0, 28.0, 3.0), (-10.0, 0.0), (-5.2, 17.4, -7.0)),
+    (0.25, (6.6, 24.0, -8.8), (0.0, 8.0, 0.0), (10.0, 0.0), (-6.2, 15.4, -3.4)),
+    (0.30, (1.2, 15.4, -11.2), (13.0, -22.0, -4.0), (42.0, 0.0), (-7.4, 13.4, 1.6)),
+    (0.35, (-2.6, 11.8, -7.8), (17.0, -36.0, -5.0), (45.0, -14.0), (-7.6, 13.0, 2.6)),
+    (0.45, (2.2, 11.8, -6.4), (11.0, -20.0, -3.0), (42.0, 0.0), (-7.2, 12.8, 1.4)),
+    (0.65, MAIN_ARME, (0.0, 0.0, 0.0), (33.0, 14.0), AUTRE_REPOS),
+], 0.20, 0.30, 0.35)
 
 # coup de poing (main vide ; 9 tics) : un direct. Le poing se ramène contre les côtes, l'épaule recule (2 tics), puis
 # part droit devant à hauteur de poitrine, le buste tourne avec lui et l'autre main monte en garde ; il revient aussitôt.
@@ -758,35 +803,6 @@ def direct(t):
 
 
 deux("coup_poing", 0.45, "once", geste(0.45, direct, "once"))
-
-# coup de hache (hache, masse ; 13 tics) : plus lourd que la taille à l'épée. L'élan est plus long (4 tics, le buste se
-# cambre et tourne davantage), la hache tombe de plus haut et le buste plonge avec elle ; elle finit basse devant la jambe
-# et remonte lentement. En coupant du bois, Vorace n'en relance un que quand celui-ci a porté.
-HACHE = [
-    (0.00, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
-    (0.05, (8.2, 15.0, -4.2), (-1.0, 5.0), (22.0, 10.0), (-6.4, 13.4, -2.4)),
-    (0.10, (8.2, 20.6, -6.2), (-4.0, 12.0), (8.0, 4.0), (-6.0, 15.0, -4.6)),
-    (0.15, (7.6, 26.4, -4.4), (-8.0, 20.0), (-6.0, 0.0), (-5.4, 16.8, -6.4)),
-    (0.20, (7.0, 29.0, -1.2), (-10.0, 24.0), (-10.0, 0.0), (-5.2, 17.4, -7.0)),
-    (0.25, (6.6, 25.0, -8.6), (0.0, 6.0), (10.0, 0.0), (-6.2, 15.4, -3.4)),
-    (0.30, (5.8, 15.0, -10.8), (13.0, -14.0), (42.0, 0.0), (-7.4, 13.4, 1.6)),
-    (0.35, (5.2, 11.6, -6.4), (16.0, -18.0), (45.0, 0.0), (-7.6, 13.0, 2.6)),
-    (0.45, (6.2, 11.8, -3.4), (10.0, -11.0), (42.0, 6.0), (-7.2, 12.8, 1.4)),
-    (0.65, MAIN_ARME, (0.0, 0.0), (33.0, 14.0), (-6.6, 12.6, -0.6)),
-]
-
-
-def hache(t):
-    main = courbe([(a, m) for a, m, _, _, _ in HACHE], t)
-    bx, by = courbe([(a, b) for a, _, b, _, _ in HACHE], t)
-    autre = courbe([(a, g) for a, _, _, _, g in HACHE], t)
-    return {"buste": (bx, by, 0), "droit": (main, (0.1, main[2], 22 - main[1])), "gauche": (autre, (-0.6, -0.4, 1.0))}
-
-
-HACHE_PISTES = geste(0.65, hache, "once")
-HACHE_PISTES["poing_droit"] = {"rotation": ech(0.65, lambda t: (max(-10.0, min(45.0, courbe([(a, q[0]) for a, _, _, q, _ in HACHE], t))),
-                                                                courbe([(a, q[1]) for a, _, _, q, _ in HACHE], t), 0), False)}
-deux("coup_hache", 0.65, "once", HACHE_PISTES)
 
 # manger : la main à la bouche, de petits va-et-vient (une bouchée tous les 4 tics dans le jeu) ; la tête pique un peu
 T = 0.4

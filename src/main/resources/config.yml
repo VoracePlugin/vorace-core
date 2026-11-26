@@ -124,6 +124,9 @@ pantin:
   # rattrapée à chaque tic (0.3 comme le jeu ; 1 : corps toujours face au regard, la tête ne tourne plus seule). Pendant
   # une compétence, le corps est face au regard tout de suite ; pendant un coup de bras ou une visée, en deux ou trois tics.
   corps-suit-regard: 0.3
+  # En marche, le corps se tourne vers là où il VA (comme le jeu) : en avançant de biais sans tourner la tête, le corps part
+  # de biais, la tête regarde toujours devant. false : le corps se tourne vers là où il regarde.
+  corps-vers-le-mouvement: true
   tete-max: 50
   # Ultimes : le joueur voit la scène comme un film (caméra qui tourne autour de lui, recule pour montrer le phénix, le
   # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
