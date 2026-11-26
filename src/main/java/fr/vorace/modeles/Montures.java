@@ -38,6 +38,8 @@ public final class Montures implements Listener {
     /** Numéro d'un morceau → numéro de son porteur. */
     private final Map<Integer, Integer> porteurDe = new ConcurrentHashMap<>();
     private final Map<Integer, UUID> joueurs = new ConcurrentHashMap<>();
+    /** Morceaux déjà annoncés comme passagers aux clients (avant : ils sont encore posés aux pieds du joueur). */
+    private final Set<Integer> annonces = ConcurrentHashMap.newKeySet();
     private boolean actif;
 
     private Constructor<?> paquetPassagers;
@@ -70,8 +72,18 @@ public final class Montures implements Listener {
         return actif;
     }
 
-    /** Ce morceau est-il monté sur un joueur chez les clients ? */
+    /** Ce morceau est-il monté sur un joueur chez les clients (passagers déjà annoncés) ? */
     public boolean monte(Entity e) {
+        return e != null && annonces.contains(e.getEntityId());
+    }
+
+    /** Morceau qui vient d'apparaître et attend d'être annoncé comme passager (le pantin le garde invisible). */
+    public boolean enAttente(Entity e) {
+        return e != null && porteurDe.containsKey(e.getEntityId()) && !annonces.contains(e.getEntityId());
+    }
+
+    /** Ce morceau est-il enregistré sur un joueur (annoncé ou pas encore) ? */
+    public boolean enregistre(Entity e) {
         return e != null && porteurDe.containsKey(e.getEntityId());
     }
 
@@ -92,6 +104,7 @@ public final class Montures implements Listener {
     public void oublier(Collection<? extends Entity> morceaux) {
         for (Entity e : morceaux) {
             if (e == null) continue;
+            annonces.remove(e.getEntityId());
             Integer p = porteurDe.remove(e.getEntityId());
             if (p == null) continue;
             Set<Integer> ids = parPorteur.get(p);
@@ -110,7 +123,10 @@ public final class Montures implements Listener {
         Set<Integer> ids = parPorteur.remove(porteur.getEntityId());
         joueurs.remove(porteur.getEntityId());
         if (ids == null) return;
-        for (Integer i : ids) porteurDe.remove(i);
+        for (Integer i : ids) {
+            porteurDe.remove(i);
+            annonces.remove(i);
+        }
         Set<Player> cibles = new HashSet<>();
         cibles.add(porteur);
         try {
@@ -137,6 +153,8 @@ public final class Montures implements Listener {
             cibles.addAll(porteur.getWorld().getPlayers());
         }
         for (Player c : cibles) annoncer(porteur, c);
+        Set<Integer> ids = parPorteur.get(porteur.getEntityId());
+        if (ids != null) annonces.addAll(ids);
     }
 
     private void annoncer(Player porteur, Player a) {

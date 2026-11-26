@@ -653,9 +653,14 @@ public final class Pantins implements Listener {
         if (!plugin.getConfig().getBoolean("pantin.objets-en-main", true)) return l;
         ItemStack droite = p.getInventory().getItemInMainHand(), gauche = p.getInventory().getItemInOffHand();
         boolean d = droite != null && !droite.getType().isAir(), g = gauche != null && !gauche.getType().isAir();
+        // pantin permanent : les deux mains ont toujours leur objet (de l'air si elles sont vides), pour que changer d'objet
+        // ne fasse que changer l'objet affiché, sans refaire tout le pantin (il disparaissait un instant)
+        boolean toujours = permanent(p);
         if (d) l.add(Map.entry(MAIN_DROITE, droite.clone()));
+        else if (toujours) l.add(Map.entry(MAIN_DROITE, new ItemStack(Material.AIR)));
         if (g) l.add(Map.entry(MAIN_GAUCHE, gauche.clone()));
         else if (d && droite.hasItemMeta() && droite.getItemMeta().getPersistentDataContainer().has(PAIRE)) l.add(Map.entry(MAIN_GAUCHE, droite.clone()));
+        else if (toujours) l.add(Map.entry(MAIN_GAUCHE, new ItemStack(Material.AIR)));
         return l;
     }
 

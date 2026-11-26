@@ -1794,7 +1794,7 @@ public final class Modeles {
                 // montées chez les clients seulement : le serveur les garde près du joueur pour qu'elles restent suivies,
                 // leurs déplacements ne sont pas envoyés (Montures)
                 List<Display> aff = affichages();
-                if (base instanceof Player pj && !aff.isEmpty() && !mo.monte(aff.get(0))) mo.monter(pj, aff);   // après une caméra
+                if (base instanceof Player pj && !aff.isEmpty() && !mo.enregistre(aff.get(0))) mo.monter(pj, aff);   // après une caméra
                 if (derniere == null || !derniere.getWorld().equals(l.getWorld()) || derniere.distanceSquared(l) > 1e-6) {
                     Location c = l.clone();
                     c.setYaw(0);
@@ -1925,6 +1925,11 @@ public final class Modeles {
             majCamera();
             Quaternionf droite = Animateur.demiTour();
             float siege = monte() ? (float) base.getHeight() : 0f;
+            // morceaux tout juste refaits, pas encore montés chez les clients (Montures) : invisibles en attendant, au lieu
+            // d'apparaître une fraction de seconde sous les pieds du joueur
+            Montures moAtt = montures();
+            List<Display> affAtt = moAtt == null ? List.of() : affichages();
+            boolean attente = monte() && moAtt != null && moAtt.actif() && !affAtt.isEmpty() && moAtt.enAttente(affAtt.get(0));
             // copie pour soi : reculée vers l'arrière du corps (l'avant du modèle regarde -z)
             Vector3f recul = partiesSoi.length == 0 ? new Vector3f()
                 : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw))).transform(new Vector3f(0, 0, pantinRecul / 16f * taille));
@@ -1940,6 +1945,7 @@ public final class Modeles {
                     // passager : le jeu le place au sommet de la boîte du joueur (1,8 debout, 1,5 accroupi) ; on redescend
                     tr = new Transformation(new Vector3f(tr.getTranslation()).sub(0, siege, 0), tr.getLeftRotation(), tr.getScale(), tr.getRightRotation());
                 }
+                if (attente) tr = new Transformation(tr.getTranslation(), tr.getLeftRotation(), new Vector3f(), tr.getRightRotation());
                 if (k < partiesSoi.length && partiesSoi[k] != null) {
                     envoyer(partiesSoi[k], repereSoi(new Transformation(new Vector3f(tr.getTranslation()).add(recul), tr.getLeftRotation(), tr.getScale(),
                         tr.getRightRotation())), envoyeesSoi, k, intervalle);
@@ -1985,6 +1991,7 @@ public final class Modeles {
                     tr.add(new Quaternionf(p.rotation()).transform(bout(a).add(0, 0, -2f).div(16f).mul(ech)));
                     rot = new Quaternionf(p.rotation()).mul(TENUE);
                 }
+                if (attente) ech = new Vector3f();
                 Transformation t = new Transformation(tr, rot, ech, droite);
                 if (a < armuresSoi.length && armuresSoi[a] != null) {
                     // pantin permanent, hors animation demandée : l'arme de sa copie disparaît (il garde celle du jeu à la
