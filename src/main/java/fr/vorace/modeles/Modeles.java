@@ -1745,15 +1745,9 @@ public final class Modeles {
             if (mob && !mort) {
                 LivingEntity le = (LivingEntity) base;
                 // pantin : le corps regarde où regarde le joueur (pas le corps du jeu, qui tourne en retard)
-                if (permanent && ancre == null && le instanceof Player) {
-                    // pantin permanent : entre deux compétences, le corps tourne comme celui du jeu (en retard sur le regard, la
-                    // tête suit) ; pendant une compétence, il fait face au regard. Le passage de l'un à l'autre est adouci.
-                    float cible = animationDemandee() ? l.getYaw() : corps(le);
-                    float ecart = enDegres(cible - yaw);
-                    yaw = Math.abs(ecart) < 1f ? cible : yaw + ecart * 0.5f;
-                } else {
-                    yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? l.getYaw() : corps(le);
-                }
+                // pantin d'un joueur (permanent compris) : il fait toujours face au regard, sans retard (le corps « en retard
+                // sur le regard » du jeu ne suivait pas assez : essai du 26 nov.)
+                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? l.getYaw() : corps(le);
                 boolean memeMonde = derniere != null && derniere.getWorld().equals(l.getWorld());
                 double dx = !memeMonde ? 0 : l.getX() - derniere.getX(), dz = !memeMonde ? 0 : l.getZ() - derniere.getZ();
                 double dy = !memeMonde ? 0 : l.getY() - derniere.getY();
