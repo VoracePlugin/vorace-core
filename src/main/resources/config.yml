@@ -156,11 +156,13 @@ pantin:
   monter-par-paquets: true
   # Pantin permanent : le joueur est remplacé tout le temps par son pantin (pas seulement pendant une compétence). Le
   # pantin joue de lui-même le repos, la marche, la course, le recul, les pas de côté, l'accroupi, le saut, la chute, la
-  # nage, l'échelle, assis, couché ; les gestes par-dessus (coup de bras, manger, viser à l'arc, bouclier...) et un
-  # sursaut aux coups reçus. Ces mouvements viennent de modeles-animes/pantin_mouvements.bbmodel (à retoucher dans
-  # Blockbench) et sont prêtés à tout modèle au même squelette (les modèles des classes) par le nom des os ; un modèle qui
-  # a sa propre « marche » garde la sienne. Les compétences se jouent sur le même pantin, qui revient ensuite à ses
-  # mouvements. Retiré en spectateur, sous une vraie potion d'invisibilité et à la mort ; remis tout seul ensuite.
+  # nage, ramper, l'échelle, assis, couché, le vol, la vrille ; les gestes par-dessus (main qui tient un objet, coup de
+  # bras, manger, boire, arc, arbalète, bouclier, trident, longue-vue, cor, brosse) et un sursaut aux coups reçus. La
+  # cadence de la marche suit la vitesse du joueur. Ces mouvements viennent de modeles-animes/pantin_mouvements.bbmodel (à
+  # retoucher dans Blockbench, ou à régénérer avec outils/mouvements-pantin.py) et sont prêtés à tout modèle au même
+  # squelette (les modèles des classes) par le nom des os ; un modèle qui a sa propre « marche » garde la sienne. Les
+  # compétences se jouent sur le même pantin, qui revient ensuite à ses mouvements. Retiré en spectateur, sous une vraie
+  # potion d'invisibilité et à la mort ; remis tout seul ensuite.
   permanent:
     actif: false
     # modèle des mouvements prêtés

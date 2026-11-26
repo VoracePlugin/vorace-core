@@ -136,6 +136,36 @@ public final class TestPantins {
         boolean seule = !droit[osTete].rotation().equals(tourne[osTete].rotation(), 1e-4f);
         for (int k = 0; k < droit.length; k++) if (k != osTete && droit[k] != null && !droit[k].rotation().equals(tourne[k].rotation(), 1e-4f)) seule = false;
         verifier(seule, "tête : le regard tourne la tête et rien d'autre");
+
+        // mouvements du pantin (outils/mouvements-pantin.py) : tous là, et les mains là où le script les pose
+        ModeleBB mv = lire("pantin_mouvements");
+        boolean tous = true;
+        for (String n : List.of("repos", "marche", "course", "recul", "pas_droite", "pas_gauche", "accroupi", "accroupi_marche", "saut", "chute",
+                "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
+                "geste_main_gauche", "manger", "boire", "viser_arc", "viser_arc_gauche", "tir_arc", "charger_arbalete", "viser_arbalete",
+                "garde_bouclier", "garde_bouclier_gauche", "viser_trident", "longue_vue", "cor", "brosse", "degat")) {
+            tous &= mv.animations().containsKey(n);
+        }
+        verifier(tous && mv.animations().get("viser_arc").boucle().equals("hold") && mv.animations().get("marche").boucle().equals("loop")
+                && mv.animations().get("geste_main").boucle().equals("once"), "mouvements du pantin : les 17 mouvements et les gestes, arc tenu (hold)");
+        int poingD = -1, poingG = -1;
+        for (int k = 0; k < mv.parties().size(); k++) {
+            if ("poing_droit".equals(mv.parties().get(k).nom())) poingD = k;
+            if ("poing_gauche".equals(mv.parties().get(k).nom())) poingG = k;
+        }
+        // arc bandé : la main de l'arc en (3,0 ; 23,4 ; -12,6) pixels, celle de la corde à la joue en (-5,0 ; 24,4 ; -2,6) ;
+        // un modèle au yaw 0 regarde vers +z : x et z changent de signe
+        List<Animateur.Couche> bande = List.of(new Animateur.Couche(mv.animations().get("viser_arc"), 1.0, 1f, true));
+        Animateur.Pose[] arc = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f);
+        verifier(arc[poingD].translation().distance(-3.0f / 16, 23.4f / 16, 12.6f / 16) < 0.01f
+                && arc[poingG].translation().distance(5.0f / 16, 24.4f / 16, 2.6f / 16) < 0.01f,
+            "arc bandé : les mains là où le script les pose (même calcul que Blockbench)");
+        // visée : regard 30° vers le bas, la main de l'arc descend ; 30° vers le haut, elle monte ; sans geste, rien ne bouge
+        Animateur.Pose[] bas = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f, 30f), haut = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f, -30f);
+        Animateur.Pose[] sans = Animateur.posesCompletes(mv, List.of(), 0f, 1f, 0f, 0f, 30f), nu = Animateur.posesCompletes(mv, List.of(), 0f, 1f, 0f, 0f);
+        verifier(bas[poingD].translation().y < arc[poingD].translation().y - 0.2f && haut[poingD].translation().y > arc[poingD].translation().y + 0.2f
+                && sans[poingD].translation().distance(nu[poingD].translation()) < 1e-5f,
+            "visée : les bras du geste suivent le regard vers le haut et le bas");
         verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
             "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
 

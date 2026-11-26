@@ -560,26 +560,66 @@ public final class Pantins implements Listener {
     /** Main levée (manger, boire, arc, arbalète, bouclier, trident) : le geste en boucle par-dessus les mouvements. */
     private void gesteEnBoucle(Player p, Modeles m) {
         String voulu = null;
+        boolean gauche = false;
+        ItemStack droite = p.getInventory().getItemInMainHand(), autre = p.getInventory().getItemInOffHand();
         if (p.isHandRaised()) {
             ItemStack o = p.getActiveItem();
             Material t = o == null ? Material.AIR : o.getType();
-            if (t.isEdible() || t == Material.POTION || t == Material.MILK_BUCKET || t == Material.HONEY_BOTTLE) voulu = "manger";
+            gauche = p.getActiveItemHand() == EquipmentSlot.OFF_HAND;
+            if (t == Material.POTION || t == Material.MILK_BUCKET || t == Material.HONEY_BOTTLE || t.name().equals("OMINOUS_BOTTLE")) voulu = "boire";
+            else if (t.isEdible()) voulu = "manger";
             else if (t == Material.BOW) voulu = "viser_arc";
-            else if (t == Material.CROSSBOW) voulu = "viser_arbalete";
+            else if (t == Material.CROSSBOW) voulu = "charger_arbalete";
             else if (t == Material.SHIELD) voulu = "garde_bouclier";
             else if (t == Material.TRIDENT) voulu = "viser_trident";
             else if (t == Material.SPYGLASS) voulu = "longue_vue";
+            else if (t == Material.GOAT_HORN) voulu = "cor";
+            else if (t == Material.BRUSH) voulu = "brosse";
         }
+        if (voulu == null && (arbaleteChargee(droite) || arbaleteChargee(autre))) {
+            // arbalète chargée en main : en joue
+            voulu = "viser_arbalete";
+            gauche = !arbaleteChargee(droite);
+        }
+        // geste de fond : la main qui tient un objet (la pose « objet en main » du jeu), sous les autres gestes ; une posture
+        // de classe pose elle-même les bras
+        boolean d = droite != null && !droite.getType().isAir(), g = autre != null && !autre.getType().isAir();
+        m.gesteDeFond(p, m.aPosture(p) || !(d || g) ? null : d && g ? "tenir_deux" : d ? "tenir" : "tenir_gauche");
+        if (voulu != null && gauche) voulu += "_gauche";
         String actuel = gestes.get(p.getUniqueId());
         if (java.util.Objects.equals(voulu, actuel)) {
-            if (voulu != null) m.gesteJoueur(p, voulu, true);   // repris s'il a été coupé (coup reçu...)
+            if (voulu != null) lancerGeste(p, m, voulu);   // repris s'il a été coupé (coup reçu, coup de bras...)
             return;
         }
+        // (le tir à l'arc, joué au lâcher de la flèche, finit seul : on n'arrête que le geste qu'on avait lancé)
         if (actuel != null) m.finGesteJoueur(p, actuel);
-        if (voulu != null && m.gesteJoueur(p, voulu, true)) gestes.put(p.getUniqueId(), voulu);
+        if (voulu != null && lancerGeste(p, m, voulu)) gestes.put(p.getUniqueId(), voulu);
         else gestes.remove(p.getUniqueId());
         // l'arc de son pantin se tend ou se détend (voir mains)
-        if ("viser_arc".equals(voulu) || "viser_arc".equals(actuel)) porter(p);
+        if (commence(voulu, "viser_arc") || commence(actuel, "viser_arc")) porter(p);
+    }
+
+    private static boolean commence(String geste, String nom) {
+        return geste != null && geste.startsWith(nom);
+    }
+
+    /** Lance un geste en boucle ; celui de la main gauche (« _gauche ») retombe sur celui de droite si le modèle ne l'a pas. */
+    private static boolean lancerGeste(Player p, Modeles m, String geste) {
+        return m.gesteJoueur(p, geste, true) || (geste.endsWith("_gauche") && m.gesteJoueur(p, geste.substring(0, geste.length() - 7), true));
+    }
+
+    private static boolean arbaleteChargee(ItemStack o) {
+        return o != null && o.getType() == Material.CROSSBOW && o.getItemMeta() instanceof org.bukkit.inventory.meta.CrossbowMeta c
+            && c.hasChargedProjectiles();
+    }
+
+    /** Flèche lâchée : la main de corde part en arrière, l'arc redescend (geste « tir_arc », joué une fois). */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void tir(org.bukkit.event.entity.EntityShootBowEvent e) {
+        if (!(e.getEntity() instanceof Player p) || !permanent(p) || plugin.modeles() == null) return;
+        if (e.getBow() == null || e.getBow().getType() != Material.BOW) return;
+        Modeles m = plugin.modeles();
+        if (!(e.getHand() == EquipmentSlot.OFF_HAND && m.gesteJoueur(p, "tir_arc_gauche", false))) m.gesteJoueur(p, "tir_arc", false);
     }
 
     /** Pantin permanent : numéro d'entité du joueur → joueurs trop loin, qui voient le joueur du jeu (sans ses morceaux). */
@@ -606,6 +646,7 @@ public final class Pantins implements Listener {
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
     public void brasLeve(org.bukkit.event.player.PlayerAnimationEvent e) {
         Player p = e.getPlayer();
+        // pas pendant un geste d'utilisation (manger, viser...)
         if (!permanent(p) || plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
         boolean gauche = e instanceof io.papermc.paper.event.player.PlayerArmSwingEvent s && s.getHand() == EquipmentSlot.OFF_HAND;
         if (!(gauche && plugin.modeles().gesteJoueur(p, "geste_main_gauche", false))) plugin.modeles().gesteJoueur(p, "geste_main", false);

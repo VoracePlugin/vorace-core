@@ -1,5 +1,36 @@
 # Journal des changements
 
+## 1.7.0 (novembre 2026) : toutes les animations du pantin refaites
+
+Retour d'Antoine : « fais des animations plus réalistes que celles de Minecraft, prends en base les mods et les MMO ».
+
+- **Les mouvements du pantin sont réécrits** (`pantin_mouvements.bbmodel`, généré par `outils/mouvements-pantin.py`) : 45
+  animations au lieu de 24. Chaque mouvement part de celui du jeu (formules de Minecraft 1.21.4) et des mesures prises sur
+  Mo' Bends (buste qui tourne de ±20° en marche, bras levés sur les côtés en chute...), avec des genoux et des coudes, les
+  épaules qui tournent à l'inverse du bassin, et la racine qui descend pour que le pied d'appui touche le sol.
+  - Mouvements : repos, marche, course, recul, pas de côté, accroupi, accroupi en marche, saut, chute, nage (la brasse du
+    jeu), **ramper** (pose de nage hors de l'eau), échelle, assis, dormir, vol, **vrille** (trident avec Impulsion).
+  - Gestes, pour la main droite et la main gauche (`_gauche`) : **tenir** (la main qui tient un objet, bras levé comme dans
+    le jeu), coup de bras (armé près de l'oreille puis coup en diagonale, le buste tourne), manger, **boire**, viser à l'arc
+    (la main de corde tire jusqu'à la joue en 1 s, le buste s'ouvre, puis tient), **tir à l'arc** (au lâcher de la flèche),
+    **charger l'arbalète**, viser à l'arbalète (arbalète chargée en main), bouclier, trident, longue-vue, **cor**,
+    **brosse**, coup reçu.
+  - Les mains sont posées par cinématique inverse : le script dit où va la main (la bouche, la corde, l'œil), il trouve les
+    angles du bras. Un test vérifie que Vorace les pose au même endroit que Blockbench.
+  - Le fichier `plugins/Vorace/modeles-animes/pantin_mouvements.bbmodel` de la 1.6.0 est remplacé tout seul au démarrage
+    s'il n'a pas été retouché ; un fichier retouché est gardé (le supprimer pour recevoir le nouveau).
+- **Cadence réglée sur la vitesse du joueur**, comme le jeu : marche, course, recul, pas de côté, accroupi, échelle et
+  ramper avancent de la distance parcourue. Les pieds ne glissent plus sous une lenteur ou un bonus de vitesse, et un joueur
+  arrêté sur une échelle ne grimpe plus dans le vide. D'une allure à l'autre, le même pied reste devant.
+- **Les bras qui visent suivent le regard** vers le haut et le bas (arc, arbalète, bouclier, longue-vue, cor), comme le jeu.
+- **Le corps se penche vers le regard** à la nage, en vol et en vrille (le jeu fait pareil) ; la tête du pantin est à la place
+  du joueur dans ces mouvements (ses yeux restent dans la tête du pantin, il ne voit plus son dos à la première personne).
+- **Dormir** : le pantin est couché dans le sens du lit, la tête sur l'oreiller.
+- **Geste de fond** : la main qui tient un objet reste levée sous les autres gestes ; un coup de bras part de cette pose et y
+  revient, sans que le bras retombe. Les postures de classe (« combat ») gardent leurs propres bras.
+- **Gestes tenus** (`hold`) : l'arc bandé et l'arbalète chargée restent sur leur dernière pose au lieu de rejouer. Un geste
+  court (coup de bras) entre et sort en 2 tics : avec le fondu de 4 tics, il n'atteignait jamais sa pleine amplitude.
+
 ## 1.6.0 (novembre 2026) : pantin permanent, corps fantôme, armures en volume
 
 - **Pantin permanent** (`pantin.permanent.actif`, ou `/vorace pantin permanent on`) : le joueur est remplacé tout le temps
