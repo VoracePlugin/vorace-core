@@ -298,7 +298,7 @@ public final class PeauUV {
         BufferedImage s = Peau.format64(skin);
         int[] c = new int[pixelsBrasTenu(fin)];
         int i = 0;
-        for (Face f : facesBrasTenu(fin)) for (int ty = 0; ty < f.h(); ty++) for (int tx = 0; tx < f.l(); tx++) c[i++] = pixel(s, f.x0() + tx, f.y0() + ty) & 0xFFFFFF;
+        for (Face f : facesBrasTenu(fin)) for (int ty = 0; ty < f.h(); ty++) for (int tx = 0; tx < f.l(); tx++) c[i++] = MarqueSoi.eviter(pixel(s, f.x0() + tx, f.y0() + ty));   // dessiné tout près de la caméra : jamais la marque
         return c;
     }
 

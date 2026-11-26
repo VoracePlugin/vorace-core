@@ -110,6 +110,22 @@ public final class TestPantins {
         verifier(cuir.getAsJsonArray("elements").size() == 2 && cuir.getAsJsonObject("textures").get("1").getAsString().endsWith("leather_overlay")
                 && idsArm.get("pantin_armure/minecraft/leather/humanoid/tete"),
             "armure : cuir teint + couche non teinte");
+        verifier(el.getAsJsonObject("faces").getAsJsonObject("north").get("tintindex").getAsInt() == 0
+                && cuir.getAsJsonArray("elements").get(1).getAsJsonObject().getAsJsonObject("faces").getAsJsonObject("north").get("tintindex").getAsInt() == 1,
+            "armure : faces teintables (0 : cuir ou marque, 1 : surcouche du cuir) pour marquer les bras de sa copie");
+
+        // marque des bras de sa propre copie (effacés à la première personne par le shader)
+        int marque = MarqueSoi.marquer(0x8A5C3F);
+        verifier((marque & 0x030303) == 0x010201 && Math.abs(((marque >> 16) & 0xFF) - 0x8A) <= 3 && Math.abs((marque & 0xFF) - 0x3F) <= 3
+                && (MarqueSoi.eviter(marque) & 0x030303) != 0x010201 && MarqueSoi.eviter(0x8A5C3C) == 0x8A5C3C && (0xFFFFFF & 0x030303) != 0x010201,
+            "marque : deux bits bas (1, 2, 1), écart invisible, évitée par les autres couleurs, absente du blanc");
+        boolean brasOk = true, autresOk = true;
+        for (int k = 0; k < j.parties().size(); k++) {
+            String n = String.valueOf(j.parties().get(k).nom()).toLowerCase(java.util.Locale.ROOT);
+            boolean b = MarqueSoi.bras(j, k);
+            if (n.contains("bras") || n.startsWith("poing")) brasOk &= b; else autresOk &= !b;
+        }
+        verifier(brasOk && autresOk, "marque : bras, avant-bras et poings, rien d'autre (tête, tronc, jambes)");
         verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
             "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
 

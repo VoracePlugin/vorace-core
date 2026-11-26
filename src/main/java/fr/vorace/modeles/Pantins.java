@@ -155,7 +155,7 @@ public final class Pantins implements Listener {
         meta.setItemModel(new org.bukkit.NamespacedKey(fr.vorace.objets.GenerateurPack.NS, PeauUV.id(morceau)));
         org.bukkit.inventory.meta.components.CustomModelDataComponent cmd = meta.getCustomModelDataComponent();
         java.util.List<org.bukkit.Color> couleurs = new java.util.ArrayList<>(d.couleurs().length);
-        for (int c : d.couleurs()) couleurs.add(org.bukkit.Color.fromRGB(c & 0xFFFFFF));
+        for (int c : d.couleurs()) couleurs.add(org.bukkit.Color.fromRGB(MarqueSoi.eviter(c)));   // jamais la marque des bras de sa copie
         java.util.List<Boolean> drapeaux = new java.util.ArrayList<>(d.drapeaux().length);
         for (boolean b : d.drapeaux()) drapeaux.add(b);
         cmd.setColors(couleurs);
@@ -695,7 +695,7 @@ public final class Pantins implements Listener {
             if (o.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta lm) {
                 org.bukkit.Color couleur = porte.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta pm ? pm.getColor()
                     : org.bukkit.Color.fromRGB(0xA06540);
-                lm.setColor(couleur);
+                lm.setColor(org.bukkit.Color.fromRGB(MarqueSoi.eviter(couleur.asRGB())));
                 o.setItemMeta(lm);
             }
         }

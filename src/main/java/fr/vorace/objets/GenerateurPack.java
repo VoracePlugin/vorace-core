@@ -85,12 +85,22 @@ public final class GenerateurPack {
                     t.addProperty("default", -1);
                     tints.add(t);
                     m.add("tints", tints);
-                } else if (v.teinte() != null) {
+                } else if (v.teinte() != null || v.id().startsWith("pantin_armure/")) {
                     JsonArray tints = new JsonArray();
-                    JsonObject t = new JsonObject();
-                    t.addProperty("type", "minecraft:dye");
-                    t.addProperty("default", v.teinte());
-                    tints.add(t);
+                    if (v.teinte() != null) {
+                        JsonObject t = new JsonObject();
+                        t.addProperty("type", "minecraft:dye");
+                        t.addProperty("default", v.teinte());
+                        tints.add(t);
+                    }
+                    if (v.id().startsWith("pantin_armure/")) {
+                        // armure du pantin : teinte blanche, sauf sur les bras de sa propre copie (marque, voir MarqueSoi)
+                        JsonObject t = new JsonObject();
+                        t.addProperty("type", "minecraft:custom_model_data");
+                        t.addProperty("index", 0);
+                        t.addProperty("default", -1);
+                        tints.add(t);
+                    }
                     m.add("tints", tints);
                 }
                 JsonObject def = new JsonObject();

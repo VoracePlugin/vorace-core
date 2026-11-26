@@ -25,6 +25,12 @@
 - **Armures** : objets portés sur la tête (casque 3D de vorace-item, citrouille, tête) posés sur la tête du pantin comme le
   jeu le fait ; armures en volume tirées d'un .bbmodel (`pantin.armures-3d`, groupes « casque », « plastron »,
   « jambieres », « bottes »).
+- **Première personne comme First-person Model (« Vanilla Hands »)** : hors compétence, la main du jeu tient l'arme et les
+  bras de sa propre copie du pantin (skin et armure) sont effacés quand la caméra est dans sa tête ; en regardant vers le
+  bas, il voit son tronc et ses jambes animés ; en F5, son pantin est entier. Le shader du pack le devine à la distance de la
+  caméra : les bras de sa copie portent une marque dans leur teinte (deux bits bas des couleurs), que les autres pantins
+  évitent. Pendant une compétence, ses bras restent visibles à la première personne. Un pantin permanent a toujours sa
+  copie, même avec `recul-pour-soi: 0`.
 - Essai : `pantin.soi-tourne-avec-la-camera` (copie pour soi en billboard, plus de retard en tournant à la 1re personne).
 - Commandes : `/vorace pantin permanent on|off`, `posture <posture|aucune> [joueur]`, `modele <modèle> [joueur]`.
 - API : `pantinPermanentActif`, `pantinPermanent`, `modelePantin`, `posturePantin`, `autoriserPantin`. `arreterJoueur` et
