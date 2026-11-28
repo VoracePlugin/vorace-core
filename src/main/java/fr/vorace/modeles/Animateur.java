@@ -53,12 +53,21 @@ public final class Animateur {
      * @param tetePitch inclinaison de la tête (degrés Minecraft, positif = regarde vers le bas)
      */
     public static Pose[] poses(ModeleBB m, List<Couche> couches, float yaw, float taille, float teteYaw, float tetePitch) {
-        return calculer(m, couches, yaw, taille, teteYaw, tetePitch, false);
+        return calculer(m, couches, yaw, taille, teteYaw, tetePitch, 0f, false);
     }
 
     /** Comme poses(), mais aussi pour les os sans cube (os de nom « tag_ », repères...). */
     public static Pose[] posesCompletes(ModeleBB m, List<Couche> couches, float yaw, float taille, float teteYaw, float tetePitch) {
-        return calculer(m, couches, yaw, taille, teteYaw, tetePitch, true);
+        return calculer(m, couches, yaw, taille, teteYaw, tetePitch, 0f, true);
+    }
+
+    /**
+     * Comme posesCompletes(), avec une visée : les hauts de bras animés par une couche partielle (le geste : arc, bouclier,
+     * longue-vue...) montent ou descendent de {@code visee} degrés avec le regard (positif = vers le bas), comme le jeu
+     * ajoute l'inclinaison de la tête aux bras qui visent. Suit le poids de la couche : entre et sort avec le geste.
+     */
+    public static Pose[] posesCompletes(ModeleBB m, List<Couche> couches, float yaw, float taille, float teteYaw, float tetePitch, float visee) {
+        return calculer(m, couches, yaw, taille, teteYaw, tetePitch, visee, true);
     }
 
     /** Os de tête qui tournent avec le regard : les plus hauts dans la hiérarchie (un os de tête dans la tête suit déjà). */
@@ -74,7 +83,8 @@ public final class Animateur {
         return res;
     }
 
-    private static Pose[] calculer(ModeleBB m, List<Couche> couches, float yaw, float taille, float teteYaw, float tetePitch, boolean toutes) {
+    private static Pose[] calculer(ModeleBB m, List<Couche> couches, float yaw, float taille, float teteYaw, float tetePitch, float visee,
+                                   boolean toutes) {
         int n = m.parties().size();
         Vector3f[] pos = new Vector3f[n];
         Quaternionf[] rot = new Quaternionf[n];
@@ -83,17 +93,22 @@ public final class Animateur {
         double[] ts = new double[couches.size()];
         for (int c = 0; c < ts.length; c++) ts[c] = temps(couches.get(c).anim(), couches.get(c).temps());
         boolean[] tete = teteYaw != 0 || tetePitch != 0 ? tetes(m) : null;
+        // le geste qui vise est la dernière couche partielle (au-dessus du geste de fond, la main qui tient un objet)
+        int geste = -1;
+        if (visee != 0f) for (int c = 0; c < ts.length; c++) if (couches.get(c).partielle()) geste = c;
         Quaternionf racine = new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw)));
 
         for (int i = 0; i < n; i++) {
             Partie p = m.parties().get(i);
             double[] dp = new double[3], dr = new double[3], ds = {1, 1, 1};
+            float poidsGeste = 0f;
             for (int c = 0; c < ts.length; c++) {
                 Couche co = couches.get(c);
                 float w = Math.max(0f, Math.min(1f, co.poids()));
                 if (w <= 0) continue;
                 Canaux ca = co.anim() == null || p.uuid() == null ? null : co.anim().os().get(p.uuid());
                 if (ca == null && co.partielle()) continue;
+                if (c == geste && ca != null && ca.rotation() != null && !ca.rotation().isEmpty()) poidsGeste = w;
                 melanger(dp, ca == null ? null : ca.position(), ts[c], 0, w, co.partielle());
                 melanger(dr, ca == null ? null : ca.rotation(), ts[c], 0, w, co.partielle());
                 melanger(ds, ca == null ? null : ca.echelle(), ts[c], 1, w, co.partielle());
@@ -102,6 +117,7 @@ public final class Animateur {
                 dr[1] += teteYaw;
                 dr[0] += tetePitch;
             }
+
 
             double[] pivotParent = p.parent() < 0 ? new double[3] : m.parties().get(p.parent()).pivot();
             // conventions de Blockbench pour les animations : x et y inversés en rotation, x inversé en position
@@ -112,6 +128,12 @@ public final class Animateur {
                 .rotateY((float) Math.toRadians(p.rotation()[1] - dr[1]))
                 .rotateX((float) Math.toRadians(p.rotation()[0] - dr[0]));
             Vector3f s = new Vector3f((float) ds[0], (float) ds[1], (float) ds[2]);
+            if (visee != 0f && poidsGeste > 0f && p.parent() >= 0 && p.brasHaut()) {
+                // visée : le bras entier tourne autour de l'épaule, sur l'axe gauche-droite du modèle (pas celui du buste, qui
+                // peut être tourné par le geste : l'arc monte alors bien vers où regarde le joueur)
+                Quaternionf parent = rot[p.parent()];
+                q = new Quaternionf(parent).invert().mul(new Quaternionf().rotateX((float) Math.toRadians(-visee * poidsGeste))).mul(parent).mul(q);
+            }
 
             if (p.parent() < 0) {
                 pos[i] = local;
@@ -207,5 +229,17 @@ public final class Animateur {
         Molang[] e = c.expressions();
         if (e != null) for (int k = 0; k < 3; k++) if (e[k] != null) v[k] = e[k].evaluer(t);
         return v;
+    }
+
+    /**
+     * Deux images d'un morceau si proches que l'écart ne se voit pas : moins de 0,0015 bloc (un quarantième de pixel) et de
+     * 0,3° (un huitième de pixel au bout d'une épée). Vorace ne renvoie pas une telle image : un pantin au repos, qui ne
+     * fait que respirer, n'envoie presque plus rien au lieu d'un paquet par morceau à chaque tic. L'écart est mesuré depuis
+     * la dernière image ENVOYÉE : un mouvement lent finit toujours par être envoyé, par petits pas.
+     */
+    static boolean memeImage(Vector3f t1, Quaternionf r1, Vector3f t2, Quaternionf r2) {
+        if (t1.distanceSquared(t2) > 0.0015f * 0.0015f) return false;
+        double p = Math.abs((double) r1.x * r2.x + (double) r1.y * r2.y + (double) r1.z * r2.z + (double) r1.w * r2.w);
+        return p > 0.9999965731;   // cos(0,15°) : la moitié de l'angle entre les deux rotations
     }
 }

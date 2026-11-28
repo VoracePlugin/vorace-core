@@ -284,12 +284,28 @@ public final class Pantins implements Listener {
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
     public void paireInventaire(org.bukkit.event.inventory.InventoryClickEvent e) {
-        if (e.getWhoClicked() instanceof Player p) plusTard(p);
+        if (e.getWhoClicked() instanceof Player p) { plusTard(p); barrePlusTard(p); }
+    }
+
+    /**
+     * Après un clic dans un inventaire (celui du mode créatif compris) : sa barre lui est renvoyée avec les copies « caché
+     * en main ». Sans cela, une épée prise dans l'inventaire restait dessinée dans la main du jeu, à côté de celle du pantin.
+     */
+    private void barrePlusTard(Player p) {
+        if (caches == null || !permanent(p)) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (caches != null && p.isOnline()) caches.rafraichirBarre(p);
+        }, 1);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void barreFermee(org.bukkit.event.inventory.InventoryCloseEvent e) {
+        if (e.getPlayer() instanceof Player p) barrePlusTard(p);
     }
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
     public void paireGlisser(org.bukkit.event.inventory.InventoryDragEvent e) {
-        if (e.getWhoClicked() instanceof Player p) plusTard(p);
+        if (e.getWhoClicked() instanceof Player p) { plusTard(p); barrePlusTard(p); }
     }
 
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
@@ -358,6 +374,12 @@ public final class Pantins implements Listener {
 
     /** @param boucle animation répétée jusqu'à {@link #arreter(Player)} (Reprise de souffle) */
     public boolean jouer(Player p, String modele, String animation, boolean boucle) {
+        // une compétence ou une emote : elle n'est plus un simple coup, le coup suivant ne la coupera pas
+        coupsTemporaires.remove(p.getUniqueId());
+        return animer(p, modele, animation, boucle);
+    }
+
+    private boolean animer(Player p, String modele, String animation, boolean boucle) {
         Modeles m = plugin.modeles();
         if (m == null || !actif()) return false;
         Map<String, ItemStack> pretes = peaux.get(p.getUniqueId());
@@ -560,26 +582,103 @@ public final class Pantins implements Listener {
     /** Main levée (manger, boire, arc, arbalète, bouclier, trident) : le geste en boucle par-dessus les mouvements. */
     private void gesteEnBoucle(Player p, Modeles m) {
         String voulu = null;
+        boolean gauche = false;
+        ItemStack droite = p.getInventory().getItemInMainHand(), autre = p.getInventory().getItemInOffHand();
         if (p.isHandRaised()) {
             ItemStack o = p.getActiveItem();
             Material t = o == null ? Material.AIR : o.getType();
-            if (t.isEdible() || t == Material.POTION || t == Material.MILK_BUCKET || t == Material.HONEY_BOTTLE) voulu = "manger";
-            else if (t == Material.BOW) voulu = "viser_arc";
-            else if (t == Material.CROSSBOW) voulu = "viser_arbalete";
+            gauche = p.getActiveItemHand() == EquipmentSlot.OFF_HAND;
+            if (t == Material.POTION || t == Material.MILK_BUCKET || t == Material.HONEY_BOTTLE || t.name().equals("OMINOUS_BOTTLE")) voulu = "boire";
+            else if (t.isEdible()) voulu = "manger";
+            // l'arc se bande en 1 s (20 tics), puis reste bandé : la même pose, qui respire (si le modèle a ce geste)
+            else if (t == Material.BOW) voulu = p.getActiveItemUsedTime() >= 20 && m.aGeste(p, "viser_arc_tenu") ? "viser_arc_tenu" : "viser_arc";
+            else if (t == Material.CROSSBOW) voulu = "charger_arbalete";
             else if (t == Material.SHIELD) voulu = "garde_bouclier";
             else if (t == Material.TRIDENT) voulu = "viser_trident";
             else if (t == Material.SPYGLASS) voulu = "longue_vue";
+            else if (t == Material.GOAT_HORN) voulu = "cor";
+            else if (t == Material.BRUSH) voulu = "brosse";
         }
+        if (voulu == null && (arbaleteChargee(droite) || arbaleteChargee(autre))) {
+            // arbalète chargée en main : en joue
+            voulu = "viser_arbalete";
+            gauche = !arbaleteChargee(droite);
+        }
+        // geste de fond : la main qui tient un objet (la pose « objet en main » du jeu), sous les autres gestes ; une posture
+        // de classe pose elle-même les bras
+        m.gesteDeFond(p, m.aPosture(p) ? null : fond(p, m, droite, autre));
+        if (voulu != null && gauche) voulu += "_gauche";
         String actuel = gestes.get(p.getUniqueId());
         if (java.util.Objects.equals(voulu, actuel)) {
-            if (voulu != null) m.gesteJoueur(p, voulu, true);   // repris s'il a été coupé (coup reçu...)
+            if (voulu != null) lancerGeste(p, m, voulu);   // repris s'il a été coupé (coup reçu, coup de bras...)
             return;
         }
+        // (le tir à l'arc, joué au lâcher de la flèche, finit seul : on n'arrête que le geste qu'on avait lancé)
         if (actuel != null) m.finGesteJoueur(p, actuel);
-        if (voulu != null && m.gesteJoueur(p, voulu, true)) gestes.put(p.getUniqueId(), voulu);
+        if (voulu != null && lancerGeste(p, m, voulu)) gestes.put(p.getUniqueId(), voulu);
         else gestes.remove(p.getUniqueId());
         // l'arc de son pantin se tend ou se détend (voir mains)
-        if ("viser_arc".equals(voulu) || "viser_arc".equals(actuel)) porter(p);
+        if (commence(voulu, "viser_arc") || commence(actuel, "viser_arc")) porter(p);
+    }
+
+    /**
+     * Geste de fond selon ce qu'il tient : une arme longue (épée, hache, outil, trident...) se porte sur le côté
+     * (« tenir_arme »), le reste devant soi comme dans le jeu (« tenir »). Null : mains vides. Un modèle qui n'a pas les
+     * gestes d'arme garde « tenir ».
+     */
+    private static String fond(Player p, Modeles m, ItemStack droite, ItemStack gauche) {
+        boolean d = droite != null && !droite.getType().isAir(), g = gauche != null && !gauche.getType().isAir();
+        if (!d && !g) return null;
+        boolean ad = d && armeLongue(droite), ag = g && armeLongue(gauche);
+        String simple = d && g ? "tenir_deux" : d ? "tenir" : "tenir_gauche";
+        String voulu = d && g ? (ad && ag ? "tenir_armes" : ad ? "tenir_arme_deux" : ag ? "tenir_deux_arme" : simple)
+            : d ? (ad ? "tenir_arme" : simple) : (ag ? "tenir_arme_gauche" : simple);
+        return voulu.equals(simple) || m.aGeste(p, voulu) ? voulu : simple;
+    }
+
+    /** Arme ou outil à long manche : épée, hache, pioche, pelle, houe, lance, trident, masse. */
+    static boolean armeLongue(ItemStack o) {
+        if (o == null) return false;
+        String n = o.getType().name();
+        return n.endsWith("_SWORD") || n.endsWith("_AXE") || n.endsWith("_PICKAXE") || n.endsWith("_SHOVEL") || n.endsWith("_HOE")
+            || n.endsWith("_SPEAR") || n.equals("TRIDENT") || n.equals("MACE");
+    }
+
+    /**
+     * Geste du coup selon ce que tient la main qui frappe : un direct à main nue (« coup_poing »), une taille de haut en
+     * bas à l'épée (« coup_arme »), un coup lourd à la hache ou à la masse (« coup_hache ») ; le coup court pour le reste
+     * (« geste_main » : pioche, pelle, bloc qu'on pose, objet qu'on utilise).
+     */
+    static String coup(ItemStack o) {
+        if (o == null || o.getType().isAir()) return "coup_poing";
+        String n = o.getType().name();
+        if (n.endsWith("_SWORD") || n.equals("TRIDENT") || n.endsWith("_SPEAR")) return "coup_arme";
+        if ((n.endsWith("_AXE") && !n.endsWith("_PICKAXE")) || n.equals("MACE")) return "coup_hache";
+        return "geste_main";
+    }
+
+    private static boolean commence(String geste, String nom) {
+        return geste != null && geste.startsWith(nom);
+    }
+
+    /** Lance un geste en boucle ; celui de la main gauche (« _gauche ») retombe sur celui de droite si le modèle ne l'a pas. */
+    private static boolean lancerGeste(Player p, Modeles m, String geste) {
+        return m.gesteJoueur(p, geste, true)
+            || (geste.endsWith("_gauche") && m.gesteJoueur(p, geste.substring(0, geste.length() - 7), true));
+    }
+
+    private static boolean arbaleteChargee(ItemStack o) {
+        return o != null && o.getType() == Material.CROSSBOW && o.getItemMeta() instanceof org.bukkit.inventory.meta.CrossbowMeta c
+            && c.hasChargedProjectiles();
+    }
+
+    /** Flèche lâchée : la main de corde part en arrière, l'arc redescend (geste « tir_arc », joué une fois). */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void tir(org.bukkit.event.entity.EntityShootBowEvent e) {
+        if (!(e.getEntity() instanceof Player p) || !permanent(p) || plugin.modeles() == null) return;
+        if (e.getBow() == null || e.getBow().getType() != Material.BOW) return;
+        Modeles m = plugin.modeles();
+        if (!(e.getHand() == EquipmentSlot.OFF_HAND && m.gesteJoueur(p, "tir_arc_gauche", false))) m.gesteJoueur(p, "tir_arc", false);
     }
 
     /** Pantin permanent : numéro d'entité du joueur → joueurs trop loin, qui voient le joueur du jeu (sans ses morceaux). */
@@ -602,13 +701,92 @@ public final class Pantins implements Listener {
         for (EquipmentSlot e : EMPLACEMENTS) voit.sendEquipmentChange(p, e, loin ? p.getEquipment().getItem(e) : vide);
     }
 
+    /** Tics entre le début d'un coup et l'instant où il porte (la lame tombée, le poing tendu), par geste. */
+    static final Map<String, Integer> IMPACTS = Map.of("coup_arme", 5, "coup_hache", 6, "coup_poing", 4, "geste_main", 5);
+
+    /**
+     * Tics à attendre, à partir de maintenant, avant que le coup de bras du pantin de ce joueur porte : l'instant où un
+     * plugin de combat doit appliquer les dégâts pour qu'ils tombent avec la lame et non au clic, quand elle monte encore
+     * (retour d'Antoine du 26 nov.). À appeler au moment du clic (l'événement de dégâts du jeu arrive juste avant celui du
+     * bras levé). 0 : pas de pantin permanent, pas de coup à venir (geste d'utilisation ou animation en cours), ou le coup
+     * en cours a déjà porté et ne sera pas relancé.
+     */
+    public int ticsAvantImpact(Player p) {
+        Modeles m = plugin.modeles();
+        if (p != null && m != null && !permanent(p)) {
+            // coups temporaires : le pantin naît au coup de bras et la lame tombe au même instant que sur le pantin permanent
+            if (!coupsTemporairesActifs() || p.isHandRaised()) return 0;
+            Modeles.Instance i = m.instance(p);
+            if (i != null && !coupsTemporaires.contains(p.getUniqueId())) return 0;   // compétence en cours
+            String coup = coup(p.getInventory().getItemInMainHand());
+            if (!aCoup(coup)) coup = "geste_main";
+            return aCoup(coup) ? IMPACTS.getOrDefault(coup, 0) : 0;
+        }
+        if (p == null || m == null || !permanent(p) || gestes.containsKey(p.getUniqueId())) return 0;
+        String coup = coup(p.getInventory().getItemInMainHand());
+        if (!m.aGeste(p, coup)) coup = "geste_main";
+        if (!m.aGeste(p, coup)) return 0;
+        return m.ticsAvantImpact(p, coup, IMPACTS.getOrDefault(coup, 0));
+    }
+
     /** Coup de bras (frapper, poser, miner) : le geste par-dessus les mouvements. */
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
     public void brasLeve(org.bukkit.event.player.PlayerAnimationEvent e) {
         Player p = e.getPlayer();
-        if (!permanent(p) || plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
         boolean gauche = e instanceof io.papermc.paper.event.player.PlayerArmSwingEvent s && s.getHand() == EquipmentSlot.OFF_HAND;
-        if (!(gauche && plugin.modeles().gesteJoueur(p, "geste_main_gauche", false))) plugin.modeles().gesteJoueur(p, "geste_main", false);
+        if (!permanent(p)) {
+            coupTemporaire(p, gauche);
+            return;
+        }
+        // pas pendant un geste d'utilisation (manger, viser...)
+        if (plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
+        Modeles m = plugin.modeles();
+        // un coup par sorte d'objet (poing, épée, hache...) ; un modèle qui ne l'a pas garde le coup court
+        String coup = coup(gauche ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand());
+        if (!coup.equals("geste_main") && m.gesteJoueur(p, gauche ? coup + "_gauche" : coup, false)) return;
+        if (!(gauche && m.gesteJoueur(p, "geste_main_gauche", false))) m.gesteJoueur(p, "geste_main", false);
+    }
+
+    // ------------------------------------------------------------------ coups temporaires (sans pantin permanent)
+
+    /** Joueurs dont le pantin en cours ne joue qu'un coup normal (pas une compétence ni une emote). */
+    private final java.util.Set<UUID> coupsTemporaires = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Sans pantin permanent, le joueur est le joueur du jeu ; son pantin n'apparaît que quand il tape (pantin.coups-temporaires),
+     * joue le coup (poing, épée, hache...), garde sa pose un instant pour enchaîner, puis revient en fondu à la pose du joueur du
+     * jeu et disparaît (pantin.retour-secondes).
+     */
+    public boolean coupsTemporairesActifs() {
+        return actif() && !permanentActif() && plugin.getConfig().getBoolean("pantin.coups-temporaires", true);
+    }
+
+    /** Le squelette du pantin a-t-il ce geste (le sien ou celui du modèle des mouvements) ? */
+    private boolean aCoup(String nom) {
+        Modeles m = plugin.modeles();
+        ModeleBB s = m == null ? null : m.modele(SQUELETTE);
+        return s != null && (s.animations().containsKey(nom) || m.emprunter(s, nom) != null);
+    }
+
+    /** Coup de bras sans pantin permanent : le pantin apparaît le temps du coup (voir {@link #coupsTemporairesActifs()}). */
+    private void coupTemporaire(Player p, boolean gauche) {
+        Modeles m = plugin.modeles();
+        if (m == null || !coupsTemporairesActifs() || p.isHandRaised() || p.isDead()) return;
+        if (p.getGameMode() == org.bukkit.GameMode.SPECTATOR || p.hasPotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY)) return;
+        if (p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA))) return;
+        // une compétence joue déjà sur son pantin : elle continue
+        if (m.instance(p) != null && !coupsTemporaires.contains(p.getUniqueId())) return;
+        // miner ou poser un bloc n'est pas un coup (le bras se lève en boucle quand on mine) : seulement dans le vide ou sur
+        // une créature, sauf pantin.coups-temporaires-blocs
+        if (!plugin.getConfig().getBoolean("pantin.coups-temporaires-blocs", false)
+            && p.getTargetBlockExact(5) != null && p.getTargetEntity(5) == null) return;
+        String coup = coup(gauche ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand());
+        String voulu = null;
+        for (String n : gauche ? new String[]{coup + "_gauche", coup, "geste_main_gauche", "geste_main"} : new String[]{coup, "geste_main"}) {
+            if (aCoup(n)) { voulu = n; break; }
+        }
+        if (voulu == null) return;
+        if (animer(p, SQUELETTE, voulu, false)) coupsTemporaires.add(p.getUniqueId());
     }
 
     /** Armure ou objets tenus changés : le pantin permanent se rhabille au tic suivant. */
@@ -639,6 +817,7 @@ public final class Pantins implements Listener {
         java.util.List<String> connus = plugin.modeles() == null ? ArmuresPantin.VANILLE : plugin.modeles().armuresPantin();
         org.bukkit.configuration.ConfigurationSection en3d = plugin.getConfig().getConfigurationSection("pantin.armures-3d");
         boolean garderPlat = plugin.getConfig().getBoolean("pantin.armures-3d-plat", true);
+        java.util.Set<String> courtes = plugin.modeles() == null ? new java.util.HashSet<>(ArmuresPantin.VANILLE) : plugin.modeles().manchesCourtes();
         for (EquipmentSlot e : ARMURE) {
             ItemStack porte = p.getEquipment().getItem(e);
             if (porte == null || porte.getType().isAir()) continue;
@@ -646,13 +825,40 @@ public final class Pantins implements Listener {
             // pièce d'armure en volume : un .bbmodel au squelette du joueur (pantin.armures-3d)
             boolean volume = asset != null && en3d != null && en3d.isString(asset) && piecesEnVolume(l, en3d.getString(asset), e, porte);
             if (asset != null && connus.contains(asset) && (!volume || garderPlat)) {
-                for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset))) l.add(Map.entry(c.os(), objetArmure(c, porte)));
+                for (ArmuresPantin.Couche c : ArmuresPantin.couches(Map.of(e.name(), asset), courtes)) l.add(Map.entry(c.os(), objetArmure(c, porte)));
             } else if (e == EquipmentSlot.HEAD && asset == null) {
                 // casque 3D d'objet (vorace-item), citrouille, tête : posé sur la tête du pantin comme le jeu le fait
                 l.add(Map.entry(Modeles.TETE + "peau_tete", porte.clone()));
             }
         }
+        // cape dans le dos (posée par un plugin d'objets, voir cape(Player, ItemStack)) : sur le haut du tronc
+        ItemStack cape = cape(p);
+        if (cape != null && plugin.getConfig().getBoolean("pantin.cape", true)) l.add(Map.entry(Modeles.DOS + "peau_corps_haut", cape));
         return l;
+    }
+
+    /** Objet affiché de la cape d'un joueur, gardé avec ses données (il la retrouve en se reconnectant). */
+    public static final org.bukkit.NamespacedKey CAPE = new org.bukkit.NamespacedKey("vorace", "cape");
+
+    /** La cape portée par le joueur (objet affiché, modèle dans le repère du haut du tronc), ou null. */
+    public static ItemStack cape(Player p) {
+        byte[] b = p.getPersistentDataContainer().get(CAPE, org.bukkit.persistence.PersistentDataType.BYTE_ARRAY);
+        if (b == null || b.length == 0) return null;
+        try {
+            return ItemStack.deserializeBytes(b);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Pose ou retire (null, air) la cape du pantin d'un joueur. L'objet est seulement affiché : son modèle est dans le
+     * repère du haut du tronc (pivot en 8, 8, 8 ; accroche aux épaules en Modeles.ACCROCHE_CAPE). Le pantin est rhabillé.
+     */
+    public void cape(Player p, ItemStack objet) {
+        if (objet == null || objet.getType().isAir()) p.getPersistentDataContainer().remove(CAPE);
+        else p.getPersistentDataContainer().set(CAPE, org.bukkit.persistence.PersistentDataType.BYTE_ARRAY, objet.clone().serializeAsBytes());
+        rhabillerPlusTard(p);
     }
 
     /** Groupe du .bbmodel d'une armure en volume qui contient les os de chaque pièce. */
@@ -735,7 +941,12 @@ public final class Pantins implements Listener {
         if (it == null || it.getType().isAir()) return null;
         try {
             org.bukkit.inventory.meta.ItemMeta meta = it.getItemMeta();
-            if (meta != null && meta.hasEquippable() && meta.getEquippable().getModel() != null) return meta.getEquippable().getModel().toString();
+            if (meta != null && meta.hasEquippable()) {
+                // composant posé par un plugin : son modèle d'équipement ; sans modèle, l'objet se porte tel quel sur la tête
+                // (casque 3D de vorace-item sur un iron_helmet) : pas de dessin d'armure
+                if (meta.getEquippable().getModel() != null) return meta.getEquippable().getModel().toString();
+                if (meta.hasItemModel()) return null;
+            }
         } catch (Throwable ignore) {
             // API sans composant equippable : on se sert du nom de l'objet
         }
@@ -919,6 +1130,7 @@ public final class Pantins implements Listener {
     }
 
     private void montrer(Player p) {
+        coupsTemporaires.remove(p.getUniqueId());
         if (permanent(p) && p.isOnline()) {
             // vue « pantin » : ses objets restent dans les mains du pantin, la main du jeu reste cachée
             if (vueMainDuJeu) montrerSoi(p);
@@ -1039,6 +1251,7 @@ public final class Pantins implements Listener {
 
     @EventHandler
     public void depart(PlayerQuitEvent e) {
+        coupsTemporaires.remove(e.getPlayer().getUniqueId());
         pairesMontrees.remove(e.getPlayer().getUniqueId());
         dernieresPaires.remove(e.getPlayer().getUniqueId());
         if (caches != null) caches.oublier(e.getPlayer());

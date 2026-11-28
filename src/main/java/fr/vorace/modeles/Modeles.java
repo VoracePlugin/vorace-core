@@ -91,10 +91,24 @@ public final class Modeles {
      * voient le pantin à sa vraie place. 0 : pas de copie.
      */
     private float pantinRecul = 4f;
+    /**
+     * Recul de plus (pixels) quand il regarde par terre, pantin permanent seulement. Les yeux du jeu sont 3 pixels au-dessus
+     * du haut du torse : en regardant en bas, le torse et les épaules remplissaient l'écran. Le corps recule donc à mesure
+     * que le regard descend : il voit son ventre en bas de l'écran et ses pieds, comme quand on se regarde les pieds.
+     */
+    private float pantinReculBas = 5f;
     /** Taille du pantin d'un joueur : le jeu dessine ses joueurs à 0,9375 (30 pixels de haut, 1,875 bloc), pas à 1 (2 blocs). */
     private float pantinTaille = 0.9375f;
     /** Part de l'écart au regard que le corps du pantin rattrape à chaque tic en marche (1 : toujours face au regard), et écart maximal tête-corps. */
     private float pantinCorpsSuit = 0.3f, pantinTeteMax = 50f;
+    /** Couches d'armure du pantin fondues dans ses morceaux de peau (voir fondre) ; faux : un affichage par couche. */
+    private boolean armuresFondues = true;
+    /** Images presque identiques non renvoyées (voir Animateur.memeImage). */
+    private boolean economieImages = true;
+    /** Pantin permanent : au-delà de ce nombre d'autres joueurs à moins de 32 blocs, ses images partent tous les 2 tics (0 : jamais). */
+    private int pantinFoule = 8;
+    /** En marche, le corps se tourne vers là où il va (comme le jeu) ; faux : vers là où il regarde. */
+    private boolean pantinCorpsVersMouvement = true;
     /**
      * Essai : la copie pour soi tourne avec la caméra du joueur, à chaque image, sans attendre le serveur (affichages en
      * « billboard » vertical) ; plus de retard du corps quand on tourne vite. Le serveur envoie alors ses poses sans
@@ -110,6 +124,13 @@ public final class Modeles {
     public static final String MAIN = "main:", MAIN_G = "main_gauche:";
     /** Préfixe d'un objet porté sur la tête comme le jeu le fait (casque 3D d'objet, citrouille, tête) : « tete:peau_tete ». */
     public static final String TETE = "tete:";
+    /**
+     * Préfixe d'une cape portée dans le dos (« dos:peau_corps_haut ») : modèle posé sur le haut du tronc, dans le repère de
+     * l'os (pivot en 8, 8, 8), accroché aux épaules en {@link #ACCROCHE_CAPE} ; elle se soulève vers l'arrière avec la vitesse.
+     */
+    public static final String DOS = "dos:";
+    /** Point d'accroche d'une cape dans son modèle (pixels, repère du modèle d'objet : pivot du haut du tronc en 8, 8, 8). */
+    public static final float[] ACCROCHE_CAPE = {8f, 15.2f, 11.6f};
     /**
      * Échelle de la pièce dans son propre modèle (pièce d'armure 3D tirée d'un .bbmodel) : posée sur l'objet affiché par
      * Pantins, lue ici ; absente : 1 (couches d'ArmuresPantin, générées à l'échelle 1).
@@ -239,7 +260,7 @@ public final class Modeles {
         Map<String, byte[]> f = new java.util.TreeMap<>();
         for (ModeleBB m : modeles.values()) f.putAll(GenerateurModeles.generer(m));
         f.putAll(ArmuresPantin.generer(modele(Pantins.SQUELETTE), armuresPantin()));
-        f.putAll(PeauUV.generer(modele(Pantins.SQUELETTE)));
+        f.putAll(PeauUV.generer(modele(Pantins.SQUELETTE), armuresPantin()));
         // objets du jeu tenus pendant une animation du pantin : rien en main, leur icône dans l'inventaire (ObjetsCaches)
         for (org.bukkit.Material t : org.bukkit.Material.values()) {
             if (ObjetsCaches.objetDuJeu(t)) {
@@ -296,9 +317,36 @@ public final class Modeles {
         }
     }
 
-    /** Armures que le pantin sait porter : celles du jeu et celles de pantin.armures-perso (« babel:mythril »). */
+    /**
+     * Armures à manches courtes ({@code pantin.armures-manches-courtes}, en plus de celles du jeu) : le pantin ne leur met
+     * pas de couche sur l'avant-bras (voir ArmuresPantin.manchesCourtes).
+     */
+    public java.util.Set<String> manchesCourtes() {
+        java.util.Set<String> l = new java.util.HashSet<>(ArmuresPantin.VANILLE);
+        for (String a : plugin.getConfig().getStringList("pantin.armures-manches-courtes")) {
+            String n = a.toLowerCase(Locale.ROOT).trim();
+            if (!n.isEmpty()) l.add(n.contains(":") ? n : "minecraft:" + n);
+        }
+        return l;
+    }
+
+    /** Modèles d'équipement trouvés dans les packs fusionnés (assets/<espace>/equipment/...), à la dernière construction. */
+    private volatile java.util.Set<String> armuresDetectees = java.util.Set.of();
+
+    /** Donné par la construction du pack : les modèles d'équipement de ses sources (pantin.armures-auto). */
+    public void armuresDetectees(java.util.Set<String> assets) {
+        armuresDetectees = assets == null ? java.util.Set.of() : java.util.Set.copyOf(assets);
+    }
+
+    /**
+     * Armures que le pantin sait porter : celles du jeu, celles de pantin.armures-perso (« babel:mythril ») et, avec
+     * pantin.armures-auto, tous les modèles d'équipement des packs fusionnés (vorace-item, packs du serveur).
+     */
     public List<String> armuresPantin() {
         List<String> l = new ArrayList<>(ArmuresPantin.VANILLE);
+        if (plugin.getConfig().getBoolean("pantin.armures-auto", true)) {
+            for (String a : armuresDetectees) if (!l.contains(a)) l.add(a);
+        }
         for (String a : plugin.getConfig().getStringList("pantin.armures-perso")) {
             String n = a.toLowerCase(Locale.ROOT).trim();
             if (n.isEmpty()) continue;
@@ -443,8 +491,76 @@ public final class Modeles {
     public boolean gesteJoueur(Player joueur, String geste, boolean boucle) {
         Instance i = instances.get(joueur.getUniqueId());
         if (i == null || !i.pantin || !i.permanent || i.animationDemandee()) return false;
+        Animation a = i.trouver(geste);
+        if (a == null) return false;
+        // geste « tenu » (hold : bander l'arc, charger l'arbalète) : joué une fois, il reste sur sa dernière pose
+        boolean tenu = boucle && a.boucle().equals("hold");
         if (geste.equals(i.forcee) && i.forceePartielle && boucle) return true;
-        return i.demarrer(geste, boucle, true);
+        // coup joué une fois, redemandé avant d'avoir porté (clics rapides ; en minant, le jeu relance le bras tous les 3 ou
+        // 4 tics) : il va au bout. Sinon il repartait sans cesse de son élan et ne frappait jamais.
+        if (!boucle && geste.equals(i.forcee) && i.forceePartielle && tic - i.debutForcee < Math.round(a.duree() * 20 * 0.6)) return true;
+        return i.demarrer(geste, boucle && !tenu, true);
+    }
+
+    /**
+     * Pantin permanent : geste de fond (la main qui tient un objet), en boucle sous les autres gestes : un coup de bras ou
+     * un coup reçu se joue par-dessus et y revient, sans que le bras retombe entre les deux. Null : plus de geste de fond
+     * (il sort en fondu). Faux si le modèle n'a pas ce geste.
+     */
+    public boolean gesteDeFond(Player joueur, String geste) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin || !i.permanent) return false;
+        if (geste != null && i.trouver(geste) == null) geste = null;
+        if (geste == null) {
+            if (i.fond != null && i.finFond < 0) i.finFond = tic;
+            return false;
+        }
+        if (!geste.equals(i.fond) || i.finFond >= 0) {
+            // autre objet ou autre main : le nouveau geste entre en fondu ; l'ancien reste entier dessous pendant ce temps,
+            // puis sort (le bras passe de l'un à l'autre au lieu de retomber)
+            if (!geste.equals(i.fond)) {
+                Animation av = i.fond == null || i.finFond >= 0 ? null : i.trouver(i.fond);
+                if (av != null) {
+                    i.fondSortant = av;
+                    i.tempsFondSortant = i.tempsPiste(av, i.debutFond, true);
+                    i.debutFondSortie = tic + fonduTics;
+                }
+                i.debutFond = tic;
+            }
+            i.fond = geste;
+            i.finFond = -1;
+        }
+        return true;
+    }
+
+    /** Pantin permanent : une posture (« combat »...) remplace-t-elle ses mouvements ? Elle pose alors elle-même les bras. */
+    public boolean aPosture(Player joueur) {
+        Instance i = instances.get(joueur.getUniqueId());
+        return i != null && i.posture != null;
+    }
+
+    /** Pantin permanent : son modèle (ou celui des mouvements) a-t-il ce geste ? */
+    public boolean aGeste(Player joueur, String geste) {
+        Instance i = instances.get(joueur.getUniqueId());
+        return i != null && i.pantin && i.trouver(geste) != null;
+    }
+
+    /**
+     * Pantin permanent : tics avant que ce coup porte s'il est demandé maintenant. Déjà en cours et pas encore porté : ce
+     * qu'il lui reste ; déjà porté mais trop tôt pour être relancé (gesteJoueur ne le relance qu'à 60 % de sa durée) : 0 ;
+     * pendant une animation demandée (compétence), qui a son propre instant d'impact : 0.
+     */
+    public int ticsAvantImpact(Player joueur, String coup, int impact) {
+        Instance i = instances.get(joueur.getUniqueId());
+        if (i == null || !i.pantin || i.animationDemandee()) return 0;
+        Animation a = i.trouver(coup);
+        if (a == null) return 0;
+        if (coup.equals(i.forcee) && i.forceePartielle) {
+            long depuis = tic - i.debutForcee;
+            if (depuis < impact) return (int) Math.max(1, impact - depuis);
+            if (depuis < Math.round(a.duree() * 20 * 0.6)) return 0;
+        }
+        return impact;
     }
 
     /** Pantin permanent : arrête le geste en cours (s'il en joue un). */
@@ -515,8 +631,9 @@ public final class Modeles {
             ancien.finir();
         }
         Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
-        if (i.trouver(animation) == null) return false;
+        // pantin d'abord : il emprunte alors les gestes du modèle des mouvements (coups normaux : « coup_arme »...)
         i.pantin = true;
+        if (i.trouver(animation) == null) return false;
         i.taille = pantinTaille;
         i.proprietaire = joueur.getUniqueId();
         i.fin = fin;
@@ -547,19 +664,23 @@ public final class Modeles {
     }
 
     /** Pose les morceaux de skin (os « peau_… ») et les couches d'armure ou objets tenus d'un pantin. */
-    private static void habiller(Instance i, ModeleBB m, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure) {
+    private void habiller(Instance i, ModeleBB m, Map<String, ItemStack> peaux, List<Map.Entry<String, ItemStack>> armure) {
         for (int k = 0; k < m.parties().size(); k++) {
             String n = m.parties().get(k).nom() == null ? "" : m.parties().get(k).nom().toLowerCase(Locale.ROOT);
             if (n.startsWith("peau_") && peaux.get(n.substring(5)) != null) i.peaux.put(k, peaux.get(n.substring(5)));
         }
+        // couches d'armure déjà fondues dans chaque morceau de peau : {nombre de pixels du morceau, couches fondues}
+        Map<Integer, int[]> fondues = new HashMap<>();
         for (Map.Entry<String, ItemStack> c : armure) {
             String os = c.getKey();
-            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : os.startsWith(TETE) ? 3 : 0;
+            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : os.startsWith(TETE) ? 3 : os.startsWith(DOS) ? 4 : 0;
             if (main == 2) os = os.substring(MAIN_G.length());
             else if (main == 1) os = os.substring(MAIN.length());
             else if (main == 3) os = os.substring(TETE.length());
+            else if (main == 4) os = os.substring(DOS.length());
             for (int k = 0; k < m.parties().size(); k++) {
                 if (!os.equalsIgnoreCase(m.parties().get(k).nom())) continue;
+                if (main == 0 && armuresFondues && fondre(i, k, c.getValue(), fondues)) break;
                 i.armureOs.add(k);
                 i.armureObjets.add(c.getValue());
                 i.armureMain.add(main);
@@ -570,6 +691,46 @@ public final class Modeles {
                 break;
             }
         }
+    }
+
+    /**
+     * Fond une couche d'armure dans le morceau de peau qui la porte : l'objet du morceau reçoit la clé de la couche (chaîne
+     * de custom_model_data) et sa couleur ; sa définition dessine l'armure par-dessus la peau (PeauUV.generer). Un seul
+     * affichage au lieu de deux : un pantin en armure complète passe de 26 morceaux à 11, donc de 26 paquets par image et
+     * par spectateur à 11.
+     *
+     * @return faux si la couche doit garder son propre affichage : ce n'est pas une couche d'armure du pack, le morceau n'a
+     *     pas de peau du pack, la pièce brille (enchantée : le reflet couvrirait aussi la peau), ou le morceau porte déjà
+     *     deux couches
+     */
+    private boolean fondre(Instance i, int k, ItemStack couche, Map<Integer, int[]> fondues) {
+        ItemStack peau = i.peaux.get(k);
+        if (peau == null || couche == null || !peau.hasItemMeta() || !couche.hasItemMeta()) return false;
+        org.bukkit.inventory.meta.ItemMeta mc = couche.getItemMeta(), mp = peau.getItemMeta();
+        if (!mc.hasItemModel() || !mp.hasItemModel() || !mp.getItemModel().getKey().startsWith("pantin_peau/")) return false;
+        String cle = ArmuresPantin.cleDepuisId(mc.getItemModel().getKey());
+        if (cle == null || (mc.hasEnchantmentGlintOverride() && mc.getEnchantmentGlintOverride())) return false;
+        org.bukkit.inventory.meta.components.CustomModelDataComponent cmd = mp.getCustomModelDataComponent();
+        int[] etat = fondues.computeIfAbsent(k, x -> new int[]{cmd.getColors().size(), 0});
+        if (etat[1] >= PeauUV.RANGS_ARMURE) return false;
+        int rang = etat[1]++;
+        List<String> chaines = new ArrayList<>(cmd.getStrings());
+        while (chaines.size() <= rang) chaines.add("");
+        chaines.set(rang, cle);
+        cmd.setStrings(chaines);
+        // deux teintes par couche après celles des pixels : la pièce (couleur du cuir, blanc sinon) et la surcouche du cuir
+        List<org.bukkit.Color> couleurs = new ArrayList<>(cmd.getColors());
+        org.bukkit.Color blanc = org.bukkit.Color.fromRGB(MarqueSoi.eviter(0xFFFFFF));
+        while (couleurs.size() < etat[0] + 2 * PeauUV.RANGS_ARMURE) couleurs.add(blanc);
+        if (mc instanceof org.bukkit.inventory.meta.LeatherArmorMeta cuir) {
+            couleurs.set(etat[0] + 2 * rang, org.bukkit.Color.fromRGB(MarqueSoi.eviter(cuir.getColor().asRGB())));
+        }
+        cmd.setColors(couleurs);
+        ItemStack fondu = peau.clone();
+        mp.setCustomModelDataComponent(cmd);
+        fondu.setItemMeta(mp);
+        i.peaux.put(k, fondu);
+        return true;
     }
 
     /**
@@ -744,6 +905,11 @@ public final class Modeles {
             sortieTics = (int) Math.round(Math.max(0, Math.min(1, plugin.getConfig().getDouble("pantin.retour-secondes", 0.25))) * 20);
             pantinCacherTete = plugin.getConfig().getBoolean("pantin.cacher-sa-tete", false);
             pantinRecul = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-pour-soi", 4)));
+            pantinReculBas = (float) Math.max(0, Math.min(12, plugin.getConfig().getDouble("pantin.recul-regard-bas", 5)));
+            pantinCorpsVersMouvement = plugin.getConfig().getBoolean("pantin.corps-vers-le-mouvement", true);
+            economieImages = plugin.getConfig().getBoolean("modeles.economie-images", true);
+            armuresFondues = plugin.getConfig().getBoolean("pantin.armures-fondues", true);
+            pantinFoule = Math.max(0, plugin.getConfig().getInt("pantin.permanent.foule", 8));
             pantinTaille = (float) Math.max(0.25, Math.min(4, plugin.getConfig().getDouble("pantin.taille", 0.9375)));
             pantinCorpsSuit = (float) Math.max(0.05, Math.min(1, plugin.getConfig().getDouble("pantin.corps-suit-regard", 0.3)));
             pantinTeteMax = (float) Math.max(0, Math.min(75, plugin.getConfig().getDouble("pantin.tete-max", 50)));
@@ -791,6 +957,26 @@ public final class Modeles {
             }
         }
     }
+
+    /** Gestes de visée du pantin : leurs bras suivent le regard vers le haut ou le bas (voir Animateur.posesCompletes). */
+    /**
+     * Poids du geste de fond (la main qui tient un objet) : le reste laisse passer un peu du mouvement du corps, le bras qui
+     * porte l'épée balance légèrement avec la marche au lieu d'être figé.
+     */
+    static final float POIDS_FOND = 0.85f;
+
+    static final java.util.Set<String> VISEES = java.util.Set.of("viser_arc", "viser_arc_tenu", "tir_arc", "viser_arbalete", "garde_bouclier",
+        "longue_vue", "cor");
+
+    /**
+     * Mouvements du pantin des joueurs réglés sur leur vitesse : {nom, vitesse pour laquelle l'animation est écrite (blocs
+     * par tic : marche du jeu 0,2158, sprint 0,2806, accroupi 0,0648, échelle 0,1176), cadence minimale}. L'ordre compte :
+     * « accroupi_marche » avant « marche ».
+     */
+    private static final Object[][] RYTHMES = {
+        {"accroupi_marche", 0.0648, 0.4}, {"marche", 0.2158, 0.45}, {"course", 0.2806, 0.6}, {"recul", 0.2158, 0.45},
+        {"pas_droite", 0.2158, 0.45}, {"pas_gauche", 0.2158, 0.45}, {"echelle", 0.1176, 0.0}, {"ramper", 0.0648, 0.0},
+    };
 
     /** Rôles automatiques joués par-dessus l'animation en cours (seuls les os qu'ils animent changent). */
     static final java.util.Set<String> PAR_DESSUS = java.util.Set.of("degat", "attaque", "clic");
@@ -882,12 +1068,14 @@ public final class Modeles {
             Location l = position();
             double seuil = plugin.getConfig().getDouble("pantin.permanent.distance", 0);
             double plusPres = Double.MAX_VALUE;
+            int autour = 0;
             List<Display> morceaux = null;
             Pantins pa = plugin.pantins();
             for (Player j : l.getWorld().getPlayers()) {
                 if (j.getUniqueId().equals(proprietaire)) continue;
                 double d = j.getLocation().distance(l);
                 plusPres = Math.min(plusPres, d);
+                if (d < 32) autour++;
                 boolean loin = seuil > 0 && d > seuil + (loinDe.contains(j.getUniqueId()) ? -4 : 0);
                 if (loin == loinDe.contains(j.getUniqueId())) continue;
                 if (morceaux == null) morceaux = morceauxAutres();
@@ -901,6 +1089,9 @@ public final class Modeles {
                 if (pa != null) pa.lointain(soi, j, loin);
             }
             ivAutres = plusPres < 16 ? 1 : plusPres < 32 ? 2 : plusPres < 64 ? 3 : 4;
+            // dans une foule, chacun reçoit les images de tous les autres : une image tous les 2 tics (3 dans une très grosse
+            // foule), le jeu adoucit entre deux. Le nombre de paquets croît comme le carré du nombre de joueurs réunis.
+            if (pantinFoule > 0 && autour > pantinFoule) ivAutres = Math.max(ivAutres, autour > pantinFoule * 3 ? 3 : 2);
         }
         /** Pantin d'un joueur : disparaît à la fin de son animation, ses os « peau_ » portent des têtes de joueur. */
         boolean pantin;
@@ -1135,7 +1326,7 @@ public final class Modeles {
         /** Couches d'armure du pantin : os porteur et objet affiché ; leurs entités et dernières transformations. */
         final List<Integer> armureOs = new ArrayList<>();
         final List<ItemStack> armureObjets = new ArrayList<>();
-        /** 0 : couche d'armure ; 1 : objet tenu en main droite ; 2 : en main gauche. */
+        /** 0 : couche d'armure ; 1 : objet tenu en main droite ; 2 : en main gauche ; 3 : sur la tête ; 4 : cape dans le dos. */
         final List<Integer> armureMain = new ArrayList<>();
         /** Bout de l'avant-bras vu depuis le pivot de l'os qui tient l'objet (pixels, repère de repos ; voir Modeles.bout). */
         final List<Vector3f> armureBout = new ArrayList<>();
@@ -1162,6 +1353,7 @@ public final class Modeles {
             if (main == 1) return ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
             if (main == 0) return ItemDisplay.ItemDisplayTransform.NONE;
             if (main == 3) return ItemDisplay.ItemDisplayTransform.HEAD;
+            if (main == 4) return ItemDisplay.ItemDisplayTransform.NONE;
             ItemStack o = armureObjets.get(a);
             boolean paire = o.hasItemMeta() && o.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE);
             if (o.getType() == org.bukkit.Material.SHIELD) return ItemDisplay.ItemDisplayTransform.NONE;   // placé à la main (ECU)
@@ -1203,13 +1395,22 @@ public final class Modeles {
 
         private ItemStack objetSoi(int k) {
             ItemStack o = objets[k];
-            return marqueSoi && o != null && MarqueSoi.bras(modele, k) ? MarqueSoi.marquer(o) : o;
+            return o != null && ((marqueSoi && MarqueSoi.bras(modele, k)) || teteMarquee(k)) ? MarqueSoi.marquer(o) : o;
+        }
+
+        /**
+         * Pantin permanent : la tête de sa copie (et son casque) est toujours marquée, donc effacée à la première personne
+         * (comme First-person Model, qui ne dessine jamais la tête) et entière en F5. Sans cela, il voyait sa propre tête
+         * en regardant par terre : elle se penche avec le regard et passait devant la caméra.
+         */
+        private boolean teteMarquee(int k) {
+            return permanent && MarqueSoi.tete(modele, k);
         }
 
         /** Objet de sa copie pour une couche : couche d'armure d'un bras marquée comme le bras (pas les objets tenus). */
         private ItemStack armureSoi(int a) {
             ItemStack o = armureObjets.get(a);
-            return marqueSoi && main(a) == 0 && MarqueSoi.bras(modele, armureOs.get(a)) ? MarqueSoi.marquer(o) : o;
+            return main(a) == 0 && ((marqueSoi && MarqueSoi.bras(modele, armureOs.get(a))) || teteMarquee(armureOs.get(a))) ? MarqueSoi.marquer(o) : o;
         }
 
         /** Change la marque des bras de sa copie (début ou fin d'une compétence). */
@@ -1257,8 +1458,16 @@ public final class Modeles {
                 t.getScale(), t.getRightRotation());
         }
 
+        /** Image à ne pas renvoyer : la même, ou si proche de la dernière envoyée que l'écart ne se voit pas (Animateur.memeImage). */
+        private boolean dejaEnvoyee(Transformation t, Transformation avant) {
+            if (avant == null) return false;
+            if (t.equals(avant)) return true;
+            return economieImages && t.getScale().equals(avant.getScale()) && t.getRightRotation().equals(avant.getRightRotation())
+                && Animateur.memeImage(t.getTranslation(), t.getLeftRotation(), avant.getTranslation(), avant.getLeftRotation());
+        }
+
         private void envoyer(ItemDisplay d, Transformation t, Transformation[] cache, int i, int intervalle) {
-            if (d == null || !d.isValid() || t.equals(cache[i])) return;
+            if (d == null || !d.isValid() || dejaEnvoyee(t, cache[i])) return;
             cache[i] = t;
             d.setInterpolationDelay(0);
             d.setInterpolationDuration(intervalle);
@@ -1330,7 +1539,153 @@ public final class Modeles {
 
         /** Mouvements où le corps entier est tourné par l'animation : il reste dans l'axe du regard. */
         private boolean corpsAligne() {
-            return animationOuGeste() || "nage".equals(auto) || "vol".equals(auto) || "dormir".equals(auto) || "echelle".equals(auto);
+            // (le geste de fond, la main qui tient un objet, ne compte pas : il laisse la tête tourner seule)
+            return animationOuGeste() || aPlat() || auto("dormir") || auto("echelle");
+        }
+
+        /** Le mouvement automatique en cours est-il celui-là (ou sa variante de posture : « nage_combat ») ? */
+        private boolean auto(String nom) {
+            return auto != null && (auto.equals(nom) || auto.startsWith(nom + "_"));
+        }
+
+        /** Mouvements à plat ventre : le corps entier se penche vers le regard, la tête ne se penche pas en plus. */
+        private boolean aPlat() {
+            return auto("nage") || auto("vol") || auto("vrille") || auto("ramper");
+        }
+
+        /**
+         * Pantin permanent : geste tenu qu'on vient de quitter (remplacé ou arrêté), figé sur sa dernière pose. Il sort en
+         * fondu au lieu de disparaître d'un coup : le bras ne retombe plus entre « bander l'arc » et « arc bandé », et la
+         * main de corde part bien de la corde au lâcher de la flèche.
+         */
+        private Animation gesteSortant;
+        private double tempsSortant;
+        private long debutSortie;
+
+        /**
+         * Avant de changer de geste ou de l'arrêter. Seul un geste tenu (en boucle, ou « hold ») est gardé : un geste joué
+         * une fois (coup de bras, coup reçu) sort déjà tout seul. Une animation demandée ({@code dessus} faux) prend tout le
+         * corps : rien n'est gardé.
+         */
+        private void sortir(boolean dessus, String suivant) {
+            if (!dessus) {
+                gesteSortant = null;
+                return;
+            }
+            if (!pantin || !permanent || forcee == null || !forceePartielle || forcee.equals(suivant)) return;
+            Animation av = trouver(forcee);
+            if (av == null || !(forceeBoucle || av.boucle().equals("loop") || av.boucle().equals("hold"))) return;
+            gesteSortant = av;
+            tempsSortant = forceeBoucle ? tempsPiste(av, debutForcee, true) : Math.min(av.duree(), (tic - debutForcee) / 20.0);
+            debutSortie = tic;
+        }
+
+        /** Un geste tenu (manger, viser, garde...) est-il en cours par-dessus les mouvements ? */
+        boolean gesteTenu() {
+            if (forcee == null || !forceePartielle) return false;
+            Animation a = trouver(forcee);
+            return a != null && (forceeBoucle || a.boucle().equals("loop") || a.boucle().equals("hold"));
+        }
+
+        /** Pantin permanent : geste de fond (voir gesteDeFond), son début, et le tic où il a commencé à sortir (-1 : en place). */
+        private String fond;
+        private long debutFond, finFond = -1;
+        /** Geste de fond qu'on vient de remplacer, figé sur sa pose, qui sort en fondu sous le nouveau. */
+        private Animation fondSortant;
+        private double tempsFondSortant;
+        private long debutFondSortie;
+        /** Part du geste de fond (0 à 1) : il s'efface à plat ventre, sur une échelle et au lit, où les bras ont leur mouvement. */
+        private float partFond = 1f;
+
+        /** Pantin d'un joueur : sa vitesse du dernier tic (blocs par tic), à plat et en hauteur. */
+        private double vitesseAuto, monteeAuto;
+        /** Cape : angle de soulèvement vers l'arrière (degrés, négatif = vers l'arrière), lissé d'une image à l'autre. */
+        private float angleCape;
+        /** Sens du dernier déplacement (vecteur unité) et nombre de tics de suite sans bouger. */
+        private double sensX, sensZ;
+        private int arrets;
+        /** Tics de suite au sol (voir locomotion : un tic au sol entre deux bonds n'arrête pas le saut). */
+        private int ticsAuSol;
+        /** Avance (secondes d'animation) du mouvement réglé sur la vitesse, et de celui d'avant pendant le fondu. */
+        private double phaseAuto, phaseAvant;
+        private String phaseDe, phaseAvantDe;
+        private long phaseTic = -1;
+
+        /**
+         * Mouvements dont la cadence suit la vitesse réelle du joueur, comme le jeu (qui avance les jambes de la distance
+         * parcourue) : les pieds ne glissent pas sous une lenteur, une vitesse ou un sprint de classe, et un joueur arrêté sur
+         * une échelle ne grimpe pas dans le vide. Renvoie {vitesse pour laquelle l'animation est écrite (blocs par tic),
+         * cadence minimale}, ou null pour un mouvement joué à l'horloge.
+         */
+        private double[] rythme(String nom) {
+            if (nom == null || !pantin || !(base instanceof Player)) return null;
+            for (Object[] r : RYTHMES) if (nom.equals(r[0]) || nom.startsWith(r[0] + "_")) return new double[]{(double) r[1], (double) r[2]};
+            return null;
+        }
+
+        /** Une fois par tic : fait avancer le mouvement réglé sur la vitesse. */
+        private void avancerPhase() {
+            if (phaseTic == tic) return;
+            phaseTic = tic;
+            if (!java.util.Objects.equals(auto, phaseDe)) {
+                phaseAvant = phaseAuto;
+                phaseAvantDe = phaseDe;
+                // d'une allure à l'autre (marche → course), le même pied reste devant
+                Animation avant = phaseDe == null ? null : trouver(phaseDe), apres = auto == null ? null : trouver(auto);
+                phaseAuto = rythme(phaseDe) != null && rythme(auto) != null && avant != null && apres != null && avant.duree() > 0
+                    ? phaseAuto % avant.duree() / avant.duree() * apres.duree() : 0;
+                phaseDe = auto;
+            }
+            double[] r = rythme(auto);
+            if (r == null) return;
+            double v = auto("echelle") ? monteeAuto : vitesseAuto;
+            // Plus vite que l'allure pour laquelle l'animation est écrite (potion de vitesse, élan d'une compétence, bonds) :
+            // la cadence ne suit qu'à 40 % et plafonne à 1,3 fois (un coureur allonge sa foulée plus qu'il n'accélère ses
+            // jambes). Avant, elle suivait jusqu'à 1,8 fois : les jambes moulinaient.
+            double part = v / r[0];
+            phaseAuto += Math.max(r[1], part <= 1 ? part : Math.min(1.3, 1 + (part - 1) * 0.4)) / 20.0;
+        }
+
+        /** Sens du pantin couché dans un lit : la tête vers la tête du lit (le pantin est couché sur le dos, tête derrière lui). */
+        private float sensDuLit(Player p, float defaut) {
+            try {
+                if (p.getBedLocation().getBlock().getBlockData() instanceof org.bukkit.block.data.type.Bed lit) {
+                    return switch (lit.getFacing()) {
+                        case SOUTH -> 180f;
+                        case WEST -> 270f;
+                        case NORTH -> 0f;
+                        case EAST -> 90f;
+                        default -> defaut;
+                    };
+                }
+            } catch (RuntimeException e) {
+                // pas dans un lit (ou lit disparu) : il garde son sens
+            }
+            return defaut;
+        }
+
+        /** Corps penché vers le regard (nage, vol, vrille), en degrés ; lissé d'un tic à l'autre. */
+        private float inclinaison;
+        /** Part du recul « regard vers le bas » de sa copie (0 à 1), lissée. */
+        private float reculBas;
+
+        /**
+         * Penche le corps entier autour de la place du joueur (sa tête, à plat ventre) : positif = vers le bas. Le jeu fait
+         * pareil pour la nage et les élytres (rotation de -90° moins l'inclinaison du regard).
+         */
+        private Pose[] pencher(Pose[] poses, float degres) {
+            double r = Math.toRadians(yaw);
+            Vector3f devant = new Vector3f((float) -Math.sin(r), 0f, (float) Math.cos(r));
+            Vector3f axe = new Vector3f(0f, 1f, 0f).cross(devant).normalize();
+            Quaternionf q = new Quaternionf().rotateAxis((float) Math.toRadians(degres), axe);
+            Vector3f centre = new Vector3f(0f, 5f / 16f * taille, 0f);
+            Pose[] res = new Pose[poses.length];
+            for (int k = 0; k < poses.length; k++) {
+                Pose p = poses[k];
+                if (p == null) continue;
+                res[k] = new Pose(new Vector3f(p.translation()).sub(centre).rotate(q).add(centre), new Quaternionf(q).mul(p.rotation()), p.echelle());
+            }
+            return res;
         }
 
         /**
@@ -1341,14 +1696,25 @@ public final class Modeles {
          * visée : les bras visent où regarde le joueur, comme le jeu aligne le corps sur un coup) et dans les mouvements où
          * l'animation tourne le corps entier, il s'aligne en deux ou trois tics.
          */
-        private float corpsJoueur(float regard, boolean marche) {
+        private float corpsJoueur(float regard, boolean marche, double dx, double dz) {
             if (Float.isNaN(corpsLisse) || pantinCorpsSuit >= 1f || animationDemandee()) return corpsLisse = enDegres(regard);
             float ecart = enDegres(regard - corpsLisse);
-            if (corpsAligne()) corpsLisse += ecart * Math.max(pantinCorpsSuit, 0.6f);
-            else if (marche) corpsLisse += ecart * pantinCorpsSuit;
+            if (corpsAligne()) {
+                corpsLisse += ecart * Math.max(pantinCorpsSuit, 0.6f);
+            } else if (marche) {
+                // Comme le jeu (LivingEntity.tick) : le corps se tourne vers là où il VA, pas vers là où il regarde. En
+                // avançant de biais sans tourner la tête, le corps part de biais et la tête continue de regarder devant.
+                // À plus de 95° du regard, il marche à reculons : le corps tourne le dos au déplacement.
+                float cible = regard;
+                if (pantinCorpsVersMouvement && dx * dx + dz * dz > 0.03 * 0.03) {
+                    cible = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
+                    if (Math.abs(enDegres(regard - cible)) > 95f) cible -= 180f;
+                }
+                corpsLisse += enDegres(cible - corpsLisse) * pantinCorpsSuit;
+            }
             ecart = enDegres(regard - corpsLisse);
             if (Math.abs(ecart) > pantinTeteMax) corpsLisse += ecart - Math.signum(ecart) * pantinTeteMax;
-            if ((marche || corpsAligne()) && Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
+            if (corpsAligne() && Math.abs(enDegres(regard - corpsLisse)) < 0.05f) corpsLisse = regard;
             return corpsLisse = enDegres(corpsLisse);
         }
 
@@ -1623,6 +1989,12 @@ public final class Modeles {
                 if (a == null) return false;
                 boucle = ev.isBoucle();
             }
+            sortir(dessus, a.nom());
+            // le geste quitté à l'instant reste entier sous le nouveau le temps que celui-ci entre, puis il sort
+            if (dessus && gesteSortant != null && debutSortie == tic) {
+                boolean uneFois = !boucle && !a.boucle().equals("loop") && !a.boucle().equals("hold");
+                debutSortie = tic + (uneFois ? Math.min(fonduTics, 2) : fonduTics);
+            }
             forcee = a.nom();
             forceeBoucle = boucle;
             forceePartielle = dessus;
@@ -1634,6 +2006,7 @@ public final class Modeles {
 
         /** Revient aux animations automatiques. */
         public void arreterAnimation() {
+            sortir(true, null);
             forcee = null;
             forceePartielle = false;
             if (!mob) memoriser();
@@ -1686,6 +2059,9 @@ public final class Modeles {
             // le pantin d'un joueur ne joue que l'animation demandée ; permanent, il réagit aux coups (geste par-dessus)
             if (pantin && !(permanent && "degat".equals(role) && !animationDemandee())) return false;
             if (pantin) {
+                // pas pendant un geste tenu (arc bandé, bouclier levé, repas) : le sursaut redresserait le buste et les bras
+                // quitteraient la corde ; le jeu non plus ne bouge pas le corps d'un joueur touché
+                if (gesteTenu()) return false;
                 Animation g = trouver("degat");
                 return g != null && demarrer(g.nom(), false, true);
             }
@@ -1793,10 +2169,20 @@ public final class Modeles {
             armureEchelle.clear();
             habiller(this, modele, nouvellesPeaux, armure);
             boolean memesPeaux = avantPeaux.keySet().equals(peaux.keySet());
-            if (memesPeaux) for (Map.Entry<Integer, ItemStack> e : peaux.entrySet()) if (!e.getValue().isSimilar(avantPeaux.get(e.getKey()))) memesPeaux = false;
             if (endormi) return;
-            if (memesPeaux && avantOs.equals(armureOs) && avantMain.equals(armureMain) && armures.length == armureObjets.size()) {
+            if (memesPeaux && avantOs.equals(armureOs) && avantMain.equals(armureMain) && armures.length == armureObjets.size()
+                    && objets.length == modele.parties().size()) {
                 // mêmes os : seuls les objets changent (arme en main, pièce d'armure), sans refaire le pantin
+                // (une armure fondue dans la peau change l'objet du morceau : lui aussi sur place)
+                for (Map.Entry<Integer, ItemStack> e : peaux.entrySet()) {
+                    int k = e.getKey();
+                    if (e.getValue().isSimilar(avantPeaux.get(k)) || k >= parties.length || parties[k] == null) continue;
+                    objets[k] = e.getValue();
+                    rouges = null;
+                    boolean rouge = finTeinte >= 0;
+                    if (parties[k].isValid()) parties[k].setItemStack(rouge ? Teinte.teinter(objets[k], COULEUR_DEGATS) : objets[k]);
+                    if (k < partiesSoi.length && partiesSoi[k] != null && partiesSoi[k].isValid()) partiesSoi[k].setItemStack(objetSoi(k));
+                }
                 for (int a = 0; a < armureObjets.size(); a++) {
                     if (armureObjets.get(a).isSimilar(avantObjets.get(a))) continue;
                     if (armures[a] != null && armures[a].isValid()) armures[a].setItemStack(armureObjets.get(a));
@@ -1817,19 +2203,43 @@ public final class Modeles {
             double v = Math.sqrt(dx * dx + dz * dz);
             @SuppressWarnings("deprecation")
             boolean sol = p.isOnGround();
+            // en courant par bonds, il ne touche le sol qu'un tic entre deux sauts : il reste en l'air (sinon la course
+            // revenait un instant à chaque bond)
+            ticsAuSol = sol ? ticsAuSol + 1 : 0;
+            if (sol && ticsAuSol < 2 && v > 0.2 && (auto("saut") || auto("chute"))) sol = false;
             if (p.isSleeping()) c.add("dormir");
             else if (p.isInsideVehicle()) c.add("assis");
+            else if (p.isRiptiding()) { c.add("vrille"); c.add("vol"); }
             else if (p.isGliding()) c.add("vol");
-            else if (p.isSwimming()) c.add("nage");
+            else if (p.isSwimming() || (p.getPose() == org.bukkit.entity.Pose.SWIMMING && p.isInWater())) c.add("nage");
+            else if (p.getPose() == org.bukkit.entity.Pose.SWIMMING) { c.add("ramper"); c.add("nage"); }   // sous un bloc, hors de l'eau
             else if (p.isClimbing() && !sol) c.add("echelle");
             else if (!sol && !p.isFlying()) c.add(dy < -0.25 ? "chute" : "saut");
+            // Sens du déplacement par rapport au REGARD. Le corps se tourne vers là où il va (corpsJoueur) : quel que soit
+            // le sens (tout droit, de biais, de côté), il joue la même marche, qui ne s'interrompt pas quand il change de
+            // direction ; seule la marche à reculons est un autre mouvement, comme dans le jeu (au-delà de 95° du regard).
+            // Avant, le sens était lu par rapport au corps en train de tourner : la marche, le pas de côté et le recul se
+            // relayaient pendant un quart de seconde à chaque changement de direction, chacun repartant de zéro.
+            double r = Math.toRadians(l.getYaw());
+            double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
+            // vol en créatif : il plane (penché quand il avance) au lieu de courir dans le vide ; un modèle sans ces
+            // mouvements garde ceux d'avant
+            if (c.isEmpty() && p.isFlying() && !sol) {
+                if (v > 0.08 && avant > 0.6 * v) c.add("planer_avance");
+                c.add("planer");
+            }
             if (p.isSneaking()) c.add(v > 0.01 ? "accroupi_marche" : "accroupi");
             if (v > 0.01) {
-                double r = Math.toRadians(l.getYaw());
-                double avant = -dx * Math.sin(r) + dz * Math.cos(r), cote = -dx * Math.cos(r) - dz * Math.sin(r);
-                if (avant < -0.5 * v) c.add("recul");
-                else if (Math.abs(cote) > 0.75 * v) c.add(cote > 0 ? "pas_droite" : "pas_gauche");
-                if (p.isSprinting() || v > 0.24) c.add("course");
+                if (pantinCorpsVersMouvement) {
+                    // à reculons à partir de 100° du regard ; il le reste jusqu'à 85° (un écart, pour ne pas hésiter)
+                    if (avant < (auto("recul") ? 0.09 : -0.17) * v) c.add("recul");
+                } else if (avant < -0.5 * v) {
+                    c.add("recul");
+                } else if (Math.abs(cote) > 0.75 * v) {
+                    c.add(cote > 0 ? "pas_droite" : "pas_gauche");
+                }
+                // de la marche à la course à 0,24 bloc par tic ; il reste en course jusqu'à 0,2 (même raison)
+                if (p.isSprinting() || v > (auto("course") ? 0.2 : 0.24)) c.add("course");
                 c.add("marche");
             }
             c.add("repos");
@@ -1861,10 +2271,18 @@ public final class Modeles {
                 double dy = !memeMonde ? 0 : l.getY() - derniere.getY();
                 double vitesse = Math.sqrt(dx * dx + dz * dz);
                 // pantin d'un joueur : la tête regarde où il regarde ; le corps suit comme dans le jeu (corpsJoueur)
-                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw(), vitesse > 0.01) : corps(le);
+                yaw = ancre != null ? ancre.getYaw() : pantin && le instanceof Player ? corpsJoueur(l.getYaw(), vitesse > 0.01, dx, dz) : corps(le);
+                if (pantin && le instanceof Player pj && ancre == null && pj.isSleeping()) yaw = corpsLisse = sensDuLit(pj, yaw);
+                // Vitesse lissée : le serveur reçoit les déplacements du joueur par à-coups (aucun pendant un tic, deux au
+                // suivant, surtout quand il va vite ou que sa connexion hésite). Lue telle quelle, la course sautait d'une
+                // allure à l'autre et sa cadence tremblait. Deux tics sans bouger : il est vraiment arrêté.
+                arrets = vitesse < 0.003 ? arrets + 1 : 0;
+                vitesseAuto = arrets >= 2 || !(pantin && le instanceof Player) ? vitesse : vitesseAuto + (vitesse - vitesseAuto) * 0.35;
+                if (vitesse > 0.003) { sensX = dx / vitesse; sensZ = dz / vitesse; }
+                monteeAuto = Math.abs(dy);
                 Animation a;
                 if (pantin && le instanceof Player pj) {
-                    a = locomotion(pj, l, dx, dy, dz);
+                    a = locomotion(pj, l, sensX * vitesseAuto, dy, sensZ * vitesseAuto);
                 } else {
                     String voulue = vitesse > 0.15 && trouver("course") != null ? "course" : vitesse > 0.01 ? "marche" : "repos";
                     a = trouver(voulue);
@@ -1872,15 +2290,16 @@ public final class Modeles {
                 String nom = a == null ? null : a.nom();
                 if (nom != null && !nom.equals(auto)) { auto = nom; debutAuto = tic; }
                 if (nom == null) auto = null;
+                if (pantin && le instanceof Player) avancerPhase();
                 // pantin d'un joueur pendant une compétence ou couché : la tête reste à l'animation
-                boolean teteFigee = pantin && le instanceof Player && (animationDemandee() || "dormir".equals(auto));
+                boolean teteFigee = pantin && le instanceof Player && (animationDemandee() || auto("dormir"));
                 if (suiviTete && Float.isNaN(regardYaw) && !teteFigee) {
                     teteYaw = limiter(enDegres(tete(le) - yaw), 75);
                     // pantin d'un joueur debout : la tête se penche autant que dans le jeu (pas à la nage, en vol ou couché :
                     // le corps est déjà penché par l'animation)
-                    boolean libre = pantin && le instanceof Player && !animationDemandee()
-                        && !"nage".equals(auto) && !"vol".equals(auto) && !"dormir".equals(auto);
-                    tetePitch = limiter(l.getPitch(), libre ? 90 : 45);
+                    boolean libre = pantin && le instanceof Player && !animationDemandee();
+                    // à plat ventre (nage, vol, vrille, ramper), c'est le corps entier qui se penche vers le regard (pencher)
+                    tetePitch = pantin && le instanceof Player && aPlat() ? 0f : limiter(l.getPitch(), libre ? 90 : 45);
                 }
             } else if (auto == null && forcee == null) {
                 Animation a = trouver("repos");
@@ -1941,9 +2360,11 @@ public final class Modeles {
                     forcee = null;
                 } else if (!forceeBoucle && !fa.boucle().equals("loop") && tf >= fa.duree()) {
                     if (mort) return false;
+                    // geste tenu du pantin permanent (arc bandé) : il reste sur sa dernière pose tant qu'on ne l'arrête pas
+                    if (pantin && permanent && forceePartielle && fa.boucle().equals("hold")) { /* tenu */ }
                     // pantin : garde un instant la dernière pose (le coup suivant d'un combo reprend le même pantin),
                     // puis revient à la pose du vrai joueur avant de disparaître
-                    if (pantin && !forceePartielle && tf < fa.duree() + pauseFinTics / 20.0) { /* attend */ }
+                    else if (pantin && !forceePartielle && tf < fa.duree() + pauseFinTics / 20.0) { /* attend */ }
                     else if (pantin && permanent) finAnimationPermanente();
                     else if (pantin) commencerRetour();
                     else if (!fa.boucle().equals("hold") || forceePartielle) forcee = null;
@@ -1984,12 +2405,17 @@ public final class Modeles {
             }
             List<Animateur.Couche> couches = new ArrayList<>(3);
             Animation pa = pleine == null ? null : trouver(pleine);
-            double tp = tempsPiste(pa, debutPleine, pleineBoucle);
+            // mouvement réglé sur la vitesse du joueur : son avance, pas l'horloge
+            boolean rythmee = pa != null && pleine.equals(auto) && pleine.equals(phaseDe) && rythme(pleine) != null && pa.duree() > 0;
+            double tp = rythmee ? phaseAuto % pa.duree() : tempsPiste(pa, debutPleine, pleineBoucle);
             float poids = 1f;
             if (tic - debutFondu < fonduTics) {
                 // pantin d'un joueur qui apparaît : il part de la pose que le jeu donnait au vrai joueur
                 Animation aa = avant == null ? (pantin && base instanceof Player ? poseDuJeu() : null) : trouver(avant);
-                couches.add(new Animateur.Couche(aa, tempsPiste(aa, debutAvant, avantBoucle), 1f, false));
+                // un mouvement réglé sur la vitesse sort du fondu depuis la pose où il en était
+                double ta = aa != null && avant != null && avant.equals(phaseAvantDe) && rythme(avant) != null
+                    ? phaseAvant + (tic - debutFondu) / 20.0 : tempsPiste(aa, debutAvant, avantBoucle);
+                couches.add(new Animateur.Couche(aa, ta, 1f, false));
                 poids = (tic - debutFondu) / (float) fonduTics;
                 if (avant == null && pantin && base instanceof Player && ancre == null) {
                     // le corps part de l'orientation du vrai joueur (en retard sur son regard) et tourne vers le regard
@@ -2000,6 +2426,37 @@ public final class Modeles {
             }
             couches.add(new Animateur.Couche(pa, tp, poids, false));
 
+            // geste de fond du pantin permanent (la main qui tient un objet) : sous les autres gestes, pas pendant une
+            // compétence (elle anime elle-même les bras)
+            // À la nage, en rampant, en vol, sur une échelle ou au lit, les deux bras font le mouvement : le fond s'efface.
+            boolean fondPermis = !animationDemandee() && posture == null && !aPlat() && !auto("echelle") && !auto("dormir");
+            float pasFond = fonduTics > 0 ? Math.max(1, intervalle) / (float) fonduTics : 1f;
+            partFond = fondPermis ? Math.min(1f, partFond + pasFond) : Math.max(0f, partFond - pasFond);
+            if (animationDemandee() || posture != null) partFond = 0f;
+            if (fondSortant != null) {
+                float w = fonduTics > 0 ? Math.min(1f, 1f - (tic - debutFondSortie + 1) / (float) fonduTics) : 0f;
+                if (w <= 0f || fond == null) fondSortant = null;
+                else if (partFond > 0f) couches.add(new Animateur.Couche(fondSortant, tempsFondSortant, w * partFond * POIDS_FOND, true));
+            }
+            if (fond != null) {
+                Animation fa = trouver(fond);
+                float w = fonduTics > 0 ? Math.min(1f, (tic - debutFond + 1) / (float) fonduTics) : 1f;
+                if (finFond >= 0) w *= fonduTics > 0 ? Math.max(0f, 1f - (tic - finFond + 1) / (float) fonduTics) : 0f;
+                if (fa == null || w <= 0f) {
+                    fond = null;
+                    finFond = -1;
+                } else if (partFond > 0f) {
+                    couches.add(new Animateur.Couche(fa, tempsPiste(fa, debutFond, true), w * partFond * POIDS_FOND, true));
+                }
+            }
+
+            // geste qu'on vient de quitter : il sort en fondu sous le suivant
+            if (gesteSortant != null) {
+                float w = fonduTics > 0 ? Math.min(1f, 1f - (tic - debutSortie + 1) / (float) fonduTics) : 0f;
+                if (w <= 0f || animationDemandee() || posture != null) gesteSortant = null;
+                else couches.add(new Animateur.Couche(gesteSortant, tempsSortant, w, true));
+            }
+
             // animation par-dessus (dégâts, attaque...) : entre et sort en fondu
             Animation da = null;
             double td = 0;
@@ -2008,10 +2465,14 @@ public final class Modeles {
                 td = tempsPiste(da, debutForcee, forceeBoucle);
                 float w = 1f;
                 if (fonduTics > 0 && da != null) {
+                    boolean uneFois = !forceeBoucle && !da.boucle().equals("loop") && !da.boucle().equals("hold");
+                    // un geste court joué une fois (coup de bras, 6 tics) entre et sort en 2 tics au plus : avec un fondu plus
+                    // long il n'atteindrait jamais sa pleine amplitude
+                    int f = uneFois ? Math.min(fonduTics, 2) : fonduTics;
                     // entrée en fondu sur le temps écoulé depuis le début, pas sur le temps dans la boucle : un geste en
                     // boucle (viser à l'arc, manger) retombait et remontait à chaque tour de son animation
-                    w = Math.min(1f, (tic - debutForcee) / (float) fonduTics);
-                    if (!forceeBoucle && !da.boucle().equals("loop") && !da.boucle().equals("hold")) w = Math.min(w, (float) ((da.duree() - td) * 20 / fonduTics));
+                    w = Math.min(1f, (tic - debutForcee + 1) / (float) f);
+                    if (uneFois) w = Math.min(w, (float) ((da.duree() - td) * 20 / f));
                 }
                 couches.add(new Animateur.Couche(da, td, Math.max(0f, w), true));
             }
@@ -2022,7 +2483,19 @@ public final class Modeles {
             if (!java.util.Objects.equals(cleDessus, effetDessusCle)) { effetDessusCle = cleDessus; tEffetDessus = -1e-9; }
             if (da != null) tEffetDessus = effets(da, tEffetDessus, (tic - debutForcee) / 20.0, forceeBoucle);
 
-            Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch);
+            // geste de visée (arc, arbalète, bouclier, longue-vue, cor) : les bras montent et descendent avec le regard
+            float leve = 0f;
+            if (pantin && permanent && forcee != null && forceePartielle && base instanceof Player) {
+                String g = forcee.endsWith("_gauche") ? forcee.substring(0, forcee.length() - 7) : forcee;
+                if (VISEES.contains(g)) leve = g.equals("garde_bouclier") ? Math.max(-80f, Math.min(25f, l.getPitch())) : limiter(l.getPitch(), 85);
+            }
+            Pose[] poses = Animateur.posesCompletes(modele, couches, yaw, taille, teteYaw, tetePitch, leve);
+            if (pantin && base instanceof Player) {
+                float cible = ancre == null && !animationDemandee() && (auto("nage") || auto("vol") || auto("vrille")) ? limiter(l.getPitch(), 90) : 0f;
+                inclinaison += (cible - inclinaison) * 0.35f;
+                if (cible == 0f && Math.abs(inclinaison) < 0.2f) inclinaison = 0f;
+                if (inclinaison != 0f) poses = pencher(poses, inclinaison);
+            }
             if (visee != null) poses = visee.appliquer(modele, poses);
             dessiner(poses, intervalle);
             return true;
@@ -2044,8 +2517,18 @@ public final class Modeles {
             List<Display> affAtt = moAtt == null ? List.of() : affichages();
             boolean attente = monte() && moAtt != null && moAtt.actif() && !affAtt.isEmpty() && moAtt.enAttente(affAtt.get(0));
             // copie pour soi : reculée vers l'arrière du corps (l'avant du modèle regarde -z)
+            // (pantin permanent debout : un peu plus quand il regarde par terre, de 20° à 80° vers le bas, voir pantinReculBas)
+            float bas = 0f;
+            if (permanent && pantinReculBas > 0 && base instanceof Player && ancre == null && !animationDemandee() && !aPlat() && !auto("dormir")) {
+                bas = lisse(Math.max(0f, Math.min(1f, (base.getLocation().getPitch() - 20f) / 60f)));
+            }
+            reculBas += (bas - reculBas) * 0.5f;
+            if (Math.abs(bas - reculBas) < 0.01f) reculBas = bas;
+            // (pantin permanent : dans l'axe du regard, pas du corps, qui peut être tourné de 50° vers là où il va)
+            float axeRecul = permanent && base instanceof Player && ancre == null && !animationDemandee() ? base.getLocation().getYaw() : yaw;
             Vector3f recul = partiesSoi.length == 0 ? new Vector3f()
-                : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(yaw))).transform(new Vector3f(0, 0, pantinRecul / 16f * taille));
+                : new Quaternionf().rotateY((float) (Math.PI - Math.toRadians(axeRecul))).transform(
+                    new Vector3f(0, 0, (pantinRecul + pantinReculBas * reculBas) / 16f * taille));
             for (int k = 0; k < parties.length; k++) {
                 ItemDisplay d = parties[k];
                 if (d == null || poses[k] == null || !d.isValid()) continue;
@@ -2063,7 +2546,7 @@ public final class Modeles {
                     envoyer(partiesSoi[k], repereSoi(new Transformation(new Vector3f(tr.getTranslation()).add(recul), tr.getLeftRotation(), tr.getScale(),
                         tr.getRightRotation())), envoyeesSoi, k, intervalle);
                 }
-                if (!imageAutres || tr.equals(envoyees[k])) continue;
+                if (!imageAutres || dejaEnvoyee(tr, envoyees[k])) continue;
                 envoyees[k] = tr;
                 d.setInterpolationDelay(0);
                 d.setInterpolationDuration(ivAutres(intervalle));
@@ -2086,7 +2569,11 @@ public final class Modeles {
                     tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 4f / 16f, 0).mul(ech)));
                     ech.mul(0.625f);
                 }
-                if (bouclierGauche(a)) {
+                if (main(a) == 4) {
+                    // cape : tournée autour de son accroche aux épaules (axe x de l'os du tronc). Elle se soulève vers l'arrière
+                    // avec la vitesse (≈ 30° en marchant, 40° en courant), un peu plus en tombant, et ondule doucement à l'arrêt.
+                    rot = capeTournee(p.rotation(), tr, ech);
+                } else if (bouclierGauche(a)) {
                     // bouclier sanglé à l'avant-bras gauche (comme l'écu des animations, epee.py) : la plaque à l'extérieur du
                     // bras, son haut vers le coude, son centre 4,5 pixels à l'extérieur et 4 au-dessus du poing. Dessiné sans
                     // réglage « en main » (NONE) : le jeu pose le modèle spécial du bouclier en (-0,5, -0,5, -0,5), retourné en
@@ -2113,13 +2600,30 @@ public final class Modeles {
                     envoyer(armuresSoi[a], repereSoi(new Transformation(new Vector3f(tr).add(recul), rot, sansArme ? new Vector3f() : ech, droite)),
                         armuresEnvoyeesSoi, a, intervalle);
                 }
-                if (!imageAutres || t.equals(armuresEnvoyees[a])) continue;
+                if (!imageAutres || dejaEnvoyee(t, armuresEnvoyees[a])) continue;
                 armuresEnvoyees[a] = t;
                 d.setInterpolationDelay(0);
                 d.setInterpolationDuration(ivAutres(intervalle));
                 d.setTransformation(t);
             }
             if (aEtiquettes) etiquettes(poses, position(), intervalle);
+        }
+
+        /**
+         * Cape portée dans le dos : rotation de l'os du tronc suivie d'un soulèvement autour de l'accroche (axe x), et
+         * décalage de la translation pour que l'accroche ne bouge pas. Le soulèvement suit la vitesse du joueur, lissé.
+         */
+        private Quaternionf capeTournee(Quaternionf os, Vector3f tr, Vector3f ech) {
+            double v = Math.max(0, vitesseAuto);
+            float cible = -(float) (4 + Math.min(36, v * 140));
+            if (monteeAuto < -0.12) cible -= 14f;                                       // en chute, elle remonte
+            cible += (float) (Math.sin(System.currentTimeMillis() / 600.0) * 1.5);       // ondulation lente
+            angleCape += (cible - angleCape) * 0.25f;
+            Quaternionf rx = new Quaternionf().rotateX((float) Math.toRadians(angleCape));
+            Vector3f o = new Vector3f(ACCROCHE_CAPE[0] - 8f, ACCROCHE_CAPE[1] - 8f, ACCROCHE_CAPE[2] - 8f).div(16f).mul(ech);
+            Vector3f d = new Vector3f(o).sub(new Quaternionf(rx).transform(new Vector3f(o)));
+            tr.add(new Quaternionf(os).transform(d));
+            return new Quaternionf(os).mul(rx);
         }
 
         /**
@@ -2326,7 +2830,18 @@ public final class Modeles {
     /** Empreintes SHA-256 des joueur.bbmodel livrés avant le 19 nov. 2026 (bas du torse qui remontait de 2 pixels). */
     private static final java.util.Set<String> SQUELETTES_ANCIENS = java.util.Set.of(
         "53dc0e84042526bc011b2c5d7315b6e511fd3ef39ffd1159916d85d7d80f19eb",
-        "d41ee45f17054bf74ac955343158f24f6223d6e79c2037b7ebcd036bec5590c8");
+        "d41ee45f17054bf74ac955343158f24f6223d6e79c2037b7ebcd036bec5590c8",
+        // pantin_mouvements.bbmodel de la 1.6.0 (24 animations) : remplacé par celui de la 1.7.0 s'il n'a pas été retouché.
+        // À chaque nouvelle version de ce fichier, ajouter ici l'empreinte SHA-256 de la précédente.
+        "e942599e1e7f3ce3f132d71de326028660feeb941780f9acfcae77e08476ba2a",
+        // ceux de la 1.7.0 (45 animations), de la 1.7.1 (47), de la 1.7.2 (49) et de la 1.7.3 (60)
+        "f533ae674be361a0258e7d84e569b36f6110c4dcda6fe5d56bef5d4c0a37d22e",
+        "7f8d0ce0fd4fa2bc4ee34bff4b22286529fe7ba610b8f4ab7c10881cba3dbf2d",
+        "3f7bfc697804da0ee20676b502b437b4667572d0fb0c4008f345d6e29ccc09bc",
+        "d00bf14f9069d615b22a4665c0184a596221c74a7819219a242ead8ca6be40cd",
+        // ceux de la 1.7.4 et de la 1.7.5
+        "2e189b666c60905ea4c0213bc320b5a3059eedb4fe7dc5b82b93b1c5c91769b1",
+        "30515c1d3c6e400128ab773d3f4eda83affbc05a13aeaaa349121b26c065fa5f");
 
     static String empreinte(byte[] octets) {
         try {

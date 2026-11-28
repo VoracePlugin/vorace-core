@@ -49,6 +49,18 @@ public final class PeauUV {
         return f;
     }
 
+    /**
+     * Bouchon d'une articulation (genou, coude) : la face qui ferme le bout d'une moitié de membre du côté de la jointure
+     * (le dessous d'une cuisse ou d'un bras, le dessus d'un tibia ou d'un avant-bras). Le skin n'a pas de pixels pour elle :
+     * chaque colonne prend la couleur du pixel de la face avant qui la touche, étirée sur toute la profondeur. Sans elle,
+     * les deux moitiés étaient des tubes ouverts : quand le genou pliait, le haut du tibia sortait devant la cuisse et l'on
+     * voyait au travers (retour d'Antoine : « quand je marche, mon genou disparaît »).
+     */
+    static Face bouchon(int[] z, int r0, int rh, boolean bas) {
+        int u = z[0], v = z[1], l = z[2], p = z[3];
+        return bas ? new Face("up", u + p, v + p + r0, l, 1) : new Face("down", u + p, v + p + r0 + rh - 1, l, 1);
+    }
+
     /** Morceaux d'après le squelette (os « peau_... ») ; bras fins : 3 pixels de large, côté extérieur retiré. */
     public static List<Morceau> morceaux(ModeleBB squelette, boolean fin) {
         List<Morceau> l = new ArrayList<>();
@@ -77,9 +89,13 @@ public final class PeauUV {
             int rh = tete ? 8 : bas ? h / 2 + Peau.recouvrement(nom) : h / 2;
             // le bas du torse a un dessus : si le buste se penche, on voit le haut d'un torse, pas le vide
             boolean dessus = tete || !bas || nom.equals("corps_bas"), dessous = tete || bas;
-            l.add(new Morceau(nom + (fin ? "_fin" : ""), p.nom(), de, a,
-                faces(zb[0], zb[1], zb[2], zb[3], r0, rh, dessus, dessous),
-                faces(zc[0], zc[1], zc[2], zc[3], r0, rh, dessus, dessous), tete ? CHAPEAU : VESTE));
+            List<Face> fb = faces(zb[0], zb[1], zb[2], zb[3], r0, rh, dessus, dessous);
+            List<Face> fc = faces(zc[0], zc[1], zc[2], zc[3], r0, rh, dessus, dessous);
+            if (bras || nom.startsWith("jambe")) {
+                fb.add(bouchon(zb, r0, rh, bas));
+                fc.add(bouchon(zc, r0, rh, bas));
+            }
+            l.add(new Morceau(nom + (fin ? "_fin" : ""), p.nom(), de, a, fb, fc, tete ? CHAPEAU : VESTE));
         }
         return l;
     }
@@ -214,6 +230,19 @@ public final class PeauUV {
      * modèle par pixel de seconde couche, et la définition d'objet qui les assemble.
      */
     public static Map<String, byte[]> generer(ModeleBB squelette) {
+        return generer(squelette, List.of());
+    }
+
+    /** Nombre de couches d'armure qu'un morceau peut porter fondues dans son objet (plastron et jambières, jambières et bottes). */
+    public static final int RANGS_ARMURE = 2;
+
+    /**
+     * @param armures armures que le pantin sait porter (« minecraft:iron », voir Modeles.armuresPantin). La définition de
+     *     chaque morceau reconnaît alors jusqu'à deux couches d'armure fondues dans son objet : les chaînes 0 et 1 de
+     *     custom_model_data (ArmuresPantin.cle) choisissent leur modèle, les teintes qui suivent celles des pixels (deux par
+     *     couche : la pièce, puis la surcouche du cuir) leur couleur. Une chaîne absente : pas d'armure.
+     */
+    public static Map<String, byte[]> generer(ModeleBB squelette, List<String> armures) {
         Map<String, byte[]> sortie = new TreeMap<>(genererBrasTenu());
         if (squelette == null) return sortie;
         sortie.put("assets/" + GenerateurPack.NS + "/textures/item/pantin_pixel.png", pixelBlanc());
@@ -255,6 +284,38 @@ public final class PeauUV {
                 cond.add("on_true", oui);
                 cond.add("on_false", non);
                 composite.add(cond);
+            }
+            // couches d'armure fondues dans le morceau (même repère : pivot en 8, 8, 8, échelle 1)
+            String os = m.nom().replace("_fin", "");
+            int pixels = base.size() + couche.size();
+            for (int rang = 0; rang < RANGS_ARMURE; rang++) {
+                JsonArray cas = new JsonArray();
+                for (String asset : armures) {
+                    for (String c : List.of(ArmuresPantin.HUMANOID, ArmuresPantin.JAMBIERES)) {
+                        if (!ArmuresPantin.existe(os, asset, c)) continue;
+                        JsonObject un = new JsonObject();
+                        un.addProperty("when", ArmuresPantin.cle(asset, c));
+                        JsonObject mo = new JsonObject();
+                        mo.addProperty("type", "minecraft:model");
+                        mo.addProperty("model", GenerateurPack.NS + ":" + ArmuresPantin.id(asset, c, os));
+                        JsonArray ta = new JsonArray();
+                        ta.add(teinte(pixels + 2 * rang));
+                        if (ArmuresPantin.cuir(asset)) ta.add(teinte(pixels + 2 * rang + 1));
+                        mo.add("tints", ta);
+                        un.add("model", mo);
+                        cas.add(un);
+                    }
+                }
+                if (cas.isEmpty()) continue;
+                JsonObject choix = new JsonObject();
+                choix.addProperty("type", "minecraft:select");
+                choix.addProperty("property", "minecraft:custom_model_data");
+                choix.addProperty("index", rang);
+                choix.add("cases", cas);
+                JsonObject rien = new JsonObject();
+                rien.addProperty("type", "minecraft:empty");
+                choix.add("fallback", rien);
+                composite.add(choix);
             }
             JsonObject modele = new JsonObject();
             modele.addProperty("type", "minecraft:composite");

@@ -83,6 +83,9 @@ modeles:
   # Modèles animés (plugins/Vorace/modeles-animes/*.bbmodel) : nombre de tics entre deux images de l'animation.
   # 1 = le plus fluide, 2 = deux fois moins de données envoyées aux joueurs (le jeu adoucit entre les images).
   intervalle-tics: 2
+  # Une image presque identique à la dernière envoyée (moins d'un quarantième de pixel et de 0,3°) n'est pas renvoyée : un
+  # modèle au repos, qui ne fait que respirer, n'envoie presque plus rien. false : tout est envoyé, comme avant la 1.7.5.
+  economie-images: true
   # Les parties d'un modèle n'existent que si un joueur est à moins de tant de blocs (0 = toujours).
   # Au-delà de la moitié de cette distance, les images sont envoyées deux fois moins souvent.
   distance-affichage: 48
@@ -113,6 +116,9 @@ pantin:
   # reculée de ce nombre de pixels (comme le mod « First Person Model ») : il voit ses bras et ses poings partir devant
   # lui sans avoir les épaules dans la caméra. Les autres voient le pantin à sa vraie place. 0 : pas de recul.
   recul-pour-soi: 4
+  # Pantin permanent : recul de plus (pixels) quand il regarde par terre. Les yeux du jeu sont juste au-dessus du torse :
+  # sans ce recul, le torse et les épaules remplissent l'écran dès qu'on baisse les yeux. 0 : désactivé.
+  recul-regard-bas: 5
   # Taille du pantin des joueurs. Le jeu dessine ses joueurs à 0,9375 (1,875 bloc de haut) : à 1, le pantin fait 2 blocs et
   # son crâne entre dans le plafond d'un couloir de 2 blocs.
   taille: 0.9375
@@ -121,6 +127,9 @@ pantin:
   # rattrapée à chaque tic (0.3 comme le jeu ; 1 : corps toujours face au regard, la tête ne tourne plus seule). Pendant
   # une compétence, le corps est face au regard tout de suite ; pendant un coup de bras ou une visée, en deux ou trois tics.
   corps-suit-regard: 0.3
+  # En marche, le corps se tourne vers là où il VA (comme le jeu) : en avançant de biais sans tourner la tête, le corps part
+  # de biais, la tête regarde toujours devant. false : le corps se tourne vers là où il regarde.
+  corps-vers-le-mouvement: true
   tete-max: 50
   # Ultimes : le joueur voit la scène comme un film (caméra qui tourne autour de lui, recule pour montrer le phénix, le
   # titan ou la météorite), puis retrouve sa place et sa vue. Mode spectateur rattaché à une caméra invisible pendant
@@ -154,13 +163,23 @@ pantin:
   # le joueur sans retard ET les téléportations des plugins marchent (Paper refuse de téléporter un joueur qui porte de
   # vrais passagers). false : vrais passagers (il faut alors arrêter le pantin avant de téléporter le joueur).
   monter-par-paquets: true
+  # Coups temporaires (sans pantin permanent, défaut de Babel depuis 1.8.1) : le joueur est le joueur du jeu, et son pantin
+  # n'apparaît que quand il tape (poing, épée, hache... : gestes « coup_* » de pantin_mouvements). Il joue le coup, garde sa
+  # pose un instant pour enchaîner le suivant, puis revient en fondu à la pose du joueur du jeu (retour-secondes) et
+  # disparaît. Une compétence en cours n'est jamais coupée par un coup. Le réseau ne travaille que pendant les coups.
+  # Les joueurs qui auront le mod du launcher de Babel verront plus tard les animations dessinées par leur propre jeu.
+  coups-temporaires: true
+  # aussi en minant ou en posant un bloc (le bras se lève alors en boucle) ; false : seulement dans le vide ou sur une créature
+  coups-temporaires-blocs: false
   # Pantin permanent : le joueur est remplacé tout le temps par son pantin (pas seulement pendant une compétence). Le
   # pantin joue de lui-même le repos, la marche, la course, le recul, les pas de côté, l'accroupi, le saut, la chute, la
-  # nage, l'échelle, assis, couché ; les gestes par-dessus (coup de bras, manger, viser à l'arc, bouclier...) et un
-  # sursaut aux coups reçus. Ces mouvements viennent de modeles-animes/pantin_mouvements.bbmodel (à retoucher dans
-  # Blockbench) et sont prêtés à tout modèle au même squelette (les modèles des classes) par le nom des os ; un modèle qui
-  # a sa propre « marche » garde la sienne. Les compétences se jouent sur le même pantin, qui revient ensuite à ses
-  # mouvements. Retiré en spectateur, sous une vraie potion d'invisibilité et à la mort ; remis tout seul ensuite.
+  # nage, ramper, l'échelle, assis, couché, le vol, la vrille ; les gestes par-dessus (main qui tient un objet, coup de
+  # bras, manger, boire, arc, arbalète, bouclier, trident, longue-vue, cor, brosse) et un sursaut aux coups reçus. La
+  # cadence de la marche suit la vitesse du joueur. Ces mouvements viennent de modeles-animes/pantin_mouvements.bbmodel (à
+  # retoucher dans Blockbench, ou à régénérer avec outils/mouvements-pantin.py) et sont prêtés à tout modèle au même
+  # squelette (les modèles des classes) par le nom des os ; un modèle qui a sa propre « marche » garde la sienne. Les
+  # compétences se jouent sur le même pantin, qui revient ensuite à ses mouvements. Retiré en spectateur, sous une vraie
+  # potion d'invisibilité et à la mort ; remis tout seul ensuite.
   permanent:
     actif: false
     # modèle des mouvements prêtés
@@ -170,6 +189,10 @@ pantin:
     # envoyées moins souvent quand personne n'est près : 1 tic sur 2 au-delà de 16 blocs, 1 sur 3 au-delà de 32, 1 sur 4
     # au-delà de 64 ; le jeu adoucit entre deux). Avec cacher-toutes-armures, le joueur du jeu vu de loin n'a pas d'armure.
     distance: 0
+    # Foule : quand plus de ce nombre d'autres joueurs sont à moins de 32 blocs, les images du pantin partent tous les 2 tics
+    # au lieu de chaque tic (3 tics au-delà du triple) ; le jeu adoucit entre deux. Sa propre copie reste à chaque tic.
+    # 0 : jamais. Avec beaucoup de joueurs, régler aussi « distance » ci-dessus (48 par exemple).
+    foule: 8
     # Qui tient l'objet à la première personne (essai en jeu : /vorace pantin vue pantin|main-du-jeu) :
     #   pantin       comme le mod First-person Model : le pantin tient l'objet dans ses mains, à la première personne comme
     #                en F5 ; la main du jeu est cachée (l'objet garde son icône dans la barre). Le joueur voit ses bras et
@@ -211,9 +234,23 @@ pantin:
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true
+  # Cape dans le dos (posée par un plugin d'objets, VoraceAPI.capePantin) : sur le haut du tronc, elle se soulève vers
+  # l'arrière quand le joueur marche ou court.
+  cape: true
+  # Toutes les armures des packs fusionnés (assets/<espace>/equipment/..., celles de vorace-item par exemple) sont portées
+  # par le pantin sans avoir à les lister ci-dessous.
+  armures-auto: true
   # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
   # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
   armures-perso: []
+  # Chaque couche d'armure est fondue dans le morceau de peau qui la porte : un seul affichage au lieu de deux, donc deux
+  # fois moins de paquets pour un pantin en armure (26 morceaux deviennent 11). Une pièce enchantée garde son propre
+  # affichage (son reflet couvrirait la peau). false : un affichage par couche, comme avant la 1.7.7.
+  armures-fondues: true
+  # Armures d'un pack dont la manche s'arrête au-dessus du coude, comme toutes celles du jeu (leur plastron ne couvre que
+  # le haut du bras) : le pantin ne leur met rien sur l'avant-bras. Sans cela, le bord de la manche part avec l'avant-bras
+  # dès que le coude plie. Exemple : [babel:fer]
+  armures-manches-courtes: []
 
 surveillance:
   # Reconstruit le pack tout seul quand un pack source ou un objet change (par exemple après /meg reload).

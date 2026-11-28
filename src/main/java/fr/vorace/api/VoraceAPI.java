@@ -248,6 +248,27 @@ public final class VoraceAPI {
         return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation);
     }
 
+        /**
+     * Cape dans le dos du pantin d'un joueur (vue des autres et en F5) : {@code objet} est l'objet affiché, dont le modèle est
+     * dessiné dans le repère du haut du tronc (pivot de l'os en 8, 8, 8 du modèle ; accroche aux épaules en 8 ; 15,2 ; 11,6).
+     * Elle se soulève vers l'arrière quand il marche ou court. {@code null} ou de l'air : retirée. Gardée avec les données
+     * du joueur. Sans pantin (pantin.permanent éteint), rien ne se voit.
+     */
+    public static void capePantin(Player joueur, ItemStack objet) {
+        if (plugin == null || plugin.pantins() == null || joueur == null) return;
+        plugin.pantins().cape(joueur, objet);
+    }
+
+/**
+     * Tics à attendre avant que le coup de bras du pantin permanent de ce joueur porte (la lame tombée, le poing tendu) :
+     * un plugin de combat applique les dégâts d'un coup normal à cet instant plutôt qu'au clic, quand l'arme monte encore.
+     * À appeler pendant l'événement de dégâts du clic. 0 : pas de pantin permanent ou pas de coup à venir, dégâts tout de
+     * suite. Poing 4, épée 5, hache 6, autre objet 5.
+     */
+    public static int ticsAvantImpact(Player joueur) {
+        return plugin == null || plugin.pantins() == null ? 0 : plugin.pantins().ticsAvantImpact(joueur);
+    }
+
     /** Comme {@link #animerJoueur(Player, String, String)}, en boucle jusqu'à {@link #arreterJoueur(Player)}. */
     public static boolean animerJoueurEnBoucle(Player joueur, String modele, String animation) {
         return plugin != null && plugin.pantins() != null && plugin.pantins().jouer(joueur, modele, animation, true);

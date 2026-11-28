@@ -1,5 +1,254 @@
 # Journal des changements
 
+## 1.8.1 (novembre 2026) : le pantin seulement quand on tape
+
+Décision d'Antoine (28 nov.) : plus de joueur animé en permanence. Le joueur reste le joueur du jeu ; son pantin n'apparaît
+que quand il tape, puis repart en fondu. Les animations dessinées par le jeu du joueur viendront avec le mod du launcher.
+
+- **Coups temporaires** (`pantin.coups-temporaires`, vrai par défaut, seulement sans pantin permanent) : au coup de bras,
+  le pantin apparaît et joue le coup de l'objet en main (`coup_poing`, `coup_arme`, `coup_hache`, sinon `geste_main` ; main
+  gauche comprise), gestes empruntés à `pantin_mouvements`. Les coups enchaînés reprennent le même pantin ; à la fin, il garde
+  sa pose un instant puis revient en fondu à la pose du joueur du jeu (`pantin.pause-fin-secondes`, `pantin.retour-secondes`).
+- Une compétence ou une emote en cours n'est jamais coupée par un coup normal.
+- Miner ou poser un bloc ne fait pas apparaître le pantin (`pantin.coups-temporaires-blocs: false`).
+- `VoraceAPI.ticsAvantImpact` vaut aussi pour ces coups : les dégâts peuvent tomber avec la lame.
+- Correctif : un pantin de compétence trouve maintenant aussi les gestes du modèle des mouvements dès sa création.
+- Le pantin permanent reste disponible mais coupé par défaut (`pantin.permanent.actif: false`).
+
+## 1.8.0 (novembre 2026) : capes dans le dos, armures des packs portées par le pantin
+
+Demande d'Antoine : de vraies capes dans le dos, qui bougent (« la cape du Passeur flotte même sans vent »).
+
+- **Cape dans le dos du pantin** : `VoraceAPI.capePantin(joueur, objet)` pose l'objet affiché d'une cape (modèle dessiné dans
+  le repère du haut du tronc : pivot de l'os en 8, 8, 8, dos de l'armure en z = 11, accroche aux épaules en
+  8 ; 15,2 ; 11,6) ; `null` la retire. Gardée avec les données du joueur. Elle se soulève vers l'arrière avec la vitesse
+  (≈ 30° en marchant, 40° en courant), un peu plus en tombant, et ondule doucement à l'arrêt. `pantin.cape: false`
+  l'éteint. vorace-item 0.16 s'en sert pour la case « dos » de son menu `/equipement`.
+- **Armures des packs portées sans réglage** (`pantin.armures-auto`, vrai par défaut) : tous les modèles d'équipement des
+  packs fusionnés (`assets/<espace>/equipment/...`, ceux de vorace-item par exemple) sont portés par le pantin, sans les
+  lister dans `pantin.armures-perso`. Sans cela, avec le pantin permanent, une armure de vorace-item ne se voyait nulle
+  part (le vrai joueur est invisible et son pantin ne la connaissait pas).
+- **Casque 3D de vorace-item** : un objet dont le composant equippable n'a pas de modèle d'équipement mais a un modèle
+  d'objet (casque 3D sur un `iron_helmet`) est porté sur la tête du pantin tel quel, au lieu d'être dessiné en casque de fer.
+- **Le pack de ressources change** (couches d'armure des armures des packs) : il est régénéré au démarrage.
+
+## 1.7.9 (novembre 2026) : l'instant où un coup porte, pour les plugins de combat
+
+Retour d'Antoine en jeu : « quand tu tapes avec une arme dans les animations basiques, le dégât se fait pas quand la lame
+tombe, il se fait quand la lame monte. Il faut faire le dégât au moment où l'arme est censée taper. »
+
+- `VoraceAPI.ticsAvantImpact(joueur)` : le nombre de tics entre le clic et l'instant où le coup de bras du pantin permanent
+  porte (poing 4, épée 5, hache 6, autre objet 5 ; 0 sans pantin permanent ou sans coup à venir). Vorace n'applique aucun
+  dégât lui-même : c'est le plugin de combat qui retarde les siens de ce délai (Matsuri Cœur 0.43.1 le fait pour
+  l'attaque de base).
+
+## 1.7.8 (novembre 2026) : genoux et coudes fermés
+
+Retour d'Antoine en jeu : « ça se décale plus, mais quand je marche mon genou disparaît ».
+
+- **Genoux et coudes fermés** : chaque moitié de membre (cuisse, tibia, bras, avant-bras) a maintenant une face qui ferme son
+  bout du côté de l'articulation, pour la peau et pour l'armure. C'étaient des tubes ouverts : quand le genou pliait, le
+  haut du tibia sortait devant la cuisse et l'on voyait au travers, surtout en regardant ses jambes à la première
+  personne. Le skin n'a pas de pixels pour cette face : chaque colonne prend la couleur du pixel de la face avant qui la
+  touche.
+- **Le pack de ressources change** (modèles des morceaux de peau et d'armure) : il est régénéré au démarrage.
+
+## 1.7.7 (novembre 2026) : armure fondue dans la peau, deux fois moins de paquets en armure
+
+Chantier réseau validé par Antoine (« j'ai peur qu'avec beaucoup de gens, ça lag »).
+
+- **Chaque couche d'armure est fondue dans le morceau de peau qui la porte** (`pantin.armures-fondues`) : un seul affichage
+  au lieu de deux. Un pantin en armure complète passe de 26 morceaux (11 de corps, 15 d'armure) à 11, donc de 26 paquets
+  par image et par spectateur à 11 ; sa copie pour lui-même aussi. L'objet du morceau porte la clé de l'armure
+  (custom_model_data, chaînes 0 et 1 : plastron et jambières sur le tronc, jambières et bottes sur les jambes) et sa
+  couleur (cuir teint) ; la définition du morceau dans le pack dessine l'armure par-dessus la peau, avec les mêmes modèles
+  qu'avant, au même endroit.
+- Mettre ou retirer une pièce d'armure ne refait plus le pantin : seul l'objet des morceaux concernés change.
+- Gardent leur propre affichage : une pièce enchantée (son reflet couvrirait la peau), les armures en 3D et les objets
+  portés sur la tête, et tout pantin dont la peau n'est pas celle du pack.
+- **Le pack de ressources change** (définitions des morceaux de peau) : il est régénéré au démarrage. Avec l'ancien pack,
+  l'armure du pantin ne s'afficherait pas.
+- `pantin.armures-fondues: false` remet un affichage par couche, comme avant.
+
+## 1.7.6 (novembre 2026) : tronc d'un bloc, marche qui ne repart plus de zéro, course à grande vitesse
+
+Retours d'Antoine en jeu : « quand je marche, j'ai des parties de mon pantin qui se désassemblent : les jambes, la moitié
+de mon tronc » ; « quand je vais un peu vite ou que je fais tout droit, à gauche, à droite, ça recommence l'animation de
+zéro : je m'arrête, je reprends, je m'arrête, je reprends » ; « quand je vais trop vite, ma course est un peu chelou ».
+
+- **Tronc d'un bloc** dans tous les mouvements et tous les gestes : il ne se tord plus et ne roule plus, il se penche
+  seulement, autour des hanches, comme le corps du jeu. Le tronc est en deux morceaux et les jambes tiennent à la racine,
+  pas au bassin : tourner le haut sur le bas (16° à la marche, 32° pour viser à l'arc) ou le bassin sur les jambes ouvrait
+  des cassures à la taille et aux hanches. Le contrôle (`outils/verifier-mouvements.py`) et les tests le refusent
+  maintenant. Le bras d'arc se tend devant l'épaule au lieu de compter sur la torsion.
+- **La marche ne s'interrompt plus quand on change de direction** : tout droit, de biais ou de côté, c'est le même
+  mouvement (le corps se tourne vers là où il va) ; seule la marche à reculons en est un autre, comme dans le jeu (à partir
+  de 100° du regard, jusqu'à 85° pour en sortir). Avant, le sens était lu par rapport au corps en train de tourner : la
+  marche, le pas de côté et le recul se relayaient à chaque changement de direction, chacun repartant de zéro.
+- **Vitesse lissée** : le serveur reçoit les déplacements par à-coups (aucun pendant un tic, deux au suivant) ; la course
+  sautait d'une allure à l'autre, repassait par le repos, et sa cadence tremblait. De la marche à la course à 0,24 bloc par
+  tic, retour à la marche à 0,2 seulement.
+- **À grande vitesse** (potion, élan d'une compétence) : la cadence de la course ne suit plus qu'à 40 % au-delà de son
+  allure et plafonne à 1,3 fois, au lieu de 1,8 (les jambes moulinaient). En courant par bonds, un seul tic au sol entre
+  deux sauts ne ramène plus la course.
+- Le `pantin_mouvements.bbmodel` de la 1.7.5 est remplacé tout seul s'il n'a pas été retouché.
+
+## 1.7.5 (novembre 2026) : un coup ne bouge que le bras qui frappe, moins de paquets
+
+Retours d'Antoine en jeu : « pourquoi quand je tape, l'autre main se baisse en même temps ? Normalement il n'y a qu'une
+main » ; « quand je tape, il y a la moitié de mon corps qui bouge, la moitié de l'armure qui ne devrait pas bouger » ;
+« vérifie au niveau des paquets si on a fait le maximum pour pas que ça lag avec beaucoup de gens ».
+
+- **Un coup ne bouge que le bras qui frappe** (`coup_poing`, `coup_arme`, `coup_hache`, `geste_main`) : plus de contrepoids
+  de l'autre bras, plus de rotation du buste (la moitié haute du corps et de l'armure tournait sur la moitié basse, la cassure
+  se voyait à la taille). Les tailles restent en diagonale, d'en haut à droite vers le bas à gauche.
+- **Images presque identiques non renvoyées** (`modeles.economie-images`) : un morceau dont l'image a bougé de moins d'un
+  quarantième de pixel et de 0,3° depuis la dernière envoyée n'est pas renvoyé. Avant, un pantin au repos envoyait un paquet
+  par morceau à chaque tic (il respire : chaque image différait d'un cheveu). Vaut aussi pour les mobs animés.
+- **Foule** (`pantin.permanent.foule`, 8) : quand plus de 8 autres joueurs sont à moins de 32 blocs d'un pantin, ses images
+  partent tous les 2 tics au lieu de chaque tic (3 tics au-delà de 24 joueurs) ; le jeu adoucit entre deux. Sa propre copie
+  reste à chaque tic.
+- Le `pantin_mouvements.bbmodel` de la 1.7.4 est remplacé tout seul s'il n'a pas été retouché.
+
+## 1.7.4 (novembre 2026) : tailles en diagonale, corps tourné vers là où il va, course et saut de combattant
+
+Retours d'Antoine en jeu : « quand je cours en F1, je vois trop les bras » ; « le saut, c'est pas un saut normal : toute
+l'animation doit être réaliste, mais stylée, un mec qui sait se battre » ; « pour les coups, regarde les compétences et fais
+un coup en diagonale, d'en haut vers le bas, de droite à gauche » ; « quand tu avances et que tu vas vers la droite en même
+temps sans bouger ton regard, ça fait un truc bizarre : le corps doit se décaler vers là où tu vas, la tête reste à regarder
+au même endroit ».
+
+- **Le corps se tourne vers là où il va**, comme le jeu (mesuré dans LivingEntity.tick de Minecraft 1.21.4) : en marche, il
+  rejoint la direction du déplacement (30 % de l'écart par tic), sans s'écarter de plus de 50° du regard ; à plus de 95° du
+  regard, il marche à reculons. En avançant de biais sans tourner la tête, le corps part de biais et marche droit devant
+  lui, la tête regarde toujours devant. Pendant un coup ou une visée, il revient face au regard. Le mouvement joué (marche,
+  recul, pas de côté) est choisi par rapport au corps. `pantin.corps-vers-le-mouvement: false` pour l'ancien réglage.
+- **Tailles en diagonale** (`coup_arme`, `coup_hache`), sur le modèle de celles des compétences (Lame du vent, Taille
+  croisée) : d'en haut à droite vers le bas à gauche. L'arme monte au-dessus de l'épaule, à l'extérieur, le buste se tourne
+  (24°) ; il revient (jusqu'à -36°) et plonge, la lame traverse devant lui et finit basse devant l'autre hanche. Le coude
+  plie dans le plan de la taille : la lame tranche sur son fil.
+- **Course** : les bras restent bas et tirés vers l'arrière, un peu écartés (ils balancent de 23° devant à 37° derrière), le
+  buste en avant. À la première personne, les mains restent à 60° sous le regard, hors du champ.
+- **Saut** : un bond d'athlète (un genou haut, l'autre jambe repliée dessous, le buste en avant, les coudes tirés en
+  arrière) au lieu des bras ouverts. **Chute** : maîtrisée, genoux pliés prêts à amortir, bras à peine ouverts au lieu
+  d'être levés en croix.
+- Le recul de sa copie à la première personne suit l'axe du regard (le corps peut maintenant être tourné de 50°).
+- Le `pantin_mouvements.bbmodel` de la 1.7.3 est remplacé tout seul s'il n'a pas été retouché.
+
+## 1.7.3 (novembre 2026) : arme portée sur le côté, un vrai coup par arme, tête et épaules à la première personne
+
+Retours d'Antoine en jeu : « quand on marche, il faudrait que l'épée soit pas aussi devant nous, elle devrait être sur le
+côté ; c'est bon pour un arc parce qu'il est court » ; « pour chaque coup, faut une vraie animation : un vrai coup de poing,
+un vrai tapage à l'épée, à la hache, tous les coups possibles » ; « quand je regarde par terre en marchant, je vois ma
+tête » ; « c'est un peu bizarre de voir ses épaules aussi grosses sur soi ».
+
+- **Arme longue portée sur le côté** (`tenir_arme` : épée, hache, pioche, pelle, houe, lance, trident, masse) : le bras
+  pend, la lame pointe vers le sol devant le pied, un peu ouverte vers l'extérieur. Elle ne barre plus la vue. Les autres
+  objets (arc, bloc, nourriture) restent tenus devant, comme dans le jeu. Variantes pour les deux mains : `tenir_arme_gauche`,
+  `tenir_arme_deux` (arme et objet), `tenir_deux_arme`, `tenir_armes`.
+- **Un coup par sorte d'objet**, pour la main droite et la gauche :
+  - main vide : `coup_poing`, un direct (le poing se ramène aux côtes, part droit devant, le buste tourne, l'autre main
+    monte en garde) ;
+  - épée, trident, lance : `coup_arme`, une taille de haut en bas avec tout le haut du corps (élan au-dessus de l'épaule, le
+    buste revient et plonge, le poignet se casse, l'autre bras fait contrepoids), qui part du côté et y revient ;
+  - hache, masse : `coup_hache`, plus lourd (élan plus long, la hache tombe de plus haut et finit basse) ;
+  - pioche, pelle, houe, bloc, objet : `geste_main`, le coup court.
+- **Un coup va au bout avant d'être relancé** : en minant, le jeu relance le bras tous les 3 ou 4 tics ; le geste repartait
+  à chaque fois de son élan et ne frappait jamais. Il n'est relancé qu'après avoir porté (60 % de sa durée).
+- **Sa tête n'est plus dessinée à la première personne** (pantin permanent) : la tête de sa copie porte la marque que le
+  shader du pack efface près de la caméra, comme ses bras en vue « main-du-jeu ». En F5, elle est là. Elle se penche avec le
+  regard et passait devant la caméra quand il regardait par terre.
+- **Recul quand il regarde par terre** (`pantin.recul-regard-bas`, 5 pixels) : les yeux du jeu sont 3 pixels au-dessus du
+  torse ; en baissant les yeux, le torse et les épaules remplissaient l'écran. Le corps recule à mesure que le regard
+  descend (de 20° à 80°) : il voit son ventre en bas de l'écran et ses pieds.
+- **Geste de fond** (la main qui tient un objet) : joué à 85 %, le bras qui porte l'arme balance un peu avec la marche au
+  lieu d'être figé ; on passe d'un objet à l'autre en fondu (le bras ne retombe plus entre les deux) ; il s'efface à la
+  nage, en rampant, en vol, sur une échelle et au lit, où les deux bras font le mouvement.
+- Le `pantin_mouvements.bbmodel` de la 1.7.2 est remplacé tout seul s'il n'a pas été retouché (60 animations).
+
+## 1.7.2 (novembre 2026) : course, vol en créatif, coup d'épée droit, manches courtes, épée en double
+
+Retours d'Antoine en jeu : « comment tu cours, c'est pas beau, surtout les deux mains qui font comme ça ; c'est encore plus
+dégueulasse en vol, quand tu voles en créatif, faudrait une animation spéciale » ; « quand je tape, j'ai l'impression que je
+tape pas droit » ; « l'armure en diamant qui va sur la deuxième partie du bras, ça fait un bug de texture » ; « je vois l'épée
+qui est dans ma main visible, qui est pas dans le pantin ». Mesures reprises sur Mo' Bends (course, coup d'outil, vol).
+
+- **Course** : les bras restent longs, comme ceux du jeu (avant-bras plié de 20 à 46° au lieu de 72 à 88°), et le buste tourne
+  deux fois moins. Les coudes pliés à 90° qui pompaient faisaient monter les deux mains dans le champ à la première personne.
+- **Vol en créatif** : deux mouvements à lui au lieu de la course dans le vide. `planer` (sur place, en reculant ou de
+  côté) : le corps flotte, bras un peu ouverts, une jambe pliée. `planer_avance` (vers l'avant) : le corps penché de 26°,
+  les bras le long du corps, les jambes qui traînent ; la tête reste à la place du joueur.
+- **Coup de bras droit** : de haut en bas devant l'épaule, comme le jeu, au lieu d'une diagonale venue du côté. Le bras
+  reste dans le plan de l'épaule, l'épée descend sur son tranchant ; le poignet se casse pendant le coup (45°), la lame part
+  de derrière la tête et finit pointée devant, un peu vers le bas.
+- **Armures à manches courtes** : plus de couche d'armure sur l'avant-bras pour les armures du jeu. Mesuré sur leurs
+  textures : la manche du plastron s'arrête au-dessus du coude (lignes 0 à 4 ou 5 des 12 du bras, 6 pour la netherite) ;
+  la couche de l'avant-bras n'en montrait que le bord, qui partait avec l'avant-bras et se décollait de l'épaulière dès que
+  le coude pliait. Pour une armure d'un pack : `pantin.armures-manches-courtes` dans config.yml.
+- **Épée dessinée deux fois** (dans la main du jeu et dans celle du pantin) après l'avoir prise dans un inventaire, celui du
+  mode créatif surtout : le client y déplace lui-même sa copie de l'objet, sans la marque « caché en main », et le serveur ne
+  lui renvoyait rien. Sa barre lui est maintenant renvoyée un tic après chaque clic dans un inventaire et à sa fermeture.
+- `outils/apercu-mouvements.py` : le fichier de relecture Blockbench avec une épée en main.
+- Le `pantin_mouvements.bbmodel` de la 1.7.1 est remplacé tout seul s'il n'a pas été retouché.
+
+## 1.7.1 (novembre 2026) : animations du pantin plus belles, contrôlées une à une
+
+Retour d'Antoine : « c'est bien, mais faut vraiment aller beaucoup plus loin : des animations super belles, qui ne sont pas
+buggées. Magnifiques, mais simples, pas trop compliquées. »
+
+- **Un contrôle rejoue chaque animation tic par tic** (`outils/verifier-mouvements.py`) et signale : une main, un avant-bras ou
+  un coude dans la tête ou le buste, un pied sous le sol, un os qui saute (plus de 70° en un tic, 90° pour un coude), une
+  boucle qui ne se referme pas. Il a trouvé 12 défauts dans la 1.7.0, tous corrigés ; les 47 animations passent.
+  - coup de bras : le bras tournait de 100° en un tic (il sautait à l'écran) ;
+  - viser à l'arc : la main de corde entrait dans la tête ; elle s'arrête maintenant sous la mâchoire ;
+  - manger : l'avant-bras touchait le visage ;
+  - tir à l'arc : le bras de corde sautait au lâcher.
+- **Coup de bras** refait (9 tics au lieu de 6) : la main suit une courbe (armé sur le côté, à hauteur d'épaule, bref arrêt,
+  puis le coup accélère en diagonale), au lieu d'aller en ligne droite d'une pose à l'autre.
+- **Arc bandé qui respire** (`viser_arc_tenu`) : après la traction (1 s), le pantin n'est plus figé, l'arc et la main de corde
+  bougent à peine. **Tir** : la main de corde part en arrière, l'arc tient un instant puis redescend (10 tics).
+- **Repos** : en plus de la respiration, le poids du corps passe lentement d'une jambe à l'autre (8 s), la tête suit à peine.
+- **Marche et course** : l'avant-bras suit le bras avec un peu de retard (le coude se plie quand le bras arrive devant), et
+  le corps monte et descend sans à-coup quand le pied d'appui change.
+- **Coup reçu** : le bassin, le buste et la tête partent en arrière l'un après l'autre ; les bras gardent ce qu'ils faisaient
+  (la main qui tient l'épée ne lâche plus sa pose). Il n'est plus joué pendant un geste tenu (arc bandé, bouclier levé,
+  repas) : il coupait le geste, qui repartait de zéro.
+- **D'un geste à l'autre sans que le bras retombe** : le geste tenu qu'on quitte reste sous le suivant le temps qu'il entre,
+  puis sort en fondu (traction de l'arc → arc bandé → tir, fin d'un repas, bouclier baissé).
+- Le fichier `plugins/Vorace/modeles-animes/pantin_mouvements.bbmodel` de la 1.7.0 est remplacé tout seul s'il n'a pas été
+  retouché.
+
+## 1.7.0 (novembre 2026) : toutes les animations du pantin refaites
+
+Retour d'Antoine : « fais des animations plus réalistes que celles de Minecraft, prends en base les mods et les MMO ».
+
+- **Les mouvements du pantin sont réécrits** (`pantin_mouvements.bbmodel`, généré par `outils/mouvements-pantin.py`) : 45
+  animations au lieu de 24. Chaque mouvement part de celui du jeu (formules de Minecraft 1.21.4) et des mesures prises sur
+  Mo' Bends (buste qui tourne de ±20° en marche, bras levés sur les côtés en chute...), avec des genoux et des coudes, les
+  épaules qui tournent à l'inverse du bassin, et la racine qui descend pour que le pied d'appui touche le sol.
+  - Mouvements : repos, marche, course, recul, pas de côté, accroupi, accroupi en marche, saut, chute, nage (la brasse du
+    jeu), **ramper** (pose de nage hors de l'eau), échelle, assis, dormir, vol, **vrille** (trident avec Impulsion).
+  - Gestes, pour la main droite et la main gauche (`_gauche`) : **tenir** (la main qui tient un objet, bras levé comme dans
+    le jeu), coup de bras (armé près de l'oreille puis coup en diagonale, le buste tourne), manger, **boire**, viser à l'arc
+    (la main de corde tire jusqu'à la joue en 1 s, le buste s'ouvre, puis tient), **tir à l'arc** (au lâcher de la flèche),
+    **charger l'arbalète**, viser à l'arbalète (arbalète chargée en main), bouclier, trident, longue-vue, **cor**,
+    **brosse**, coup reçu.
+  - Les mains sont posées par cinématique inverse : le script dit où va la main (la bouche, la corde, l'œil), il trouve les
+    angles du bras. Un test vérifie que Vorace les pose au même endroit que Blockbench.
+  - Le fichier `plugins/Vorace/modeles-animes/pantin_mouvements.bbmodel` de la 1.6.0 est remplacé tout seul au démarrage
+    s'il n'a pas été retouché ; un fichier retouché est gardé (le supprimer pour recevoir le nouveau).
+- **Cadence réglée sur la vitesse du joueur**, comme le jeu : marche, course, recul, pas de côté, accroupi, échelle et
+  ramper avancent de la distance parcourue. Les pieds ne glissent plus sous une lenteur ou un bonus de vitesse, et un joueur
+  arrêté sur une échelle ne grimpe plus dans le vide. D'une allure à l'autre, le même pied reste devant.
+- **Les bras qui visent suivent le regard** vers le haut et le bas (arc, arbalète, bouclier, longue-vue, cor), comme le jeu.
+- **Le corps se penche vers le regard** à la nage, en vol et en vrille (le jeu fait pareil) ; la tête du pantin est à la place
+  du joueur dans ces mouvements (ses yeux restent dans la tête du pantin, il ne voit plus son dos à la première personne).
+- **Dormir** : le pantin est couché dans le sens du lit, la tête sur l'oreiller.
+- **Geste de fond** : la main qui tient un objet reste levée sous les autres gestes ; un coup de bras part de cette pose et y
+  revient, sans que le bras retombe. Les postures de classe (« combat ») gardent leurs propres bras.
+- **Gestes tenus** (`hold`) : l'arc bandé et l'arbalète chargée restent sur leur dernière pose au lieu de rejouer. Un geste
+  court (coup de bras) entre et sort en 2 tics : avec le fondu de 4 tics, il n'atteignait jamais sa pleine amplitude.
+
 ## 1.6.0 (novembre 2026) : pantin permanent, corps fantôme, armures en volume
 
 - **Pantin permanent** (`pantin.permanent.actif`, ou `/vorace pantin permanent on`) : le joueur est remplacé tout le temps

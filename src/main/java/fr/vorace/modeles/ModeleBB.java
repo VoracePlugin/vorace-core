@@ -34,6 +34,13 @@ public record ModeleBB(String id, List<Partie> parties, List<Texture> textures, 
          * Celui du pantin des joueurs aussi (« peau_tete » : le préfixe « peau_ » ne compte pas ; jusqu'à la 1.6.0 il n'était
          * pas reconnu et la tête du pantin ne suivait jamais le regard).
          */
+        /** Haut d'un bras (« bras_droit_haut », « peau_bras_gauche_haut », « right_arm »...) : suit le regard pendant une visée. */
+        public boolean brasHaut() {
+            String n = nom == null ? "" : nom.toLowerCase(java.util.Locale.ROOT);
+            if (n.startsWith("peau_")) n = n.substring(5);
+            return (n.startsWith("bras") && n.endsWith("_haut")) || n.equals("right_arm") || n.equals("left_arm");
+        }
+
         public boolean tete() {
             String n = nom == null ? "" : nom.toLowerCase(java.util.Locale.ROOT);
             if (n.startsWith("peau_")) n = n.substring(5);

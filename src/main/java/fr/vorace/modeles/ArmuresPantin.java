@@ -30,6 +30,18 @@ public final class ArmuresPantin {
     public static final List<String> VANILLE = List.of("minecraft:leather", "minecraft:chainmail", "minecraft:iron", "minecraft:gold",
         "minecraft:diamond", "minecraft:netherite", "minecraft:turtle_scute");
 
+    private static final java.util.regex.Pattern EQUIPEMENT = java.util.regex.Pattern.compile("^assets/([a-z0-9_.-]+)/equipment/([a-z0-9_./-]+)\\.json$");
+
+    /**
+     * Modèle d'équipement déclaré par un fichier de pack (« assets/voraceitem/equipment/babel/etage1/e1_veuve.json » ->
+     * « voraceitem:babel/etage1/e1_veuve ») ; null pour un autre fichier ou un équipement du jeu (espace minecraft).
+     */
+    public static String assetDepuisFichier(String chemin) {
+        java.util.regex.Matcher m = EQUIPEMENT.matcher(chemin);
+        if (!m.matches() || m.group(1).equals("minecraft")) return null;
+        return m.group(1) + ":" + m.group(2);
+    }
+
     /** Couches d'équipement du jeu : casque, plastron et bottes ; jambières. */
     public static final String HUMANOID = "humanoid", JAMBIERES = "humanoid_leggings";
 
@@ -66,6 +78,28 @@ public final class ArmuresPantin {
     /** Identifiant de l'objet affiché (« pantin_armure/minecraft/iron/humanoid/corps_haut »). */
     public static String id(String asset, String couche, String morceau) {
         return "pantin_armure/" + chemin(asset) + "/" + couche + "/" + morceau;
+    }
+
+    /**
+     * Couche d'armure fondue dans le morceau de peau qui la porte (un seul affichage, donc un seul paquet par image, au
+     * lieu de deux) : la clé que l'objet du morceau porte dans custom_model_data (chaîne 0 ou 1) et que sa définition
+     * reconnaît (PeauUV.generer). « minecraft/iron/humanoid ».
+     */
+    public static String cle(String asset, String couche) {
+        return chemin(asset) + "/" + couche;
+    }
+
+    /** Clé d'après l'identifiant de l'objet d'une couche (« pantin_armure/minecraft/iron/humanoid/corps_haut ») ; null sinon. */
+    public static String cleDepuisId(String id) {
+        if (id == null || !id.startsWith("pantin_armure/")) return null;
+        int fin = id.lastIndexOf('/');
+        return fin <= "pantin_armure/".length() ? null : id.substring("pantin_armure/".length(), fin);
+    }
+
+    /** Cette couche existe-t-elle pour ce morceau ? (carapace de tortue : la tête seule ; jambières : ni tête ni bras) */
+    static boolean existe(String morceau, String asset, String couche) {
+        if (asset.endsWith("turtle_scute") && (couche.equals(JAMBIERES) || !morceau.equals("tete"))) return false;
+        return !(couche.equals(JAMBIERES) && (morceau.equals("tete") || morceau.startsWith("bras")));
     }
 
     public static boolean cuir(String asset) {
@@ -181,6 +215,11 @@ public final class ArmuresPantin {
         uv.put("west", new double[]{u + d + l, haut, u + 2 * d + l, fond});
         uv.put("up", new double[]{u + d + l, v + d, u + d, v});
         uv.put("down", new double[]{u + d + 2 * l, v, u + d + l, v + d});
+        // bouchon de l'articulation d'un membre (genou, coude) : la face de jointure prend la ligne de la face avant qui la
+        // touche, étirée. Sans elle, la pièce était un tube ouvert et l'on voyait au travers d'un genou plié (PeauUV.bouchon).
+        boolean membre = morceau.startsWith("bras") || morceau.startsWith("jambe");
+        if (membre && bas) uv.put("up", new double[]{u + d, haut, u + d + l, haut + 1});
+        if (membre && !bas) uv.put("down", new double[]{u + d, fond - 1, u + d + l, fond});
         if (gauche) {
             double[] est = uv.get("east"), ouest = uv.get("west");
             uv.put("east", ouest);
@@ -189,8 +228,8 @@ public final class ArmuresPantin {
         }
         JsonObject faces = new JsonObject();
         for (Map.Entry<String, double[]> f : uv.entrySet()) {
-            // la face de jointure (dessous d'une moitié haute, dessus d'une moitié basse) reste vide
-            if (!tete && ((!bas && f.getKey().equals("down")) || (bas && f.getKey().equals("up") && !morceau.startsWith("corps_bas")))) continue;
+            // la face de jointure du tronc (dessous du haut) reste vide ; celle d'un membre est son bouchon (ci-dessus)
+            if (!tete && !membre && ((!bas && f.getKey().equals("down")) || (bas && f.getKey().equals("up") && !morceau.startsWith("corps_bas")))) continue;
             JsonObject o = new JsonObject();
             JsonArray t = new JsonArray();
             double[] w = f.getValue();
@@ -211,13 +250,27 @@ public final class ArmuresPantin {
         return Math.round(v * 1000) / 1000.0;
     }
 
-    /** Liste des couches d'un ensemble porté : emplacement -> asset (null : rien). */
+    /** Liste des couches d'un ensemble porté : emplacement -> asset (null : rien). Les armures du jeu ont des manches courtes. */
     public static List<Couche> couches(Map<String, String> portes) {
+        return couches(portes, new java.util.HashSet<>(VANILLE));
+    }
+
+    /**
+     * @param manchesCourtes armures dont la manche s'arrête au-dessus du coude. Celles du jeu (mesuré sur leurs textures :
+     *     la manche du plastron couvre les lignes 0 à 4 ou 5 des 12 du bras, 6 pour la netherite) et celles de
+     *     pantin.armures-manches-courtes. Elles n'ont pas de couche sur l'avant-bras : cette couche ne montrait que le
+     *     bord de la manche (les 2 lignes de recouvrement au-dessus du coude), qui partait avec l'avant-bras et se
+     *     décollait de l'épaulière dès que le coude pliait.
+     */
+    public static List<Couche> couches(Map<String, String> portes, java.util.Set<String> manchesCourtes) {
         List<Couche> l = new ArrayList<>();
         for (Map.Entry<String, String> e : portes.entrySet()) {
             if (e.getValue() == null) continue;
+            String asset = e.getValue().toLowerCase(Locale.ROOT);
+            boolean courtes = manchesCourtes.contains(asset.contains(":") ? asset : "minecraft:" + asset);
             for (String[] m : morceaux(e.getKey())) {
                 if (e.getValue().endsWith("turtle_scute") && !m[0].equals("tete")) continue;
+                if (courtes && m[0].startsWith("bras_") && m[0].endsWith("_bas")) continue;
                 l.add(new Couche("peau_" + m[0], id(e.getValue(), m[1], m[0]), gonflement(m[1]), cuir(e.getValue())));
             }
         }

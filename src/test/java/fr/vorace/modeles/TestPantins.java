@@ -103,8 +103,9 @@ public final class TestPantins {
             "armure : plastron sur le haut du tronc (qui descend d'un demi-pixel sur le bas), gonflé d'un pixel, avant = zone avant du tronc lignes 0 à 5");
         com.google.gson.JsonObject jb = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/iron/humanoid_leggings/jambe_gauche_bas.json"),
             java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonArray("elements").get(0).getAsJsonObject();
-        verifier(jb.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[2.0,12.0,1.0,16.0]") && !jb.getAsJsonObject("faces").has("up"),
-            "armure : jambière gauche en miroir, moitié basse avec recouvrement (lignes 4 à 11)");
+        verifier(jb.getAsJsonObject("faces").getAsJsonObject("north").get("uv").toString().equals("[2.0,12.0,1.0,16.0]")
+                && jb.getAsJsonObject("faces").getAsJsonObject("up").get("uv").toString().equals("[2.0,12.0,1.0,12.5]"),
+            "armure : jambière gauche en miroir, moitié basse avec recouvrement (lignes 4 à 11), genou fermé par la ligne du haut");
         com.google.gson.JsonObject cuir = com.google.gson.JsonParser.parseString(new String(arm.get("assets/vorace/models/pantin_armure/minecraft/leather/humanoid/tete.json"),
             java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
         verifier(cuir.getAsJsonArray("elements").size() == 2 && cuir.getAsJsonObject("textures").get("1").getAsString().endsWith("leather_overlay")
@@ -126,6 +127,22 @@ public final class TestPantins {
             if (n.contains("bras") || n.startsWith("poing")) brasOk &= estBras; else autresOk &= !estBras;
         }
         verifier(brasOk && autresOk, "marque : bras, avant-bras et poings, rien d'autre (tête, tronc, jambes)");
+        // tête de sa copie (pantin permanent) : marquée elle aussi, effacée à la première personne ; elle seule
+        boolean teteOk = true;
+        for (int k = 0; k < j.parties().size(); k++) {
+            String n = String.valueOf(j.parties().get(k).nom()).toLowerCase(java.util.Locale.ROOT);
+            teteOk &= MarqueSoi.tete(j, k) == n.contains("tete");
+        }
+        verifier(teteOk, "marque : la tête (et ce qu'elle porte), pas le tronc ni les membres");
+
+        // images presque identiques : pas renvoyées (0,1° et un centième de pixel) ; un vrai mouvement l'est (1°, ou un pixel)
+        org.joml.Vector3f v0 = new org.joml.Vector3f(0.5f, 1f, 0.25f);
+        org.joml.Quaternionf q0 = new org.joml.Quaternionf().rotateXYZ(0.4f, 1.2f, -0.3f);
+        org.joml.Quaternionf q1 = new org.joml.Quaternionf(q0).rotateX((float) Math.toRadians(0.1)), q2 = new org.joml.Quaternionf(q0).rotateX((float) Math.toRadians(1));
+        verifier(Animateur.memeImage(v0, q0, new org.joml.Vector3f(v0).add(0.0006f, 0, 0), q1)
+                && Animateur.memeImage(v0, q0, v0, new org.joml.Quaternionf(-q0.x, -q0.y, -q0.z, -q0.w))
+                && !Animateur.memeImage(v0, q0, v0, q2) && !Animateur.memeImage(v0, q0, new org.joml.Vector3f(v0).add(0.0625f, 0, 0), q0),
+            "économie d'images : un écart invisible n'est pas renvoyé, un vrai mouvement l'est");
 
         // tête du pantin : l'os « peau_tete » suit le regard (il n'était pas reconnu : la tête ne tournait jamais)
         boolean[] tetes = Animateur.tetes(j);
@@ -136,8 +153,63 @@ public final class TestPantins {
         boolean seule = !droit[osTete].rotation().equals(tourne[osTete].rotation(), 1e-4f);
         for (int k = 0; k < droit.length; k++) if (k != osTete && droit[k] != null && !droit[k].rotation().equals(tourne[k].rotation(), 1e-4f)) seule = false;
         verifier(seule, "tête : le regard tourne la tête et rien d'autre");
-        verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 7,
-            "armure : plastron = tronc + bras (6 couches), carapace de tortue = tête seule");
+
+        // mouvements du pantin (outils/mouvements-pantin.py) : tous là, et les mains là où le script les pose
+        ModeleBB mv = lire("pantin_mouvements");
+        boolean tous = true;
+        for (String n : List.of("repos", "marche", "course", "recul", "pas_droite", "pas_gauche", "accroupi", "accroupi_marche", "saut", "chute",
+                "planer", "planer_avance", "nage", "ramper", "echelle", "assis", "dormir", "vol", "vrille", "tenir_arme", "tenir_arme_gauche", "tenir_arme_deux", "tenir_deux_arme", "tenir_armes", "coup_arme", "coup_arme_gauche", "coup_poing", "coup_poing_gauche", "coup_hache", "coup_hache_gauche", "tenir", "tenir_gauche", "tenir_deux", "geste_main",
+                "geste_main_gauche", "manger", "boire", "viser_arc", "viser_arc_gauche", "viser_arc_tenu", "viser_arc_tenu_gauche", "tir_arc", "charger_arbalete", "viser_arbalete",
+                "garde_bouclier", "garde_bouclier_gauche", "viser_trident", "longue_vue", "cor", "brosse", "degat")) {
+            tous &= mv.animations().containsKey(n);
+        }
+        // tronc rigide : dans aucun mouvement le tronc ne se tord ni ne roule (le haut sur le bas, le bassin sur les jambes) ;
+        // le haut ne se penche pas de plus de 6° sur le bas. Sinon le pantin « se désassemble » à la taille et aux hanches.
+        boolean rigide = true;
+        for (ModeleBB.Animation an : mv.animations().values()) {
+            for (Map.Entry<String, ModeleBB.Canaux> eo : an.os().entrySet()) {
+                String os = eo.getKey().toLowerCase(java.util.Locale.ROOT);
+                if ((!os.endsWith("corps_haut") && !os.endsWith("corps_bas")) || eo.getValue().rotation() == null) continue;
+                for (ModeleBB.Cle cle : eo.getValue().rotation()) {
+                    rigide &= Math.abs(cle.y()) < 0.01 && Math.abs(cle.z()) < 0.01 && (!os.endsWith("corps_haut") || Math.abs(cle.x()) < 6.01);
+                }
+            }
+        }
+        verifier(rigide, "mouvements du pantin : tronc rigide (ni torsion ni roulis, le haut penché de 6° au plus)");
+        verifier(tous && mv.animations().get("viser_arc").boucle().equals("hold") && mv.animations().get("marche").boucle().equals("loop")
+                && mv.animations().get("geste_main").boucle().equals("once"), "mouvements du pantin : les 17 mouvements et les gestes, arc tenu (hold)");
+        int poingD = -1, poingG = -1;
+        for (int k = 0; k < mv.parties().size(); k++) {
+            if ("poing_droit".equals(mv.parties().get(k).nom())) poingD = k;
+            if ("poing_gauche".equals(mv.parties().get(k).nom())) poingG = k;
+        }
+        // arc bandé : la main de l'arc en (4,4 ; 23,2 ; -9,6) pixels, celle de la corde sous la mâchoire en (-5,4 ; 22,8 ; -3,0) ;
+        // un modèle au yaw 0 regarde vers +z : x et z changent de signe
+        List<Animateur.Couche> bande = List.of(new Animateur.Couche(mv.animations().get("viser_arc"), 1.0, 1f, true));
+        Animateur.Pose[] arc = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f);
+        verifier(arc[poingD].translation().distance(-4.4f / 16, 23.2f / 16, 9.6f / 16) < 0.01f
+                && arc[poingG].translation().distance(5.4f / 16, 22.8f / 16, 3.0f / 16) < 0.01f,
+            "arc bandé : les mains là où le script les pose (même calcul que Blockbench)");
+        // l'arc bandé qui respire (viser_arc_tenu) commence sur la dernière pose de la traction : pas de saut entre les deux,
+        // et sa boucle se referme
+        ModeleBB.Animation tenu = mv.animations().get("viser_arc_tenu");
+        Animateur.Pose[] t0 = Animateur.posesCompletes(mv, List.of(new Animateur.Couche(tenu, 0.0, 1f, true)), 0f, 1f, 0f, 0f);
+        Animateur.Pose[] t1 = Animateur.posesCompletes(mv, List.of(new Animateur.Couche(tenu, tenu.duree(), 1f, true)), 0f, 1f, 0f, 0f);
+        verifier(tenu.boucle().equals("loop") && t0[poingD].translation().distance(arc[poingD].translation()) < 0.012f
+                && t0[poingG].translation().distance(arc[poingG].translation()) < 0.012f
+                && t1[poingD].translation().distance(t0[poingD].translation()) < 1e-4f && t1[poingG].translation().distance(t0[poingG].translation()) < 1e-4f,
+            "arc bandé tenu : il part de la fin de la traction et sa boucle se referme");
+        // visée : regard 30° vers le bas, la main de l'arc descend ; 30° vers le haut, elle monte ; sans geste, rien ne bouge
+        Animateur.Pose[] bas = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f, 30f), haut = Animateur.posesCompletes(mv, bande, 0f, 1f, 0f, 0f, -30f);
+        Animateur.Pose[] sans = Animateur.posesCompletes(mv, List.of(), 0f, 1f, 0f, 0f, 30f), nu = Animateur.posesCompletes(mv, List.of(), 0f, 1f, 0f, 0f);
+        verifier(bas[poingD].translation().y < arc[poingD].translation().y - 0.2f && haut[poingD].translation().y > arc[poingD].translation().y + 0.2f
+                && sans[poingD].translation().distance(nu[poingD].translation()) < 1e-5f,
+            "visée : les bras du geste suivent le regard vers le haut et le bas");
+        verifier(ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond", "HEAD", "minecraft:turtle_scute")).size() == 5
+                && ArmuresPantin.couches(java.util.Map.of("CHEST", "babel:fer"), java.util.Set.of()).size() == 6
+                && ArmuresPantin.couches(java.util.Map.of("CHEST", "babel:fer"), java.util.Set.of("babel:fer")).size() == 4
+                && ArmuresPantin.couches(java.util.Map.of("CHEST", "minecraft:diamond")).stream().noneMatch(co -> co.os().endsWith("_bas") && co.os().contains("bras")),
+            "armure : plastron du jeu = tronc + haut des bras (manches courtes, rien sur l'avant-bras), manches longues = 6 couches, carapace de tortue = tête seule");
 
         // skin pixel par pixel (PeauUV) : modèles du pack et couleurs d'un skin
         java.util.Map<String, byte[]> uv = PeauUV.generer(j);
@@ -163,6 +235,51 @@ public final class TestPantins {
         PeauUV.Donnees bf = PeauUV.donnees(j, skin, true).get("bras_droit_haut");
         verifier(bf != null && PeauUV.morceauObjet("bras_droit_haut", true).equals("bras_droit_haut_fin") && bf.couleurs().length < dd.get("bras_droit_haut").couleurs().length,
             "skin UV : bras fins (3 pixels) pour les skins « slim »");
+        // genoux et coudes fermés : chaque moitié de membre a un bouchon du côté de la jointure (une ligne de la face avant)
+        boolean bouchons = true;
+        for (PeauUV.Morceau mo : PeauUV.morceaux(j, false)) {
+            boolean membre = mo.nom().startsWith("bras") || mo.nom().startsWith("jambe");
+            String cote = mo.nom().endsWith("_bas") ? "up" : "down";
+            long n = mo.base().stream().filter(fa -> fa.nom().equals(cote) && fa.h() == 1).count();
+            bouchons &= n == (membre ? 1 : 0) && mo.couche().size() == mo.base().size();
+        }
+        verifier(bouchons && dd.get("jambe_droite_bas").couleurs().length == 2 * (2 * 4 * 8 + 2 * 4 * 8 + 4 * 4 + 4),
+            "skin UV : un bouchon par moitié de membre (genou, coude), aucun sur la tête ni le tronc");
+
+        // armure fondue dans la peau : la définition de chaque morceau choisit jusqu'à deux couches d'armure par les chaînes
+        // 0 et 1 de custom_model_data ; leurs teintes suivent celles des pixels ; le modèle choisi existe dans le pack
+        java.util.Map<String, byte[]> uvA = PeauUV.generer(j, ArmuresPantin.VANILLE);
+        boolean fonduOk = uvA.size() == uv.size();
+        for (String morceau : List.of("tete", "corps_haut", "corps_bas", "bras_droit_haut", "bras_droit_haut_fin", "jambe_gauche_bas")) {
+            com.google.gson.JsonArray mods = com.google.gson.JsonParser.parseString(new String(uvA.get("assets/vorace/items/pantin_peau/" + morceau + ".json"),
+                java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("model").getAsJsonArray("models");
+            String os = morceau.replace("_fin", "");
+            int pixels = PeauUV.donnees(j, skin, morceau.endsWith("_fin")).get(os).couleurs().length;
+            int rang = 0;
+            for (com.google.gson.JsonElement me : mods) {
+                com.google.gson.JsonObject mo = me.getAsJsonObject();
+                if (!mo.get("type").getAsString().equals("minecraft:select")) continue;
+                fonduOk &= mo.get("property").getAsString().equals("minecraft:custom_model_data") && mo.get("index").getAsInt() == rang
+                    && mo.getAsJsonObject("fallback").get("type").getAsString().equals("minecraft:empty");
+                boolean fer2 = false, jamb = false;
+                for (com.google.gson.JsonElement ce : mo.getAsJsonArray("cases")) {
+                    com.google.gson.JsonObject cas = ce.getAsJsonObject(), mdl = cas.getAsJsonObject("model");
+                    String quand = cas.get("when").getAsString(), chemin = mdl.get("model").getAsString();
+                    fonduOk &= chemin.equals("vorace:pantin_armure/" + quand + "/" + os) && arm.containsKey("assets/vorace/models/" + chemin.substring(7) + ".json")
+                        && quand.equals(ArmuresPantin.cleDepuisId(chemin.substring(7)))
+                        && mdl.getAsJsonArray("tints").get(0).getAsJsonObject().get("index").getAsInt() == pixels + 2 * rang
+                        && mdl.getAsJsonArray("tints").size() == (quand.startsWith("minecraft/leather/") ? 2 : 1);
+                    fer2 |= quand.equals("minecraft/iron/humanoid");
+                    jamb |= quand.endsWith("/humanoid_leggings");
+                }
+                fonduOk &= fer2 && jamb == (os.startsWith("corps") || os.startsWith("jambe"));
+                rang++;
+            }
+            fonduOk &= rang == PeauUV.RANGS_ARMURE;
+        }
+        verifier(fonduOk && ArmuresPantin.cle("minecraft:iron", "humanoid").equals("minecraft/iron/humanoid")
+                && ArmuresPantin.cleDepuisId("pantin_peau/tete") == null,
+            "armure fondue : deux choix d'armure par morceau, teintes après les pixels, modèles présents dans le pack");
         if (echecs > 0) System.exit(1);
     }
 }
