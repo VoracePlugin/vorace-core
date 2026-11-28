@@ -1,5 +1,20 @@
 # Journal des changements
 
+## 1.8.1 (novembre 2026) : le pantin seulement quand on tape
+
+Décision d'Antoine (28 nov.) : plus de joueur animé en permanence. Le joueur reste le joueur du jeu ; son pantin n'apparaît
+que quand il tape, puis repart en fondu. Les animations dessinées par le jeu du joueur viendront avec le mod du launcher.
+
+- **Coups temporaires** (`pantin.coups-temporaires`, vrai par défaut, seulement sans pantin permanent) : au coup de bras,
+  le pantin apparaît et joue le coup de l'objet en main (`coup_poing`, `coup_arme`, `coup_hache`, sinon `geste_main` ; main
+  gauche comprise), gestes empruntés à `pantin_mouvements`. Les coups enchaînés reprennent le même pantin ; à la fin, il garde
+  sa pose un instant puis revient en fondu à la pose du joueur du jeu (`pantin.pause-fin-secondes`, `pantin.retour-secondes`).
+- Une compétence ou une emote en cours n'est jamais coupée par un coup normal.
+- Miner ou poser un bloc ne fait pas apparaître le pantin (`pantin.coups-temporaires-blocs: false`).
+- `VoraceAPI.ticsAvantImpact` vaut aussi pour ces coups : les dégâts peuvent tomber avec la lame.
+- Correctif : un pantin de compétence trouve maintenant aussi les gestes du modèle des mouvements dès sa création.
+- Le pantin permanent reste disponible mais coupé par défaut (`pantin.permanent.actif: false`).
+
 ## 1.8.0 (novembre 2026) : capes dans le dos, armures des packs portées par le pantin
 
 Demande d'Antoine : de vraies capes dans le dos, qui bougent (« la cape du Passeur flotte même sans vent »).

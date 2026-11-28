@@ -163,6 +163,14 @@ pantin:
   # le joueur sans retard ET les téléportations des plugins marchent (Paper refuse de téléporter un joueur qui porte de
   # vrais passagers). false : vrais passagers (il faut alors arrêter le pantin avant de téléporter le joueur).
   monter-par-paquets: true
+  # Coups temporaires (sans pantin permanent, défaut de Babel depuis 1.8.1) : le joueur est le joueur du jeu, et son pantin
+  # n'apparaît que quand il tape (poing, épée, hache... : gestes « coup_* » de pantin_mouvements). Il joue le coup, garde sa
+  # pose un instant pour enchaîner le suivant, puis revient en fondu à la pose du joueur du jeu (retour-secondes) et
+  # disparaît. Une compétence en cours n'est jamais coupée par un coup. Le réseau ne travaille que pendant les coups.
+  # Les joueurs qui auront le mod du launcher de Babel verront plus tard les animations dessinées par leur propre jeu.
+  coups-temporaires: true
+  # aussi en minant ou en posant un bloc (le bras se lève alors en boucle) ; false : seulement dans le vide ou sur une créature
+  coups-temporaires-blocs: false
   # Pantin permanent : le joueur est remplacé tout le temps par son pantin (pas seulement pendant une compétence). Le
   # pantin joue de lui-même le repos, la marche, la course, le recul, les pas de côté, l'accroupi, le saut, la chute, la
   # nage, ramper, l'échelle, assis, couché, le vol, la vrille ; les gestes par-dessus (main qui tient un objet, coup de

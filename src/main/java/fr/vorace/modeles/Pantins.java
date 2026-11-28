@@ -374,6 +374,12 @@ public final class Pantins implements Listener {
 
     /** @param boucle animation répétée jusqu'à {@link #arreter(Player)} (Reprise de souffle) */
     public boolean jouer(Player p, String modele, String animation, boolean boucle) {
+        // une compétence ou une emote : elle n'est plus un simple coup, le coup suivant ne la coupera pas
+        coupsTemporaires.remove(p.getUniqueId());
+        return animer(p, modele, animation, boucle);
+    }
+
+    private boolean animer(Player p, String modele, String animation, boolean boucle) {
         Modeles m = plugin.modeles();
         if (m == null || !actif()) return false;
         Map<String, ItemStack> pretes = peaux.get(p.getUniqueId());
@@ -707,6 +713,15 @@ public final class Pantins implements Listener {
      */
     public int ticsAvantImpact(Player p) {
         Modeles m = plugin.modeles();
+        if (p != null && m != null && !permanent(p)) {
+            // coups temporaires : le pantin naît au coup de bras et la lame tombe au même instant que sur le pantin permanent
+            if (!coupsTemporairesActifs() || p.isHandRaised()) return 0;
+            Modeles.Instance i = m.instance(p);
+            if (i != null && !coupsTemporaires.contains(p.getUniqueId())) return 0;   // compétence en cours
+            String coup = coup(p.getInventory().getItemInMainHand());
+            if (!aCoup(coup)) coup = "geste_main";
+            return aCoup(coup) ? IMPACTS.getOrDefault(coup, 0) : 0;
+        }
         if (p == null || m == null || !permanent(p) || gestes.containsKey(p.getUniqueId())) return 0;
         String coup = coup(p.getInventory().getItemInMainHand());
         if (!m.aGeste(p, coup)) coup = "geste_main";
@@ -718,14 +733,60 @@ public final class Pantins implements Listener {
     @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
     public void brasLeve(org.bukkit.event.player.PlayerAnimationEvent e) {
         Player p = e.getPlayer();
-        // pas pendant un geste d'utilisation (manger, viser...)
-        if (!permanent(p) || plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
         boolean gauche = e instanceof io.papermc.paper.event.player.PlayerArmSwingEvent s && s.getHand() == EquipmentSlot.OFF_HAND;
+        if (!permanent(p)) {
+            coupTemporaire(p, gauche);
+            return;
+        }
+        // pas pendant un geste d'utilisation (manger, viser...)
+        if (plugin.modeles() == null || gestes.containsKey(p.getUniqueId())) return;
         Modeles m = plugin.modeles();
         // un coup par sorte d'objet (poing, épée, hache...) ; un modèle qui ne l'a pas garde le coup court
         String coup = coup(gauche ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand());
         if (!coup.equals("geste_main") && m.gesteJoueur(p, gauche ? coup + "_gauche" : coup, false)) return;
         if (!(gauche && m.gesteJoueur(p, "geste_main_gauche", false))) m.gesteJoueur(p, "geste_main", false);
+    }
+
+    // ------------------------------------------------------------------ coups temporaires (sans pantin permanent)
+
+    /** Joueurs dont le pantin en cours ne joue qu'un coup normal (pas une compétence ni une emote). */
+    private final java.util.Set<UUID> coupsTemporaires = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Sans pantin permanent, le joueur est le joueur du jeu ; son pantin n'apparaît que quand il tape (pantin.coups-temporaires),
+     * joue le coup (poing, épée, hache...), garde sa pose un instant pour enchaîner, puis revient en fondu à la pose du joueur du
+     * jeu et disparaît (pantin.retour-secondes).
+     */
+    public boolean coupsTemporairesActifs() {
+        return actif() && !permanentActif() && plugin.getConfig().getBoolean("pantin.coups-temporaires", true);
+    }
+
+    /** Le squelette du pantin a-t-il ce geste (le sien ou celui du modèle des mouvements) ? */
+    private boolean aCoup(String nom) {
+        Modeles m = plugin.modeles();
+        ModeleBB s = m == null ? null : m.modele(SQUELETTE);
+        return s != null && (s.animations().containsKey(nom) || m.emprunter(s, nom) != null);
+    }
+
+    /** Coup de bras sans pantin permanent : le pantin apparaît le temps du coup (voir {@link #coupsTemporairesActifs()}). */
+    private void coupTemporaire(Player p, boolean gauche) {
+        Modeles m = plugin.modeles();
+        if (m == null || !coupsTemporairesActifs() || p.isHandRaised() || p.isDead()) return;
+        if (p.getGameMode() == org.bukkit.GameMode.SPECTATOR || p.hasPotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY)) return;
+        if (p.getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin, Modeles.CLE_CAMERA))) return;
+        // une compétence joue déjà sur son pantin : elle continue
+        if (m.instance(p) != null && !coupsTemporaires.contains(p.getUniqueId())) return;
+        // miner ou poser un bloc n'est pas un coup (le bras se lève en boucle quand on mine) : seulement dans le vide ou sur
+        // une créature, sauf pantin.coups-temporaires-blocs
+        if (!plugin.getConfig().getBoolean("pantin.coups-temporaires-blocs", false)
+            && p.getTargetBlockExact(5) != null && p.getTargetEntity(5) == null) return;
+        String coup = coup(gauche ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand());
+        String voulu = null;
+        for (String n : gauche ? new String[]{coup + "_gauche", coup, "geste_main_gauche", "geste_main"} : new String[]{coup, "geste_main"}) {
+            if (aCoup(n)) { voulu = n; break; }
+        }
+        if (voulu == null) return;
+        if (animer(p, SQUELETTE, voulu, false)) coupsTemporaires.add(p.getUniqueId());
     }
 
     /** Armure ou objets tenus changés : le pantin permanent se rhabille au tic suivant. */
@@ -1069,6 +1130,7 @@ public final class Pantins implements Listener {
     }
 
     private void montrer(Player p) {
+        coupsTemporaires.remove(p.getUniqueId());
         if (permanent(p) && p.isOnline()) {
             // vue « pantin » : ses objets restent dans les mains du pantin, la main du jeu reste cachée
             if (vueMainDuJeu) montrerSoi(p);
@@ -1189,6 +1251,7 @@ public final class Pantins implements Listener {
 
     @EventHandler
     public void depart(PlayerQuitEvent e) {
+        coupsTemporaires.remove(e.getPlayer().getUniqueId());
         pairesMontrees.remove(e.getPlayer().getUniqueId());
         dernieresPaires.remove(e.getPlayer().getUniqueId());
         if (caches != null) caches.oublier(e.getPlayer());

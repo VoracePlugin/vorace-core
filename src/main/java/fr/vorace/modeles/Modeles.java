@@ -631,8 +631,9 @@ public final class Modeles {
             ancien.finir();
         }
         Instance i = new Instance(m, joueur, true, joueur.getLocation().getYaw());
-        if (i.trouver(animation) == null) return false;
+        // pantin d'abord : il emprunte alors les gestes du modèle des mouvements (coups normaux : « coup_arme »...)
         i.pantin = true;
+        if (i.trouver(animation) == null) return false;
         i.taille = pantinTaille;
         i.proprietaire = joueur.getUniqueId();
         i.fin = fin;
