@@ -125,6 +125,13 @@ public final class Modeles {
     /** Préfixe d'un objet porté sur la tête comme le jeu le fait (casque 3D d'objet, citrouille, tête) : « tete:peau_tete ». */
     public static final String TETE = "tete:";
     /**
+     * Préfixe d'une cape portée dans le dos (« dos:peau_corps_haut ») : modèle posé sur le haut du tronc, dans le repère de
+     * l'os (pivot en 8, 8, 8), accroché aux épaules en {@link #ACCROCHE_CAPE} ; elle se soulève vers l'arrière avec la vitesse.
+     */
+    public static final String DOS = "dos:";
+    /** Point d'accroche d'une cape dans son modèle (pixels, repère du modèle d'objet : pivot du haut du tronc en 8, 8, 8). */
+    public static final float[] ACCROCHE_CAPE = {8f, 15.2f, 11.6f};
+    /**
      * Échelle de la pièce dans son propre modèle (pièce d'armure 3D tirée d'un .bbmodel) : posée sur l'objet affiché par
      * Pantins, lue ici ; absente : 1 (couches d'ArmuresPantin, générées à l'échelle 1).
      */
@@ -323,9 +330,23 @@ public final class Modeles {
         return l;
     }
 
-    /** Armures que le pantin sait porter : celles du jeu et celles de pantin.armures-perso (« babel:mythril »). */
+    /** Modèles d'équipement trouvés dans les packs fusionnés (assets/<espace>/equipment/...), à la dernière construction. */
+    private volatile java.util.Set<String> armuresDetectees = java.util.Set.of();
+
+    /** Donné par la construction du pack : les modèles d'équipement de ses sources (pantin.armures-auto). */
+    public void armuresDetectees(java.util.Set<String> assets) {
+        armuresDetectees = assets == null ? java.util.Set.of() : java.util.Set.copyOf(assets);
+    }
+
+    /**
+     * Armures que le pantin sait porter : celles du jeu, celles de pantin.armures-perso (« babel:mythril ») et, avec
+     * pantin.armures-auto, tous les modèles d'équipement des packs fusionnés (vorace-item, packs du serveur).
+     */
     public List<String> armuresPantin() {
         List<String> l = new ArrayList<>(ArmuresPantin.VANILLE);
+        if (plugin.getConfig().getBoolean("pantin.armures-auto", true)) {
+            for (String a : armuresDetectees) if (!l.contains(a)) l.add(a);
+        }
         for (String a : plugin.getConfig().getStringList("pantin.armures-perso")) {
             String n = a.toLowerCase(Locale.ROOT).trim();
             if (n.isEmpty()) continue;
@@ -651,10 +672,11 @@ public final class Modeles {
         Map<Integer, int[]> fondues = new HashMap<>();
         for (Map.Entry<String, ItemStack> c : armure) {
             String os = c.getKey();
-            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : os.startsWith(TETE) ? 3 : 0;
+            int main = os.startsWith(MAIN_G) ? 2 : os.startsWith(MAIN) ? 1 : os.startsWith(TETE) ? 3 : os.startsWith(DOS) ? 4 : 0;
             if (main == 2) os = os.substring(MAIN_G.length());
             else if (main == 1) os = os.substring(MAIN.length());
             else if (main == 3) os = os.substring(TETE.length());
+            else if (main == 4) os = os.substring(DOS.length());
             for (int k = 0; k < m.parties().size(); k++) {
                 if (!os.equalsIgnoreCase(m.parties().get(k).nom())) continue;
                 if (main == 0 && armuresFondues && fondre(i, k, c.getValue(), fondues)) break;
@@ -1303,7 +1325,7 @@ public final class Modeles {
         /** Couches d'armure du pantin : os porteur et objet affiché ; leurs entités et dernières transformations. */
         final List<Integer> armureOs = new ArrayList<>();
         final List<ItemStack> armureObjets = new ArrayList<>();
-        /** 0 : couche d'armure ; 1 : objet tenu en main droite ; 2 : en main gauche. */
+        /** 0 : couche d'armure ; 1 : objet tenu en main droite ; 2 : en main gauche ; 3 : sur la tête ; 4 : cape dans le dos. */
         final List<Integer> armureMain = new ArrayList<>();
         /** Bout de l'avant-bras vu depuis le pivot de l'os qui tient l'objet (pixels, repère de repos ; voir Modeles.bout). */
         final List<Vector3f> armureBout = new ArrayList<>();
@@ -1330,6 +1352,7 @@ public final class Modeles {
             if (main == 1) return ItemDisplay.ItemDisplayTransform.THIRDPERSON_RIGHTHAND;
             if (main == 0) return ItemDisplay.ItemDisplayTransform.NONE;
             if (main == 3) return ItemDisplay.ItemDisplayTransform.HEAD;
+            if (main == 4) return ItemDisplay.ItemDisplayTransform.NONE;
             ItemStack o = armureObjets.get(a);
             boolean paire = o.hasItemMeta() && o.getItemMeta().getPersistentDataContainer().has(Pantins.PAIRE);
             if (o.getType() == org.bukkit.Material.SHIELD) return ItemDisplay.ItemDisplayTransform.NONE;   // placé à la main (ECU)
@@ -1575,6 +1598,8 @@ public final class Modeles {
 
         /** Pantin d'un joueur : sa vitesse du dernier tic (blocs par tic), à plat et en hauteur. */
         private double vitesseAuto, monteeAuto;
+        /** Cape : angle de soulèvement vers l'arrière (degrés, négatif = vers l'arrière), lissé d'une image à l'autre. */
+        private float angleCape;
         /** Sens du dernier déplacement (vecteur unité) et nombre de tics de suite sans bouger. */
         private double sensX, sensZ;
         private int arrets;
@@ -2543,7 +2568,11 @@ public final class Modeles {
                     tr.add(new Quaternionf(p.rotation()).transform(new Vector3f(0, 4f / 16f, 0).mul(ech)));
                     ech.mul(0.625f);
                 }
-                if (bouclierGauche(a)) {
+                if (main(a) == 4) {
+                    // cape : tournée autour de son accroche aux épaules (axe x de l'os du tronc). Elle se soulève vers l'arrière
+                    // avec la vitesse (≈ 30° en marchant, 40° en courant), un peu plus en tombant, et ondule doucement à l'arrêt.
+                    rot = capeTournee(p.rotation(), tr, ech);
+                } else if (bouclierGauche(a)) {
                     // bouclier sanglé à l'avant-bras gauche (comme l'écu des animations, epee.py) : la plaque à l'extérieur du
                     // bras, son haut vers le coude, son centre 4,5 pixels à l'extérieur et 4 au-dessus du poing. Dessiné sans
                     // réglage « en main » (NONE) : le jeu pose le modèle spécial du bouclier en (-0,5, -0,5, -0,5), retourné en
@@ -2577,6 +2606,23 @@ public final class Modeles {
                 d.setTransformation(t);
             }
             if (aEtiquettes) etiquettes(poses, position(), intervalle);
+        }
+
+        /**
+         * Cape portée dans le dos : rotation de l'os du tronc suivie d'un soulèvement autour de l'accroche (axe x), et
+         * décalage de la translation pour que l'accroche ne bouge pas. Le soulèvement suit la vitesse du joueur, lissé.
+         */
+        private Quaternionf capeTournee(Quaternionf os, Vector3f tr, Vector3f ech) {
+            double v = Math.max(0, vitesseAuto);
+            float cible = -(float) (4 + Math.min(36, v * 140));
+            if (monteeAuto < -0.12) cible -= 14f;                                       // en chute, elle remonte
+            cible += (float) (Math.sin(System.currentTimeMillis() / 600.0) * 1.5);       // ondulation lente
+            angleCape += (cible - angleCape) * 0.25f;
+            Quaternionf rx = new Quaternionf().rotateX((float) Math.toRadians(angleCape));
+            Vector3f o = new Vector3f(ACCROCHE_CAPE[0] - 8f, ACCROCHE_CAPE[1] - 8f, ACCROCHE_CAPE[2] - 8f).div(16f).mul(ech);
+            Vector3f d = new Vector3f(o).sub(new Quaternionf(rx).transform(new Vector3f(o)));
+            tr.add(new Quaternionf(os).transform(d));
+            return new Quaternionf(os).mul(rx);
         }
 
         /**

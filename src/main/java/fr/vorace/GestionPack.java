@@ -133,6 +133,18 @@ public final class GestionPack {
             if (r.debug()) plugin.getLogger().info("Corps fantôme : " + n + " dessin(s) d'armure marqué(s)");
         }
         if (plugin.pantins() != null) plugin.pantins().armuresDansPack(armures);
+        // armures des packs (vorace-item...) : le pantin sait les porter sans les lister dans pantin.armures-perso
+        if (plugin.modeles() != null) {
+            java.util.Set<String> equipements = new java.util.TreeSet<>();
+            for (Source s : sources) {
+                for (String f : s.fichiers().keySet()) {
+                    String a = fr.vorace.modeles.ArmuresPantin.assetDepuisFichier(f);
+                    if (a != null) equipements.add(a);
+                }
+            }
+            plugin.modeles().armuresDetectees(equipements);
+            if (r.debug()) plugin.getLogger().info("Armures des packs pour le pantin : " + equipements);
+        }
         if (plugin.objets() != null) {
             Journal journalObjets = new Journal();
             java.util.Map<String, byte[]> objets = new java.util.TreeMap<>(plugin.objets().fichiersPack(format, journalObjets));

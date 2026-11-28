@@ -226,6 +226,12 @@ pantin:
   # Armure portée dessinée sur le pantin (casque, plastron, jambières, bottes) avec les textures d'équipement du jeu,
   # teinte du cuir et éclat des enchantements compris. Les ornements (trims) ne sont pas dessinés.
   armure: true
+  # Cape dans le dos (posée par un plugin d'objets, VoraceAPI.capePantin) : sur le haut du tronc, elle se soulève vers
+  # l'arrière quand le joueur marche ou court.
+  cape: true
+  # Toutes les armures des packs fusionnés (assets/<espace>/equipment/..., celles de vorace-item par exemple) sont portées
+  # par le pantin sans avoir à les lister ci-dessous.
+  armures-auto: true
   # Armures d'un pack de ressources (modèle d'équipement « espace:nom », textures dans
   # assets/<espace>/textures/entity/equipment/humanoid/<nom>.png et humanoid_leggings/<nom>.png).
   armures-perso: []

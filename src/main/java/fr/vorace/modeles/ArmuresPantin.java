@@ -30,6 +30,18 @@ public final class ArmuresPantin {
     public static final List<String> VANILLE = List.of("minecraft:leather", "minecraft:chainmail", "minecraft:iron", "minecraft:gold",
         "minecraft:diamond", "minecraft:netherite", "minecraft:turtle_scute");
 
+    private static final java.util.regex.Pattern EQUIPEMENT = java.util.regex.Pattern.compile("^assets/([a-z0-9_.-]+)/equipment/([a-z0-9_./-]+)\\.json$");
+
+    /**
+     * Modèle d'équipement déclaré par un fichier de pack (« assets/voraceitem/equipment/babel/etage1/e1_veuve.json » ->
+     * « voraceitem:babel/etage1/e1_veuve ») ; null pour un autre fichier ou un équipement du jeu (espace minecraft).
+     */
+    public static String assetDepuisFichier(String chemin) {
+        java.util.regex.Matcher m = EQUIPEMENT.matcher(chemin);
+        if (!m.matches() || m.group(1).equals("minecraft")) return null;
+        return m.group(1) + ":" + m.group(2);
+    }
+
     /** Couches d'équipement du jeu : casque, plastron et bottes ; jambières. */
     public static final String HUMANOID = "humanoid", JAMBIERES = "humanoid_leggings";
 

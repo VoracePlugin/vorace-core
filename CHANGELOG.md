@@ -1,5 +1,22 @@
 # Journal des changements
 
+## 1.8.0 (novembre 2026) : capes dans le dos, armures des packs portées par le pantin
+
+Demande d'Antoine : de vraies capes dans le dos, qui bougent (« la cape du Passeur flotte même sans vent »).
+
+- **Cape dans le dos du pantin** : `VoraceAPI.capePantin(joueur, objet)` pose l'objet affiché d'une cape (modèle dessiné dans
+  le repère du haut du tronc : pivot de l'os en 8, 8, 8, dos de l'armure en z = 11, accroche aux épaules en
+  8 ; 15,2 ; 11,6) ; `null` la retire. Gardée avec les données du joueur. Elle se soulève vers l'arrière avec la vitesse
+  (≈ 30° en marchant, 40° en courant), un peu plus en tombant, et ondule doucement à l'arrêt. `pantin.cape: false`
+  l'éteint. vorace-item 0.16 s'en sert pour la case « dos » de son menu `/equipement`.
+- **Armures des packs portées sans réglage** (`pantin.armures-auto`, vrai par défaut) : tous les modèles d'équipement des
+  packs fusionnés (`assets/<espace>/equipment/...`, ceux de vorace-item par exemple) sont portés par le pantin, sans les
+  lister dans `pantin.armures-perso`. Sans cela, avec le pantin permanent, une armure de vorace-item ne se voyait nulle
+  part (le vrai joueur est invisible et son pantin ne la connaissait pas).
+- **Casque 3D de vorace-item** : un objet dont le composant equippable n'a pas de modèle d'équipement mais a un modèle
+  d'objet (casque 3D sur un `iron_helmet`) est porté sur la tête du pantin tel quel, au lieu d'être dessiné en casque de fer.
+- **Le pack de ressources change** (couches d'armure des armures des packs) : il est régénéré au démarrage.
+
 ## 1.7.9 (novembre 2026) : l'instant où un coup porte, pour les plugins de combat
 
 Retour d'Antoine en jeu : « quand tu tapes avec une arme dans les animations basiques, le dégât se fait pas quand la lame

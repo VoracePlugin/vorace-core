@@ -770,7 +770,34 @@ public final class Pantins implements Listener {
                 l.add(Map.entry(Modeles.TETE + "peau_tete", porte.clone()));
             }
         }
+        // cape dans le dos (posée par un plugin d'objets, voir cape(Player, ItemStack)) : sur le haut du tronc
+        ItemStack cape = cape(p);
+        if (cape != null && plugin.getConfig().getBoolean("pantin.cape", true)) l.add(Map.entry(Modeles.DOS + "peau_corps_haut", cape));
         return l;
+    }
+
+    /** Objet affiché de la cape d'un joueur, gardé avec ses données (il la retrouve en se reconnectant). */
+    public static final org.bukkit.NamespacedKey CAPE = new org.bukkit.NamespacedKey("vorace", "cape");
+
+    /** La cape portée par le joueur (objet affiché, modèle dans le repère du haut du tronc), ou null. */
+    public static ItemStack cape(Player p) {
+        byte[] b = p.getPersistentDataContainer().get(CAPE, org.bukkit.persistence.PersistentDataType.BYTE_ARRAY);
+        if (b == null || b.length == 0) return null;
+        try {
+            return ItemStack.deserializeBytes(b);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Pose ou retire (null, air) la cape du pantin d'un joueur. L'objet est seulement affiché : son modèle est dans le
+     * repère du haut du tronc (pivot en 8, 8, 8 ; accroche aux épaules en Modeles.ACCROCHE_CAPE). Le pantin est rhabillé.
+     */
+    public void cape(Player p, ItemStack objet) {
+        if (objet == null || objet.getType().isAir()) p.getPersistentDataContainer().remove(CAPE);
+        else p.getPersistentDataContainer().set(CAPE, org.bukkit.persistence.PersistentDataType.BYTE_ARRAY, objet.clone().serializeAsBytes());
+        rhabillerPlusTard(p);
     }
 
     /** Groupe du .bbmodel d'une armure en volume qui contient les os de chaque pièce. */
@@ -853,7 +880,12 @@ public final class Pantins implements Listener {
         if (it == null || it.getType().isAir()) return null;
         try {
             org.bukkit.inventory.meta.ItemMeta meta = it.getItemMeta();
-            if (meta != null && meta.hasEquippable() && meta.getEquippable().getModel() != null) return meta.getEquippable().getModel().toString();
+            if (meta != null && meta.hasEquippable()) {
+                // composant posé par un plugin : son modèle d'équipement ; sans modèle, l'objet se porte tel quel sur la tête
+                // (casque 3D de vorace-item sur un iron_helmet) : pas de dessin d'armure
+                if (meta.getEquippable().getModel() != null) return meta.getEquippable().getModel().toString();
+                if (meta.hasItemModel()) return null;
+            }
         } catch (Throwable ignore) {
             // API sans composant equippable : on se sert du nom de l'objet
         }
